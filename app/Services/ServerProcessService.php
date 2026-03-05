@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\ServerStatus;
 use App\Models\Server;
+use Illuminate\Support\Facades\Log;
 
 class ServerProcessService
 {
@@ -12,7 +13,11 @@ class ServerProcessService
      */
     public function start(Server $server): void
     {
+        $context = "[Server:{$server->id} '{$server->name}']";
+
         if ($this->isRunning($server)) {
+            Log::info("{$context} Server is already running, skipping start");
+
             return;
         }
 
@@ -27,17 +32,30 @@ class ServerProcessService
 
         $command = $this->buildLaunchCommand($server);
         $pidFile = $this->getPidFilePath($server);
+        $logFile = $this->getServerLogPath($server);
+        $binaryDir = $server->getBinaryPath();
+
+        Log::info("{$context} Starting server from {$binaryDir}");
+        Log::info("{$context} Launch command: {$command}");
+        Log::info("{$context} Log file: {$logFile}");
+
+        // Truncate/create log file and start tail BEFORE the server process,
+        // so the tail is already watching when the server writes its first lines.
+        file_put_contents($logFile, '');
+        $this->startLogTail($server);
 
         $fullCommand = sprintf(
-            'nohup %s > %s 2>&1 & echo $! > %s',
+            'cd %s && nohup %s > %s 2>&1 & echo $! > %s',
+            escapeshellarg($binaryDir),
             $command,
-            $profilesPath.'/server.log',
-            $pidFile
+            escapeshellarg($logFile),
+            escapeshellarg($pidFile)
         );
 
         exec($fullCommand);
 
-        $this->startLogTail($server);
+        $pid = $this->getPid($server);
+        Log::info("{$context} Process started with PID {$pid}");
     }
 
     /**
@@ -45,11 +63,14 @@ class ServerProcessService
      */
     public function stop(Server $server): void
     {
+        $context = "[Server:{$server->id} '{$server->name}']";
+
         $this->stopLogTail($server);
 
         $pid = $this->getPid($server);
 
         if ($pid && $this->isProcessRunning($pid)) {
+            Log::info("{$context} Stopping server (PID {$pid})");
             posix_kill($pid, SIGTERM);
 
             $waited = 0;
@@ -59,8 +80,13 @@ class ServerProcessService
             }
 
             if ($this->isProcessRunning($pid)) {
+                Log::warning("{$context} Server did not stop gracefully, sending SIGKILL (PID {$pid})");
                 posix_kill($pid, SIGKILL);
             }
+
+            Log::info("{$context} Server stopped");
+        } else {
+            Log::info("{$context} Server was not running (no active PID)");
         }
 
         $this->cleanupPidFile($server);
@@ -101,6 +127,10 @@ class ServerProcessService
     {
         $count = $server->headless_client_count;
 
+        if ($count > 0) {
+            Log::info("[Server:{$server->id} '{$server->name}'] Starting {$count} headless client(s)");
+        }
+
         for ($i = 0; $i < $count; $i++) {
             $this->startHeadlessClient($server, $i);
         }
@@ -111,6 +141,7 @@ class ServerProcessService
      */
     public function stopHeadlessClients(Server $server): void
     {
+        $context = "[Server:{$server->id} '{$server->name}']";
         $count = $server->headless_client_count;
 
         for ($i = 0; $i < $count; $i++) {
@@ -120,6 +151,7 @@ class ServerProcessService
                 $pid = (int) file_get_contents($pidFile);
 
                 if ($this->isProcessRunning($pid)) {
+                    Log::info("{$context} Stopping headless client {$i} (PID {$pid})");
                     posix_kill($pid, SIGTERM);
                 }
 
@@ -233,7 +265,7 @@ class ServerProcessService
     protected function symlinkMissions(Server $server): void
     {
         $missionsPath = config('arma.missions_base_path');
-        $mpmissionsPath = $server->getInstallationPath().'/mpmissions';
+        $mpmissionsPath = $server->getBinaryPath().'/mpmissions';
 
         if (! is_dir($missionsPath)) {
             return;
@@ -259,8 +291,11 @@ class ServerProcessService
 
     protected function startHeadlessClient(Server $server, int $index): void
     {
+        $context = "[Server:{$server->id} '{$server->name}' HC:{$index}]";
         $binary = $server->getBinaryPath().'/arma3server_x64';
+        $binaryDir = $server->getBinaryPath();
         $pidFile = $this->getHcPidFilePath($server, $index);
+        $logFile = $this->getHeadlessClientLogPath($server, $index);
 
         $params = [
             '-client',
@@ -282,14 +317,20 @@ class ServerProcessService
             $params[] = '-mod='.$modParams;
         }
 
+        Log::info("{$context} Starting headless client");
+
         $command = sprintf(
-            'nohup %s %s > /dev/null 2>&1 & echo $! > %s',
+            'cd %s && nohup %s %s > %s 2>&1 & echo $! > %s',
+            escapeshellarg($binaryDir),
             $binary,
             implode(' ', $params),
-            $pidFile
+            escapeshellarg($logFile),
+            escapeshellarg($pidFile)
         );
 
         exec($command);
+
+        Log::info("{$context} Headless client started");
     }
 
     protected function getPid(Server $server): ?int
@@ -318,6 +359,22 @@ class ServerProcessService
     protected function getHcPidFilePath(Server $server, int $index): string
     {
         return storage_path('app/server_'.$server->id.'_hc_'.$index.'.pid');
+    }
+
+    /**
+     * Get the path to the server's log file.
+     */
+    public function getServerLogPath(Server $server): string
+    {
+        return $server->getProfilesPath().'/server.log';
+    }
+
+    /**
+     * Get the path to a headless client's log file.
+     */
+    public function getHeadlessClientLogPath(Server $server, int $index): string
+    {
+        return $server->getProfilesPath().'/hc_'.$index.'.log';
     }
 
     protected function cleanupPidFile(Server $server): void

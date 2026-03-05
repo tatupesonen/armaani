@@ -45,9 +45,6 @@ new #[Title('Servers')] class extends Component
     /** @var array<int, bool> */
     public array $showLogs = [];
 
-    /** @var array<int, string[]> */
-    public array $serverLogLines = [];
-
     // Inline edit state
     public ?int $editingServerId = null;
 
@@ -94,64 +91,32 @@ new #[Title('Servers')] class extends Component
             ->get();
     }
 
-    public function getListeners(): array
-    {
-        $listeners = [];
-
-        foreach ($this->servers as $server) {
-            $listeners["echo:server-log.{$server->id},ServerLogOutput"] = 'handleServerLog';
-        }
-
-        return $listeners;
-    }
-
-    public function handleServerLog(array $event): void
-    {
-        $id = $event['serverId'];
-        $line = $event['line'];
-
-        if (! isset($this->serverLogLines[$id])) {
-            $this->serverLogLines[$id] = [];
-        }
-
-        $this->serverLogLines[$id][] = $line;
-
-        // Keep only the last 200 lines
-        if (count($this->serverLogLines[$id]) > 200) {
-            $this->serverLogLines[$id] = array_slice($this->serverLogLines[$id], -200);
-        }
-    }
-
     public function toggleServerLogs(int $serverId): void
     {
-        $isShowing = $this->showLogs[$serverId] ?? false;
+        $status = $this->getStatus(Server::query()->findOrFail($serverId));
+        $isShowing = $this->showLogs[$serverId] ?? ($status === 'running');
         $this->showLogs[$serverId] = ! $isShowing;
-
-        // Load initial log content when opening
-        if (! $isShowing) {
-            $this->loadServerLog($serverId);
-        }
     }
 
-    public function loadServerLog(int $serverId): void
+    /** @return string[] */
+    public function loadServerLog(int $serverId): array
     {
         $server = Server::query()->find($serverId);
 
         if (! $server) {
-            return;
+            return [];
         }
 
-        $logPath = $server->getProfilesPath().'/server.log';
+        $logPath = app(ServerProcessService::class)->getServerLogPath($server);
 
         if (! file_exists($logPath)) {
-            $this->serverLogLines[$serverId] = ['No log file found.'];
-
-            return;
+            return ['No log file found.'];
         }
 
-        // Read last 100 lines
+        // Read last 100 lines as initial content before WebSocket takes over
         $lines = file($logPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-        $this->serverLogLines[$serverId] = $lines ? array_slice($lines, -100) : [];
+
+        return $lines ? array_slice($lines, -100) : [];
     }
 
     public function getStatus(Server $server): string
@@ -393,10 +358,10 @@ new #[Title('Servers')] class extends Component
 
                         <div class="flex items-center gap-2">
                             @if ($status === 'running')
-                                <flux:button size="sm" variant="danger" wire:click="stopServer({{ $server->id }})" wire:confirm="Are you sure you want to stop this server?" icon="stop">
+                                <flux:button size="sm" variant="danger" wire:click="stopServer({{ $server->id }})" icon="stop">
                                     {{ __('Stop') }}
                                 </flux:button>
-                                <flux:button size="sm" wire:click="restartServer({{ $server->id }})" wire:confirm="Are you sure you want to restart this server?" icon="arrow-path">
+                                <flux:button size="sm" wire:click="restartServer({{ $server->id }})" icon="arrow-path">
                                     {{ __('Restart') }}
                                 </flux:button>
                             @else
@@ -426,21 +391,48 @@ new #[Title('Servers')] class extends Component
                     </div>
 
                     {{-- Server log panel --}}
-                    @if ($this->showLogs[$server->id] ?? false)
-                        <div class="border-t border-zinc-200 dark:border-zinc-700 p-4">
-                            <div class="flex items-center justify-between mb-2">
-                                <flux:text class="text-xs font-medium text-zinc-500 dark:text-zinc-400">{{ __('Server Log') }}</flux:text>
-                                <flux:button size="sm" variant="ghost" wire:click="loadServerLog({{ $server->id }})" icon="arrow-path">
-                                    {{ __('Refresh') }}
-                                </flux:button>
-                            </div>
-                            @php $lines = $this->serverLogLines[$server->id] ?? []; @endphp
-                            <div class="rounded bg-zinc-900 text-zinc-100 p-3 font-mono text-xs max-h-64 overflow-y-auto" x-data x-init="$nextTick(() => $el.scrollTop = $el.scrollHeight)" wire:key="server-logs-{{ $server->id }}">
-                                @forelse ($lines as $logLine)
-                                    <div class="whitespace-pre-wrap break-all">{{ $logLine }}</div>
-                                @empty
-                                    <div class="text-zinc-500">{{ __('No log output yet.') }}</div>
-                                @endforelse
+                    @if ($this->showLogs[$server->id] ?? ($status === 'running'))
+                        <div class="border-t border-zinc-200 dark:border-zinc-700 p-4"
+                            x-data="{
+                                lines: [],
+                                channel: null,
+                                maxLines: 200,
+                                init() {
+                                    $wire.loadServerLog({{ $server->id }}).then(initialLines => {
+                                        this.lines = initialLines;
+                                        this.$nextTick(() => this.scrollToBottom());
+                                    });
+                                    this.channel = window.Echo.channel('server-log.{{ $server->id }}');
+                                    this.channel.listen('ServerLogOutput', (event) => {
+                                        this.lines.push(event.line);
+                                        if (this.lines.length > this.maxLines) {
+                                            this.lines = this.lines.slice(-this.maxLines);
+                                        }
+                                        this.$nextTick(() => this.scrollToBottom());
+                                    });
+                                },
+                                scrollToBottom() {
+                                    if (this.$refs.logContainer) {
+                                        this.$refs.logContainer.scrollTop = this.$refs.logContainer.scrollHeight;
+                                    }
+                                },
+                                destroy() {
+                                    if (this.channel) {
+                                        window.Echo.leave('server-log.{{ $server->id }}');
+                                        this.channel = null;
+                                    }
+                                }
+                            }"
+                            wire:key="server-logs-{{ $server->id }}"
+                        >
+                            <flux:text class="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-2">{{ __('Server Log') }}</flux:text>
+                            <div class="rounded bg-zinc-900 text-zinc-100 p-3 font-mono text-xs max-h-64 overflow-y-auto" x-ref="logContainer">
+                                <template x-if="lines.length === 0">
+                                    <div class="text-zinc-500">{{ __('Waiting for output...') }}</div>
+                                </template>
+                                <template x-for="(line, index) in lines" :key="index">
+                                    <div class="whitespace-pre-wrap break-all" x-text="line"></div>
+                                </template>
                             </div>
                         </div>
                     @endif

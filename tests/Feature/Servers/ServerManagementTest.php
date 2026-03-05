@@ -334,6 +334,48 @@ class ServerManagementTest extends TestCase
         $this->assertDatabaseMissing('servers', ['id' => $server->id]);
     }
 
+    public function test_load_server_log_returns_log_lines(): void
+    {
+        $this->actingAs($this->user);
+
+        $server = Server::factory()->create();
+
+        $logPath = $server->getProfilesPath().'/server.log';
+        @mkdir(dirname($logPath), 0755, true);
+        file_put_contents($logPath, "Line 1\nLine 2\nLine 3\n");
+
+        $mock = Mockery::mock(ServerProcessService::class);
+        $mock->shouldReceive('getStatus')->andReturn(ServerStatus::Stopped);
+        $mock->shouldReceive('getServerLogPath')->with(Mockery::on(fn ($s) => $s->id === $server->id))->andReturn($logPath);
+        $this->app->instance(ServerProcessService::class, $mock);
+
+        $result = Livewire::test('pages::servers.index')
+            ->call('loadServerLog', $server->id);
+
+        $this->assertEquals(['Line 1', 'Line 2', 'Line 3'], $result->effects['returns']['loadServerLog']);
+
+        // Clean up
+        @unlink($logPath);
+        @rmdir(dirname($logPath));
+    }
+
+    public function test_load_server_log_returns_empty_when_no_log_file(): void
+    {
+        $this->actingAs($this->user);
+
+        $server = Server::factory()->create();
+
+        $mock = Mockery::mock(ServerProcessService::class);
+        $mock->shouldReceive('getStatus')->andReturn(ServerStatus::Stopped);
+        $mock->shouldReceive('getServerLogPath')->with(Mockery::on(fn ($s) => $s->id === $server->id))->andReturn('/nonexistent/path/server.log');
+        $this->app->instance(ServerProcessService::class, $mock);
+
+        $result = Livewire::test('pages::servers.index')
+            ->call('loadServerLog', $server->id);
+
+        $this->assertEquals(['No log file found.'], $result->effects['returns']['loadServerLog']);
+    }
+
     protected function mockServerProcessService(): void
     {
         $mock = Mockery::mock(ServerProcessService::class);

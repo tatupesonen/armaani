@@ -51,7 +51,11 @@ class TailServerLog extends Command
                 $position = ftell($handle);
 
                 if ($currentSize < $position) {
+                    // File was rotated/truncated — start from beginning
                     fseek($handle, 0);
+                } else {
+                    // Reset PHP's internal EOF flag so fgets() can read new data
+                    fseek($handle, $position);
                 }
 
                 usleep(250_000);

@@ -11,9 +11,6 @@ new #[Title('Workshop Mods')] class extends Component
 {
     public string $workshopId = '';
 
-    /** @var array<int, array{progress: int, lines: string[]}> */
-    public array $modOutputs = [];
-
     /** @var array<int, bool> */
     public array $showLogs = [];
 
@@ -30,54 +27,11 @@ new #[Title('Workshop Mods')] class extends Component
         );
     }
 
-    public function getListeners(): array
-    {
-        $listeners = [];
-
-        foreach ($this->mods as $mod) {
-            $listeners["echo:mod-download.{$mod->id},ModDownloadOutput"] = 'handleModOutput';
-        }
-
-        return $listeners;
-    }
-
-    public function handleModOutput(array $event): void
-    {
-        $id = $event['modId'];
-        $line = $event['line'];
-        $progress = $event['progressPct'];
-
-        if (! isset($this->modOutputs[$id])) {
-            $this->modOutputs[$id] = ['progress' => 0, 'lines' => []];
-        }
-
-        $this->modOutputs[$id]['progress'] = $progress;
-        $this->modOutputs[$id]['lines'][] = $line;
-
-        // Keep only the last 200 lines
-        if (count($this->modOutputs[$id]['lines']) > 200) {
-            $this->modOutputs[$id]['lines'] = array_slice($this->modOutputs[$id]['lines'], -200);
-        }
-
-        // Refresh mods to pick up status changes (Queued → Installing → Installed/Failed)
-        unset($this->mods);
-    }
-
     public function toggleLogs(int $modId): void
     {
         $mod = $this->mods->firstWhere('id', $modId);
         $isActive = $mod && ($mod->installation_status === InstallationStatus::Installing || $mod->installation_status === InstallationStatus::Queued);
         $this->showLogs[$modId] = ! ($this->showLogs[$modId] ?? $isActive);
-    }
-
-    public function getProgress(int $modId): int
-    {
-        return $this->modOutputs[$modId]['progress'] ?? 0;
-    }
-
-    public function getLogLines(int $modId): array
-    {
-        return $this->modOutputs[$modId]['lines'] ?? [];
     }
 
     public function addMod(): void
@@ -102,7 +56,6 @@ new #[Title('Workshop Mods')] class extends Component
 
         if ($mod->installation_status !== InstallationStatus::Installed) {
             DownloadModJob::dispatch($mod);
-            $this->modOutputs[$mod->id] = ['progress' => 0, 'lines' => []];
             Log::info('User '.auth()->id().' ('.auth()->user()->name.") queued mod download: workshop ID {$workshopId}");
         }
 
@@ -113,9 +66,6 @@ new #[Title('Workshop Mods')] class extends Component
     public function retryMod(WorkshopMod $mod): void
     {
         $mod->update(['installation_status' => InstallationStatus::Queued]);
-
-        // Clear previous log output for this mod
-        $this->modOutputs[$mod->id] = ['progress' => 0, 'lines' => []];
 
         DownloadModJob::dispatch($mod);
         Log::info('User '.auth()->id().' ('.auth()->user()->name.") retried mod download: '{$mod->name}' ({$mod->workshop_id})");
@@ -186,8 +136,39 @@ new #[Title('Workshop Mods')] class extends Component
                         <th class="px-4 py-3 font-medium">{{ __('Actions') }}</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-zinc-200 dark:divide-zinc-700">
-                    @foreach ($this->mods as $mod)
+                @foreach ($this->mods as $mod)
+                    <tbody class="divide-y divide-zinc-200 dark:divide-zinc-700" wire:key="mod-group-{{ $mod->id }}"
+                        x-data="{
+                            progress: {{ $mod->progress_pct }},
+                            lines: [],
+                            channel: null,
+                            maxLines: 200,
+                            init() {
+                                @if ($mod->installation_status === InstallationStatus::Installing || $mod->installation_status === InstallationStatus::Queued)
+                                    this.channel = window.Echo.channel('mod-download.{{ $mod->id }}');
+                                    this.channel.listen('ModDownloadOutput', (event) => {
+                                        this.progress = event.progressPct;
+                                        this.lines.push(event.line);
+                                        if (this.lines.length > this.maxLines) {
+                                            this.lines = this.lines.slice(-this.maxLines);
+                                        }
+                                        this.$nextTick(() => this.scrollToBottom());
+                                    });
+                                @endif
+                            },
+                            scrollToBottom() {
+                                if (this.$refs.logContainer) {
+                                    this.$refs.logContainer.scrollTop = this.$refs.logContainer.scrollHeight;
+                                }
+                            },
+                            destroy() {
+                                if (this.channel) {
+                                    window.Echo.leave('mod-download.{{ $mod->id }}');
+                                    this.channel = null;
+                                }
+                            }
+                        }"
+                    >
                         <tr wire:key="mod-{{ $mod->id }}">
                             <td class="px-4 py-3 font-mono text-xs">{{ $mod->workshop_id }}</td>
                             <td class="px-4 py-3">{{ $mod->name ?? __('Fetching...') }}</td>
@@ -200,16 +181,15 @@ new #[Title('Workshop Mods')] class extends Component
                             </td>
                             <td class="px-4 py-3">
                             @if ($mod->installation_status === InstallationStatus::Installing || $mod->installation_status === InstallationStatus::Queued)
-                                @php $progress = $this->getProgress($mod->id) ?: $mod->progress_pct; @endphp
                                 <div class="w-32">
                                     <div class="flex items-center gap-2 mb-1">
                                         <flux:badge :variant="$mod->installation_status === InstallationStatus::Queued ? 'secondary' : 'warning'" size="sm">
                                             {{ $mod->installation_status === InstallationStatus::Queued ? __('Queued') : __('Downloading') }}
                                         </flux:badge>
-                                        <span class="text-xs font-medium">{{ $progress }}%</span>
+                                        <span class="text-xs font-medium" x-text="progress + '%'"></span>
                                     </div>
                                     <div class="h-1.5 w-full rounded-full bg-zinc-200 dark:bg-zinc-700">
-                                        <div class="h-1.5 rounded-full bg-amber-500 transition-all duration-500" style="width: {{ $progress }}%"></div>
+                                        <div class="h-1.5 rounded-full bg-amber-500 transition-all duration-500" x-bind:style="'width: ' + progress + '%'"></div>
                                     </div>
                                 </div>
                             @else
@@ -220,7 +200,7 @@ new #[Title('Workshop Mods')] class extends Component
                             </td>
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-2">
-                                    @if ($mod->installation_status === InstallationStatus::Installing || $mod->installation_status === InstallationStatus::Queued || ! empty($this->getLogLines($mod->id)))
+                                    @if ($mod->installation_status === InstallationStatus::Installing || $mod->installation_status === InstallationStatus::Queued)
                                         <flux:button size="sm" variant="ghost" wire:click="toggleLogs({{ $mod->id }})" icon="command-line">
                                             {{ __('Logs') }}
                                         </flux:button>
@@ -239,19 +219,19 @@ new #[Title('Workshop Mods')] class extends Component
                         @if ($this->showLogs[$mod->id] ?? ($mod->installation_status === InstallationStatus::Installing || $mod->installation_status === InstallationStatus::Queued))
                             <tr wire:key="mod-logs-{{ $mod->id }}">
                                 <td colspan="5" class="px-4 py-3">
-                                    @php $lines = $this->getLogLines($mod->id); @endphp
-                                    <div class="rounded bg-zinc-900 text-zinc-100 p-3 font-mono text-xs max-h-48 overflow-y-auto" x-data x-init="$nextTick(() => $el.scrollTop = $el.scrollHeight)">
-                                        @forelse ($lines as $logLine)
-                                            <div class="whitespace-pre-wrap break-all">{{ $logLine }}</div>
-                                        @empty
+                                    <div class="rounded bg-zinc-900 text-zinc-100 p-3 font-mono text-xs max-h-48 overflow-y-auto" x-ref="logContainer">
+                                        <template x-if="lines.length === 0">
                                             <div class="text-zinc-500">{{ __('Waiting for output...') }}</div>
-                                        @endforelse
+                                        </template>
+                                        <template x-for="(line, index) in lines" :key="index">
+                                            <div class="whitespace-pre-wrap break-all" x-text="line"></div>
+                                        </template>
                                     </div>
                                 </td>
                             </tr>
                         @endif
-                    @endforeach
-                </tbody>
+                    </tbody>
+                @endforeach
             </table>
         </div>
     @endif

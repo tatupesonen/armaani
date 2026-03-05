@@ -6,6 +6,7 @@ use App\Models\GameInstall;
 use App\Models\Server;
 use App\Services\ServerProcessService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 
 class ServerProcessServiceTest extends TestCase
@@ -120,11 +121,11 @@ class ServerProcessServiceTest extends TestCase
         $this->assertStringContainsString('hostname = "Server with \\"quotes\\"";', $contents);
     }
 
-    public function test_symlink_missions_creates_symlinks_in_mpmissions_directory(): void
+    public function test_symlink_missions_creates_symlinks_in_game_install_mpmissions_directory(): void
     {
         $server = $this->makeServer();
         $missionsPath = $this->missionsPath;
-        $mpmissionsPath = $server->getInstallationPath().'/mpmissions';
+        $mpmissionsPath = $server->getBinaryPath().'/mpmissions';
 
         mkdir($missionsPath, 0755, true);
         file_put_contents($missionsPath.'/co40_Domination.Altis.pbo', 'fake');
@@ -144,7 +145,7 @@ class ServerProcessServiceTest extends TestCase
     {
         $server = $this->makeServer();
         $missionsPath = $this->missionsPath;
-        $mpmissionsPath = $server->getInstallationPath().'/mpmissions';
+        $mpmissionsPath = $server->getBinaryPath().'/mpmissions';
 
         mkdir($missionsPath, 0755, true);
         mkdir($mpmissionsPath, 0755, true);
@@ -166,7 +167,7 @@ class ServerProcessServiceTest extends TestCase
     public function test_symlink_missions_skips_when_missions_directory_does_not_exist(): void
     {
         $server = $this->makeServer();
-        $mpmissionsPath = $server->getInstallationPath().'/mpmissions';
+        $mpmissionsPath = $server->getBinaryPath().'/mpmissions';
 
         config(['arma.missions_base_path' => '/nonexistent/path']);
 
@@ -185,13 +186,15 @@ class ServerProcessServiceTest extends TestCase
                 @rmdir($profilesPath);
             }
 
-            $mpmissionsPath = $server->getInstallationPath().'/mpmissions';
-            if (is_dir($mpmissionsPath)) {
-                $files = glob($mpmissionsPath.'/*') ?: [];
-                foreach ($files as $file) {
-                    @unlink($file);
+            foreach ([$server->getInstallationPath(), $server->getBinaryPath()] as $basePath) {
+                $mpmissionsPath = $basePath.'/mpmissions';
+                if (is_dir($mpmissionsPath)) {
+                    $files = glob($mpmissionsPath.'/*') ?: [];
+                    foreach ($files as $file) {
+                        @unlink($file);
+                    }
+                    @rmdir($mpmissionsPath);
                 }
-                @rmdir($mpmissionsPath);
             }
         }
 
@@ -204,6 +207,60 @@ class ServerProcessServiceTest extends TestCase
         }
 
         parent::tearDown();
+    }
+
+    public function test_get_server_log_path_returns_profiles_path(): void
+    {
+        $server = $this->makeServer();
+
+        $expected = $server->getProfilesPath().'/server.log';
+
+        $this->assertEquals($expected, $this->service->getServerLogPath($server));
+    }
+
+    public function test_get_headless_client_log_path_returns_profiles_path_with_index(): void
+    {
+        $server = $this->makeServer();
+
+        $expected = $server->getProfilesPath().'/hc_0.log';
+
+        $this->assertEquals($expected, $this->service->getHeadlessClientLogPath($server, 0));
+    }
+
+    public function test_start_logs_launch_command_to_application_log(): void
+    {
+        $server = $this->makeServer();
+
+        Log::shouldReceive('info')
+            ->withArgs(fn (string $msg) => str_contains($msg, "[Server:{$server->id}") && str_contains($msg, 'Starting server from'))
+            ->once();
+
+        Log::shouldReceive('info')
+            ->withArgs(fn (string $msg) => str_contains($msg, 'Launch command:'))
+            ->once();
+
+        Log::shouldReceive('info')
+            ->withArgs(fn (string $msg) => str_contains($msg, 'Log file:'))
+            ->once();
+
+        Log::shouldReceive('info')
+            ->withArgs(fn (string $msg) => str_contains($msg, 'Process started with PID'))
+            ->once();
+
+        $this->service->start($server);
+    }
+
+    public function test_build_launch_command_uses_game_install_binary_path(): void
+    {
+        $server = $this->makeServer();
+
+        $reflection = new \ReflectionMethod(ServerProcessService::class, 'buildLaunchCommand');
+        $command = $reflection->invoke($this->service, $server);
+
+        $expectedBinary = $server->getBinaryPath().'/arma3server_x64';
+        $this->assertStringStartsWith($expectedBinary, $command);
+        $this->assertStringContainsString('-port='.$server->port, $command);
+        $this->assertStringContainsString('-profiles='.$server->getProfilesPath(), $command);
     }
 
     private string $missionsPath;
