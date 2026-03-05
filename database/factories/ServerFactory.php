@@ -1,0 +1,40 @@
+<?php
+
+namespace Database\Factories;
+
+use Illuminate\Database\Eloquent\Factories\Factory;
+
+/**
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Server>
+ */
+class ServerFactory extends Factory
+{
+    /**
+     * @return array<string, mixed>
+     */
+    public function definition(): array
+    {
+        $port = fake()->numberBetween(2302, 2400);
+
+        return [
+            'name' => fake()->words(2, true).' Server',
+            'port' => $port,
+            'query_port' => $port + 1,
+            'max_players' => fake()->randomElement([16, 32, 64, 128]),
+            'password' => null,
+            'admin_password' => null,
+            'description' => fake()->optional()->sentence(),
+            'active_preset_id' => null,
+            'headless_client_count' => 0,
+            'additional_params' => null,
+        ];
+    }
+
+    public function withPassword(): static
+    {
+        return $this->state(fn (): array => [
+            'password' => fake()->password(6, 12),
+            'admin_password' => fake()->password(6, 12),
+        ]);
+    }
+}

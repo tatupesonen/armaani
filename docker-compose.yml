@@ -1,0 +1,29 @@
+services:
+  armaman:
+    build: .
+    ports:
+      - "${APP_PORT:-8080}:80"
+      - "2302-2312:2302-2312/udp"
+      - "2302-2312:2302-2312/tcp"
+    volumes:
+      - db-data:/var/www/html/database
+      - server-data:/data/servers
+      - mod-data:/data/mods
+      - storage-data:/var/www/html/storage
+    environment:
+      - APP_NAME=${APP_NAME:-ArmaMan}
+      - APP_ENV=${APP_ENV:-production}
+      - APP_DEBUG=${APP_DEBUG:-false}
+      - APP_KEY=${APP_KEY}
+      - APP_URL=${APP_URL:-http://localhost:8080}
+      - STEAM_API_KEY=${STEAM_API_KEY:-}
+      - SERVERS_BASE_PATH=/data/servers
+      - MODS_BASE_PATH=/data/mods
+      - STEAMCMD_PATH=/usr/games/steamcmd
+    restart: unless-stopped
+
+volumes:
+  db-data:
+  server-data:
+  mod-data:
+  storage-data:
