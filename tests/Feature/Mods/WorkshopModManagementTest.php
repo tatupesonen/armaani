@@ -3,8 +3,10 @@
 namespace Tests\Feature\Mods;
 
 use App\Enums\InstallationStatus;
+use App\Jobs\BatchDownloadModsJob;
 use App\Jobs\DownloadModJob;
 use App\Models\ModPreset;
+use App\Models\SteamAccount;
 use App\Models\User;
 use App\Models\WorkshopMod;
 use App\Services\SteamWorkshopService;
@@ -191,6 +193,321 @@ class WorkshopModManagementTest extends TestCase
 
         $this->assertDatabaseMissing('workshop_mods', ['id' => $mod->id]);
         $this->assertDatabaseMissing('mod_preset_workshop_mod', ['workshop_mod_id' => $mod->id]);
+    }
+
+    public function test_retry_all_failed_batches_mods(): void
+    {
+        Queue::fake();
+
+        $this->actingAs($this->user);
+
+        SteamAccount::factory()->create(['mod_download_batch_size' => 5]);
+
+        WorkshopMod::factory()->failed()->create();
+        WorkshopMod::factory()->failed()->create();
+        WorkshopMod::factory()->failed()->create();
+
+        $this->mockWorkshopService();
+
+        Livewire::test('pages::mods.index')
+            ->call('retryAllFailed');
+
+        // 3 mods with batch size 5 → one BatchDownloadModsJob
+        Queue::assertPushed(BatchDownloadModsJob::class, 1);
+        Queue::assertPushed(BatchDownloadModsJob::class, function (BatchDownloadModsJob $job): bool {
+            return $job->mods->count() === 3;
+        });
+
+        // All mods should be queued
+        $this->assertEquals(0, WorkshopMod::where('installation_status', InstallationStatus::Failed)->count());
+        $this->assertEquals(3, WorkshopMod::where('installation_status', InstallationStatus::Queued)->count());
+    }
+
+    public function test_retry_all_failed_uses_individual_job_for_single_mod(): void
+    {
+        Queue::fake();
+
+        $this->actingAs($this->user);
+
+        SteamAccount::factory()->create(['mod_download_batch_size' => 5]);
+
+        WorkshopMod::factory()->failed()->create();
+
+        $this->mockWorkshopService();
+
+        Livewire::test('pages::mods.index')
+            ->call('retryAllFailed');
+
+        Queue::assertPushed(DownloadModJob::class, 1);
+        Queue::assertNotPushed(BatchDownloadModsJob::class);
+    }
+
+    public function test_retry_all_failed_respects_batch_size_setting(): void
+    {
+        Queue::fake();
+
+        $this->actingAs($this->user);
+
+        SteamAccount::factory()->create(['mod_download_batch_size' => 2]);
+
+        WorkshopMod::factory()->failed()->count(5)->create();
+
+        $this->mockWorkshopService();
+
+        Livewire::test('pages::mods.index')
+            ->call('retryAllFailed');
+
+        // 5 mods with batch size 2 → 2 BatchDownloadModsJobs (2+2) + 1 DownloadModJob (1)
+        Queue::assertPushed(BatchDownloadModsJob::class, 2);
+        Queue::assertPushed(DownloadModJob::class, 1);
+    }
+
+    public function test_retry_all_failed_does_nothing_when_no_failed_mods(): void
+    {
+        Queue::fake();
+
+        $this->actingAs($this->user);
+
+        WorkshopMod::factory()->installed()->create();
+
+        $this->mockWorkshopService();
+
+        Livewire::test('pages::mods.index')
+            ->call('retryAllFailed');
+
+        Queue::assertNotPushed(DownloadModJob::class);
+        Queue::assertNotPushed(BatchDownloadModsJob::class);
+    }
+
+    public function test_search_filters_mods_by_name(): void
+    {
+        $this->actingAs($this->user);
+
+        WorkshopMod::factory()->create(['name' => 'ACE3', 'workshop_id' => 463939057]);
+        WorkshopMod::factory()->create(['name' => 'CBA_A3', 'workshop_id' => 450814997]);
+
+        $this->mockWorkshopService();
+
+        Livewire::test('pages::mods.index')
+            ->assertSee('ACE3')
+            ->assertSee('CBA_A3')
+            ->set('search', 'ACE')
+            ->assertSee('ACE3')
+            ->assertDontSee('CBA_A3');
+    }
+
+    public function test_search_filters_mods_by_workshop_id(): void
+    {
+        $this->actingAs($this->user);
+
+        WorkshopMod::factory()->create(['name' => 'ACE3', 'workshop_id' => 463939057]);
+        WorkshopMod::factory()->create(['name' => 'CBA_A3', 'workshop_id' => 450814997]);
+
+        $this->mockWorkshopService();
+
+        Livewire::test('pages::mods.index')
+            ->set('search', '450814997')
+            ->assertDontSee('ACE3')
+            ->assertSee('CBA_A3');
+    }
+
+    public function test_search_shows_no_results_message(): void
+    {
+        $this->actingAs($this->user);
+
+        WorkshopMod::factory()->create(['name' => 'ACE3']);
+
+        $this->mockWorkshopService();
+
+        Livewire::test('pages::mods.index')
+            ->set('search', 'nonexistent')
+            ->assertSee('No mods match your search');
+    }
+
+    public function test_update_selected_queues_download_jobs(): void
+    {
+        Queue::fake();
+
+        $this->actingAs($this->user);
+
+        SteamAccount::factory()->create(['mod_download_batch_size' => 5]);
+
+        $mod1 = WorkshopMod::factory()->installed()->create();
+        $mod2 = WorkshopMod::factory()->installed()->create();
+
+        $this->mockWorkshopService();
+
+        Livewire::test('pages::mods.index')
+            ->set('selectedMods', [$mod1->id, $mod2->id])
+            ->call('updateSelected');
+
+        Queue::assertPushed(BatchDownloadModsJob::class, 1);
+        Queue::assertPushed(BatchDownloadModsJob::class, function (BatchDownloadModsJob $job) {
+            return $job->mods->count() === 2;
+        });
+
+        $this->assertEquals(InstallationStatus::Queued, $mod1->fresh()->installation_status);
+        $this->assertEquals(InstallationStatus::Queued, $mod2->fresh()->installation_status);
+    }
+
+    public function test_update_selected_respects_batch_size(): void
+    {
+        Queue::fake();
+
+        $this->actingAs($this->user);
+
+        SteamAccount::factory()->create(['mod_download_batch_size' => 2]);
+
+        $mods = WorkshopMod::factory()->installed()->count(5)->create();
+
+        $this->mockWorkshopService();
+
+        Livewire::test('pages::mods.index')
+            ->set('selectedMods', $mods->pluck('id')->all())
+            ->call('updateSelected');
+
+        // 5 mods with batch size 2 → 2 BatchDownloadModsJobs (2+2) + 1 DownloadModJob (1)
+        Queue::assertPushed(BatchDownloadModsJob::class, 2);
+        Queue::assertPushed(DownloadModJob::class, 1);
+    }
+
+    public function test_update_selected_uses_individual_job_for_single_mod(): void
+    {
+        Queue::fake();
+
+        $this->actingAs($this->user);
+
+        $mod = WorkshopMod::factory()->installed()->create();
+
+        $this->mockWorkshopService();
+
+        Livewire::test('pages::mods.index')
+            ->set('selectedMods', [$mod->id])
+            ->call('updateSelected');
+
+        Queue::assertPushed(DownloadModJob::class, 1);
+        Queue::assertNotPushed(BatchDownloadModsJob::class);
+    }
+
+    public function test_update_selected_skips_installing_and_queued_mods(): void
+    {
+        Queue::fake();
+
+        $this->actingAs($this->user);
+
+        $installedMod = WorkshopMod::factory()->installed()->create();
+        $installingMod = WorkshopMod::factory()->installing()->create();
+        $queuedMod = WorkshopMod::factory()->create(); // default is queued
+
+        $this->mockWorkshopService();
+
+        Livewire::test('pages::mods.index')
+            ->set('selectedMods', [$installedMod->id, $installingMod->id, $queuedMod->id])
+            ->call('updateSelected');
+
+        Queue::assertPushed(DownloadModJob::class, 1);
+
+        $this->assertEquals(InstallationStatus::Queued, $installedMod->fresh()->installation_status);
+        // Installing/Queued mods should remain unchanged
+        $this->assertEquals(InstallationStatus::Installing, $installingMod->fresh()->installation_status);
+    }
+
+    public function test_update_selected_clears_selection_after(): void
+    {
+        Queue::fake();
+
+        $this->actingAs($this->user);
+
+        $mod = WorkshopMod::factory()->installed()->create();
+
+        $this->mockWorkshopService();
+
+        Livewire::test('pages::mods.index')
+            ->set('selectedMods', [$mod->id])
+            ->call('updateSelected')
+            ->assertSet('selectedMods', []);
+    }
+
+    public function test_update_selected_does_nothing_with_empty_selection(): void
+    {
+        Queue::fake();
+
+        $this->actingAs($this->user);
+
+        $this->mockWorkshopService();
+
+        Livewire::test('pages::mods.index')
+            ->set('selectedMods', [])
+            ->call('updateSelected');
+
+        Queue::assertNotPushed(DownloadModJob::class);
+        Queue::assertNotPushed(BatchDownloadModsJob::class);
+    }
+
+    public function test_toggle_select_all_selects_all_selectable_mods(): void
+    {
+        $this->actingAs($this->user);
+
+        $installed = WorkshopMod::factory()->installed()->create();
+        $failed = WorkshopMod::factory()->failed()->create();
+        WorkshopMod::factory()->installing()->create(); // not selectable
+
+        $this->mockWorkshopService();
+
+        Livewire::test('pages::mods.index')
+            ->assertSet('selectedMods', [])
+            ->call('toggleSelectAll')
+            ->assertSet('selectedMods', [$installed->id, $failed->id]);
+    }
+
+    public function test_toggle_select_all_deselects_when_all_selected(): void
+    {
+        $this->actingAs($this->user);
+
+        $mod1 = WorkshopMod::factory()->installed()->create();
+        $mod2 = WorkshopMod::factory()->installed()->create();
+
+        $this->mockWorkshopService();
+
+        Livewire::test('pages::mods.index')
+            ->set('selectedMods', [$mod1->id, $mod2->id])
+            ->call('toggleSelectAll')
+            ->assertSet('selectedMods', []);
+    }
+
+    public function test_update_selected_can_update_failed_mods(): void
+    {
+        Queue::fake();
+
+        $this->actingAs($this->user);
+
+        $mod = WorkshopMod::factory()->failed()->create();
+
+        $this->mockWorkshopService();
+
+        Livewire::test('pages::mods.index')
+            ->set('selectedMods', [$mod->id])
+            ->call('updateSelected');
+
+        Queue::assertPushed(DownloadModJob::class, 1);
+        $this->assertEquals(InstallationStatus::Queued, $mod->fresh()->installation_status);
+    }
+
+    public function test_clearing_search_shows_all_mods(): void
+    {
+        $this->actingAs($this->user);
+
+        WorkshopMod::factory()->create(['name' => 'ACE3']);
+        WorkshopMod::factory()->create(['name' => 'CBA_A3']);
+
+        $this->mockWorkshopService();
+
+        Livewire::test('pages::mods.index')
+            ->set('search', 'ACE')
+            ->assertDontSee('CBA_A3')
+            ->set('search', '')
+            ->assertSee('ACE3')
+            ->assertSee('CBA_A3');
     }
 
     protected function mockWorkshopService(): void

@@ -65,6 +65,34 @@ class SteamCmdService
     }
 
     /**
+     * Start a batched SteamCMD workshop mod download asynchronously.
+     * Stacks multiple +workshop_download_item commands in a single SteamCMD invocation
+     * so authentication and initialization only happen once per batch.
+     *
+     * @param  list<int>  $workshopIds
+     */
+    public function startBatchDownloadMods(string $installDir, array $workshopIds): InvokedProcess
+    {
+        $args = $this->baseArgs($installDir);
+
+        $gameId = config('arma.game_id');
+
+        foreach ($workshopIds as $workshopId) {
+            $args[] = '+workshop_download_item '.$gameId.' '.$workshopId.' validate';
+        }
+
+        $args[] = '+quit';
+
+        $steamcmdPath = config('arma.steamcmd_path');
+
+        // Scale timeout by number of mods: 1 hour per mod in the batch
+        $timeout = max(3600, count($workshopIds) * 3600);
+
+        return Process::timeout($timeout)
+            ->start(array_merge([$steamcmdPath], $args));
+    }
+
+    /**
      * Build and run a SteamCMD command to download a single workshop mod.
      */
     public function downloadMod(string $installDir, int $workshopId): ProcessResult

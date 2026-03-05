@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Server extends Model
 {
@@ -23,7 +24,27 @@ class Server extends Model
         'game_install_id',
         'headless_client_count',
         'additional_params',
+        'verify_signatures',
+        'allowed_file_patching',
+        'battle_eye',
+        'persistent',
+        'von_enabled',
+        'additional_server_options',
     ];
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'verify_signatures' => 'boolean',
+            'allowed_file_patching' => 'boolean',
+            'battle_eye' => 'boolean',
+            'persistent' => 'boolean',
+            'von_enabled' => 'boolean',
+        ];
+    }
 
     public function activePreset(): BelongsTo
     {
@@ -33,6 +54,11 @@ class Server extends Model
     public function gameInstall(): BelongsTo
     {
         return $this->belongsTo(GameInstall::class);
+    }
+
+    public function difficultySettings(): HasOne
+    {
+        return $this->hasOne(DifficultySettings::class);
     }
 
     /**

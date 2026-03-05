@@ -3,6 +3,7 @@
 namespace Tests\Unit\Services;
 
 use App\Enums\InstallationStatus;
+use App\Jobs\BatchDownloadModsJob;
 use App\Jobs\DownloadModJob;
 use App\Models\ModPreset;
 use App\Models\WorkshopMod;
@@ -23,6 +24,16 @@ class PresetImportServiceTest extends TestCase
         parent::setUp();
 
         $this->service = new PresetImportService;
+
+        $this->mockWorkshopService();
+    }
+
+    protected function mockWorkshopService(array $metadataMap = []): void
+    {
+        $mock = Mockery::mock(SteamWorkshopService::class);
+        $mock->shouldReceive('getMultipleModDetails')
+            ->andReturn($metadataMap);
+        $this->app->instance(SteamWorkshopService::class, $mock);
     }
 
     public function test_parse_html_preset_extracts_workshop_ids(): void
@@ -130,7 +141,45 @@ class PresetImportServiceTest extends TestCase
         $this->assertDatabaseHas('workshop_mods', ['workshop_id' => 450814997]);
     }
 
-    public function test_import_from_html_dispatches_download_jobs(): void
+    public function test_import_from_html_populates_mod_names_from_bulk_api(): void
+    {
+        Queue::fake();
+
+        $this->mockWorkshopService([
+            463939057 => ['name' => 'ace', 'file_size' => 123456],
+            450814997 => ['name' => 'CBA_A3', 'file_size' => 654321],
+        ]);
+
+        $html = $this->buildPresetHtml([463939057, 450814997], 'Named Preset');
+
+        $this->service->importFromHtml($html);
+
+        $this->assertDatabaseHas('workshop_mods', ['workshop_id' => 463939057, 'name' => 'ace']);
+        $this->assertDatabaseHas('workshop_mods', ['workshop_id' => 450814997, 'name' => 'CBA_A3']);
+    }
+
+    public function test_import_does_not_overwrite_existing_mod_names(): void
+    {
+        Queue::fake();
+
+        WorkshopMod::factory()->create([
+            'workshop_id' => 463939057,
+            'name' => 'Custom Name',
+            'installation_status' => InstallationStatus::Failed,
+        ]);
+
+        $this->mockWorkshopService([
+            463939057 => ['name' => 'ace', 'file_size' => 123456],
+        ]);
+
+        $html = $this->buildPresetHtml([463939057], 'Keep Names');
+
+        $this->service->importFromHtml($html);
+
+        $this->assertDatabaseHas('workshop_mods', ['workshop_id' => 463939057, 'name' => 'Custom Name']);
+    }
+
+    public function test_import_from_html_dispatches_batched_download_job(): void
     {
         Queue::fake();
 
@@ -138,7 +187,10 @@ class PresetImportServiceTest extends TestCase
 
         $this->service->importFromHtml($html);
 
-        Queue::assertPushed(DownloadModJob::class, 2);
+        Queue::assertPushed(BatchDownloadModsJob::class, 1);
+        Queue::assertPushed(BatchDownloadModsJob::class, function (BatchDownloadModsJob $job): bool {
+            return $job->mods->count() === 2;
+        });
     }
 
     public function test_import_from_html_does_not_queue_already_installed_mods(): void
@@ -151,7 +203,9 @@ class PresetImportServiceTest extends TestCase
 
         $this->service->importFromHtml($html);
 
+        // Only 1 mod needs downloading, so it dispatches a single DownloadModJob (not a batch)
         Queue::assertPushed(DownloadModJob::class, 1);
+        Queue::assertNotPushed(BatchDownloadModsJob::class);
     }
 
     public function test_import_from_html_uses_custom_name_over_parsed_name(): void

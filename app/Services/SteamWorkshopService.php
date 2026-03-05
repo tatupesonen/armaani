@@ -18,6 +18,54 @@ class SteamWorkshopService
     }
 
     /**
+     * Fetch metadata for multiple mods in a single Steam API call.
+     *
+     * @param  list<int>  $workshopIds
+     * @return array<int, array{name: string|null, file_size: int|null}>
+     */
+    public function getMultipleModDetails(array $workshopIds): array
+    {
+        if (empty($workshopIds)) {
+            return [];
+        }
+
+        $formData = ['itemcount' => count($workshopIds)];
+
+        foreach (array_values($workshopIds) as $index => $id) {
+            $formData["publishedfileids[{$index}]"] = $id;
+        }
+
+        $response = Http::asForm()->post(
+            'https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/',
+            $formData,
+        );
+
+        if (! $response->successful()) {
+            return [];
+        }
+
+        $results = [];
+        $details = $response->json('response.publishedfiledetails', []);
+
+        foreach ($details as $detail) {
+            if (! $detail || ($detail['result'] ?? 0) !== 1) {
+                continue;
+            }
+
+            $workshopId = (int) ($detail['publishedfileid'] ?? 0);
+
+            if ($workshopId > 0) {
+                $results[$workshopId] = [
+                    'name' => $detail['title'] ?? null,
+                    'file_size' => isset($detail['file_size']) ? (int) $detail['file_size'] : null,
+                ];
+            }
+        }
+
+        return $results;
+    }
+
+    /**
      * Validate that a Steam Web API key is accepted by the Steam Web API.
      *
      * Returns an array with 'valid' (bool) and 'error' (string|null).

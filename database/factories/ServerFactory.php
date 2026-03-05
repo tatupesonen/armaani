@@ -29,6 +29,12 @@ class ServerFactory extends Factory
             'game_install_id' => GameInstall::factory()->installed(),
             'headless_client_count' => 0,
             'additional_params' => null,
+            'verify_signatures' => true,
+            'allowed_file_patching' => false,
+            'battle_eye' => true,
+            'persistent' => false,
+            'von_enabled' => true,
+            'additional_server_options' => null,
         ];
     }
 

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\ServerStatus;
+use App\Models\DifficultySettings;
 use App\Models\Server;
 use Illuminate\Support\Facades\Log;
 
@@ -31,6 +32,8 @@ class ServerProcessService
         $this->symlinkMissions($server);
         $this->copyBiKeys($server);
         $this->generateServerConfig($server);
+        $this->generateBasicConfig($server);
+        $this->generateProfileConfig($server);
 
         $command = $this->buildLaunchCommand($server);
         $pidFile = $this->getPidFilePath($server);
@@ -165,7 +168,7 @@ class ServerProcessService
     /**
      * Build the Arma 3 server launch command string.
      */
-    protected function buildLaunchCommand(Server $server): string
+    public function buildLaunchCommand(Server $server): string
     {
         $binary = $server->getBinaryPath().'/arma3server_x64';
         $params = [];
@@ -174,13 +177,10 @@ class ServerProcessService
         $params[] = '-name=arma3_'.$server->id;
         $params[] = '-profiles='.$server->getProfilesPath();
         $params[] = '-config='.$server->getProfilesPath().'/server.cfg';
+        $params[] = '-cfg='.$server->getProfilesPath().'/server_basic.cfg';
         $params[] = '-nosplash';
         $params[] = '-skipIntro';
         $params[] = '-world=empty';
-
-        if ($server->password) {
-            $params[] = '-password='.$server->password;
-        }
 
         $modParams = $this->buildModParams($server);
 
@@ -225,16 +225,16 @@ class ServerProcessService
         $lines[] = '// JOINING RULES';
         $lines[] = 'maxPlayers = '.(int) $server->max_players.';';
         $lines[] = 'kickDuplicate = 1;';
-        $lines[] = 'verifySignatures = 2;';
-        $lines[] = 'allowedFilePatching = 0;';
+        $lines[] = 'verifySignatures = '.($server->verify_signatures ? '2' : '0').';';
+        $lines[] = 'allowedFilePatching = '.($server->allowed_file_patching ? '2' : '0').';';
         $lines[] = '';
         $lines[] = '// INGAME SETTINGS';
-        $lines[] = 'disableVoN = 0;';
+        $lines[] = 'disableVoN = '.($server->von_enabled ? '0' : '1').';';
         $lines[] = 'vonCodec = 1;';
         $lines[] = 'vonCodecQuality = 30;';
-        $lines[] = 'persistent = 0;';
+        $lines[] = 'persistent = '.($server->persistent ? '1' : '0').';';
         $lines[] = 'timeStampFormat = "short";';
-        $lines[] = 'BattlEye = 1;';
+        $lines[] = 'BattlEye = '.($server->battle_eye ? '1' : '0').';';
         $lines[] = '';
         $lines[] = '// SIGNATURE VERIFICATION';
         $lines[] = 'onUnsignedData = "kick (_this select 0)";';
@@ -254,32 +254,163 @@ class ServerProcessService
             $lines[] = '};';
         }
 
-        $mpmissionsPath = $server->getBinaryPath().'/mpmissions';
-        $missionFiles = is_dir($mpmissionsPath)
-            ? glob($mpmissionsPath.'/*.pbo') ?: []
-            : [];
-
-        if (! empty($missionFiles)) {
+        if ($server->additional_server_options) {
             $lines[] = '';
-            $lines[] = '// MISSIONS';
-            $lines[] = 'class Missions {';
-
-            foreach ($missionFiles as $index => $missionFile) {
-                $template = basename($missionFile, '.pbo');
-                $classIndex = $index + 1;
-                $lines[] = "    class Mission{$classIndex} {";
-                $lines[] = '        template = "'.addslashes($template).'";';
-                $lines[] = '        difficulty = "Regular";';
-                $lines[] = '    };';
-            }
-
-            $lines[] = '};';
+            $lines[] = '// ADDITIONAL OPTIONS';
+            $lines[] = $server->additional_server_options;
         }
 
         file_put_contents(
             $server->getProfilesPath().'/server.cfg',
             implode("\n", $lines)."\n"
         );
+    }
+
+    /**
+     * Generate and write server_basic.cfg (network tuning) to the profiles directory.
+     * The file is always regenerated on start so config changes take effect immediately.
+     */
+    protected function generateBasicConfig(Server $server): void
+    {
+        $lines = [];
+
+        $lines[] = '// BASIC NETWORK CONFIGURATION';
+        $lines[] = 'MaxMsgSend = 128;';
+        $lines[] = 'MaxSizeGuaranteed = 512;';
+        $lines[] = 'MaxSizeNonguaranteed = 256;';
+        $lines[] = 'MinBandwidth = 131072;';
+        $lines[] = 'MaxBandwidth = 10000000000;';
+        $lines[] = 'MinErrorToSend = 0.001;';
+        $lines[] = 'MinErrorToSendNear = 0.01;';
+        $lines[] = 'MaxCustomFileSize = 0;';
+        $lines[] = '';
+        $lines[] = 'class sockets {';
+        $lines[] = '    maxPacketSize = 1400;';
+        $lines[] = '};';
+
+        file_put_contents(
+            $server->getProfilesPath().'/server_basic.cfg',
+            implode("\n", $lines)."\n"
+        );
+    }
+
+    /**
+     * Generate the .Arma3Profile file with difficulty and AI settings.
+     * Written to {profiles}/home/{name}/{name}.Arma3Profile where {name} matches
+     * the -name= launch parameter (arma3_{id}).
+     */
+    protected function generateProfileConfig(Server $server): void
+    {
+        $settings = $server->difficultySettings ?? $this->getDefaultDifficultySettings();
+        $profileName = 'arma3_'.$server->id;
+        $profileDir = $server->getProfilesPath().'/home/'.$profileName;
+
+        if (! is_dir($profileDir)) {
+            mkdir($profileDir, 0755, true);
+        }
+
+        $lines = [];
+        $lines[] = 'version=1;';
+        $lines[] = 'blood=1;';
+        $lines[] = 'singleVoice=0;';
+        $lines[] = 'gamma=1;';
+        $lines[] = 'brightness=1;';
+        $lines[] = 'volumeCD=5;';
+        $lines[] = 'volumeFX=5;';
+        $lines[] = 'volumeSpeech=5;';
+        $lines[] = 'volumeVoN=5;';
+        $lines[] = 'soundEnableEAX=1;';
+        $lines[] = 'soundEnableHW=0;';
+        $lines[] = 'volumeMapDucking=1;';
+        $lines[] = 'volumeUI=1;';
+        $lines[] = 'class DifficultyPresets';
+        $lines[] = '{';
+        $lines[] = '    class CustomDifficulty';
+        $lines[] = '    {';
+        $lines[] = '        class Options';
+        $lines[] = '        {';
+        $lines[] = '            /* Simulation */';
+        $lines[] = '            reducedDamage = '.($settings->reduced_damage ? '1' : '0').';';
+        $lines[] = '';
+        $lines[] = '            /* Situational awareness */';
+        $lines[] = '            groupIndicators = '.$settings->group_indicators.';';
+        $lines[] = '            friendlyTags = '.$settings->friendly_tags.';';
+        $lines[] = '            enemyTags = '.$settings->enemy_tags.';';
+        $lines[] = '            detectedMines = '.$settings->detected_mines.';';
+        $lines[] = '            commands = '.$settings->commands.';';
+        $lines[] = '            waypoints = '.$settings->waypoints.';';
+        $lines[] = '            tacticalPing = '.$settings->tactical_ping.';';
+        $lines[] = '';
+        $lines[] = '            /* Personal awareness */';
+        $lines[] = '            weaponInfo = '.$settings->weapon_info.';';
+        $lines[] = '            stanceIndicator = '.$settings->stance_indicator.';';
+        $lines[] = '            staminaBar = '.($settings->stamina_bar ? '1' : '0').';';
+        $lines[] = '            weaponCrosshair = '.($settings->weapon_crosshair ? '1' : '0').';';
+        $lines[] = '            visionAid = '.($settings->vision_aid ? '1' : '0').';';
+        $lines[] = '';
+        $lines[] = '            /* View */';
+        $lines[] = '            thirdPersonView = '.$settings->third_person_view.';';
+        $lines[] = '            cameraShake = '.($settings->camera_shake ? '1' : '0').';';
+        $lines[] = '';
+        $lines[] = '            /* Multiplayer */';
+        $lines[] = '            scoreTable = '.($settings->score_table ? '1' : '0').';';
+        $lines[] = '            deathMessages = '.($settings->death_messages ? '1' : '0').';';
+        $lines[] = '            vonID = '.($settings->von_id ? '1' : '0').';';
+        $lines[] = '';
+        $lines[] = '            /* Misc */';
+        $lines[] = '            mapContent = '.($settings->map_content ? '1' : '0').';';
+        $lines[] = '            autoReport = '.($settings->auto_report ? '1' : '0').';';
+        $lines[] = '            multipleSaves = 0;';
+        $lines[] = '        };';
+        $lines[] = '';
+        $lines[] = '        aiLevelPreset = '.$settings->ai_level_preset.';';
+        $lines[] = '    };';
+        $lines[] = '';
+        $lines[] = '    class CustomAILevel';
+        $lines[] = '    {';
+        $lines[] = '        skillAI = '.$settings->skill_ai.';';
+        $lines[] = '        precisionAI = '.$settings->precision_ai.';';
+        $lines[] = '    };';
+        $lines[] = '};';
+
+        file_put_contents(
+            $profileDir.'/'.$profileName.'.Arma3Profile',
+            implode("\n", $lines)."\n"
+        );
+    }
+
+    /**
+     * Build a default DifficultySettings object (not persisted) for servers
+     * that don't have custom difficulty settings configured yet.
+     */
+    protected function getDefaultDifficultySettings(): DifficultySettings
+    {
+        $settings = new DifficultySettings;
+        $settings->reduced_damage = false;
+        $settings->group_indicators = 2;
+        $settings->friendly_tags = 2;
+        $settings->enemy_tags = 0;
+        $settings->detected_mines = 2;
+        $settings->commands = 2;
+        $settings->waypoints = 2;
+        $settings->tactical_ping = 3;
+        $settings->weapon_info = 2;
+        $settings->stance_indicator = 2;
+        $settings->stamina_bar = true;
+        $settings->weapon_crosshair = true;
+        $settings->vision_aid = false;
+        $settings->third_person_view = 1;
+        $settings->camera_shake = true;
+        $settings->score_table = true;
+        $settings->death_messages = true;
+        $settings->von_id = true;
+        $settings->map_content = true;
+        $settings->auto_report = false;
+        $settings->ai_level_preset = 1;
+        $settings->skill_ai = 0.50;
+        $settings->precision_ai = 0.50;
+
+        return $settings;
     }
 
     /**
@@ -356,8 +487,9 @@ class ServerProcessService
     }
 
     /**
-     * Copy .bikey files from all mods in the active preset to the game install's keys/ directory.
+     * Symlink .bikey files from all mods in the active preset to the game install's keys/ directory.
      * BiKeys are required for signature verification (verifySignatures=2).
+     * Only the conventional keys/ subdirectory within each mod is checked (no recursive scan).
      */
     protected function copyBiKeys(Server $server): void
     {
@@ -376,42 +508,21 @@ class ServerProcessService
         $preset->load('mods');
 
         foreach ($preset->mods as $mod) {
-            $modInstallPath = $mod->getInstallationPath();
+            $modKeysPath = $mod->getInstallationPath().'/keys';
 
-            if (! is_dir($modInstallPath)) {
+            if (! is_dir($modKeysPath)) {
                 continue;
             }
 
-            $bikeyFiles = $this->findBiKeyFiles($modInstallPath);
-
-            foreach ($bikeyFiles as $bikeyFile) {
+            foreach (glob($modKeysPath.'/*.bikey') ?: [] as $bikeyFile) {
                 $destPath = $keysPath.'/'.basename($bikeyFile);
-                copy($bikeyFile, $destPath);
-                Log::info("[Server:{$server->id}] Copied BiKey ".basename($bikeyFile)." from mod '{$mod->name}'");
+
+                if (! file_exists($destPath)) {
+                    symlink($bikeyFile, $destPath);
+                    Log::info("[Server:{$server->id}] Symlinked BiKey ".basename($bikeyFile)." from mod '{$mod->name}'");
+                }
             }
         }
-    }
-
-    /**
-     * Recursively find all .bikey files in a directory.
-     *
-     * @return array<string>
-     */
-    protected function findBiKeyFiles(string $directory): array
-    {
-        $bikeyFiles = [];
-
-        $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($directory, \RecursiveDirectoryIterator::SKIP_DOTS),
-        );
-
-        foreach ($iterator as $file) {
-            if ($file->isFile() && strtolower($file->getExtension()) === 'bikey') {
-                $bikeyFiles[] = $file->getPathname();
-            }
-        }
-
-        return $bikeyFiles;
     }
 
     protected function startHeadlessClient(Server $server, int $index): void

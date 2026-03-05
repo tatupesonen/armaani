@@ -36,7 +36,7 @@ return [
     |
     */
 
-    'games_base_path' => env('GAMES_BASE_PATH', storage_path('arma/games')),
+    'games_base_path' => env('GAMES_BASE_PATH') ?: storage_path('arma/games'),
 
     /*
     |--------------------------------------------------------------------------
@@ -48,7 +48,7 @@ return [
     |
     */
 
-    'servers_base_path' => env('SERVERS_BASE_PATH', storage_path('arma/servers')),
+    'servers_base_path' => env('SERVERS_BASE_PATH') ?: storage_path('arma/servers'),
 
     /*
     |--------------------------------------------------------------------------
@@ -60,7 +60,7 @@ return [
     |
     */
 
-    'mods_base_path' => env('MODS_BASE_PATH', storage_path('arma/mods')),
+    'mods_base_path' => env('MODS_BASE_PATH') ?: storage_path('arma/mods'),
 
     /*
     |--------------------------------------------------------------------------
@@ -73,7 +73,7 @@ return [
     |
     */
 
-    'missions_base_path' => env('MISSIONS_BASE_PATH', storage_path('arma/missions')),
+    'missions_base_path' => env('MISSIONS_BASE_PATH') ?: storage_path('arma/missions'),
 
     /*
     |--------------------------------------------------------------------------

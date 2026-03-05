@@ -15,6 +15,7 @@ class SteamAccount extends Model
         'password',
         'auth_token',
         'steam_api_key',
+        'mod_download_batch_size',
     ];
 
     protected $hidden = [
@@ -32,6 +33,7 @@ class SteamAccount extends Model
             'password' => 'encrypted',
             'auth_token' => 'encrypted',
             'steam_api_key' => 'encrypted',
+            'mod_download_batch_size' => 'integer',
         ];
     }
 }

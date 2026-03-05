@@ -3,8 +3,10 @@
 namespace App\Services;
 
 use App\Enums\InstallationStatus;
+use App\Jobs\BatchDownloadModsJob;
 use App\Jobs\DownloadModJob;
 use App\Models\ModPreset;
+use App\Models\SteamAccount;
 use App\Models\WorkshopMod;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
@@ -53,33 +55,86 @@ class PresetImportService
 
     /**
      * Import an HTML preset: create/find mods, create the preset, and queue downloads.
+     * Downloads are batched into groups based on the configured mod_download_batch_size.
+     * Mod names and file sizes are fetched in bulk from the Steam API before queuing.
+     * Already-installed mods are not re-queued.
      */
     public function importFromHtml(string $htmlContent, ?string $presetName = null): ModPreset
     {
         $workshopIds = $this->parseHtmlPreset($htmlContent);
         $name = $presetName ?? $this->parsePresetName($htmlContent) ?? 'Imported Preset '.now()->format('Y-m-d H:i');
 
+        $metadataMap = $this->fetchBulkMetadata($workshopIds->all());
+
         $preset = ModPreset::query()->create(['name' => $name]);
         $modIds = [];
+        $modsToDownload = collect();
 
         foreach ($workshopIds as $workshopId) {
+            $metadata = $metadataMap[$workshopId] ?? [];
+
             $mod = WorkshopMod::query()->firstOrCreate(
                 ['workshop_id' => $workshopId],
                 [
+                    'name' => $metadata['name'] ?? null,
+                    'file_size' => $metadata['file_size'] ?? null,
                     'installation_status' => InstallationStatus::Queued,
                 ]
             );
+
+            if (! $mod->name && isset($metadata['name'])) {
+                $mod->update(array_filter([
+                    'name' => $metadata['name'],
+                    'file_size' => $mod->file_size ?? ($metadata['file_size'] ?? null),
+                ]));
+            }
 
             $modIds[] = $mod->id;
 
             if ($mod->installation_status !== InstallationStatus::Installed) {
                 $mod->update(['installation_status' => InstallationStatus::Queued]);
-                DownloadModJob::dispatch($mod);
+                $modsToDownload->push($mod);
             }
         }
 
         $preset->mods()->sync($modIds);
 
+        $this->dispatchBatchedDownloads($modsToDownload);
+
         return $preset;
+    }
+
+    /**
+     * Fetch metadata for all workshop IDs in bulk from the Steam API.
+     *
+     * @param  list<int>  $workshopIds
+     * @return array<int, array{name: string|null, file_size: int|null}>
+     */
+    protected function fetchBulkMetadata(array $workshopIds): array
+    {
+        return app(SteamWorkshopService::class)->getMultipleModDetails($workshopIds);
+    }
+
+    /**
+     * Dispatch download jobs for the given mods, batching them according to the configured batch size.
+     * Single-mod batches use DownloadModJob; multi-mod batches use BatchDownloadModsJob.
+     *
+     * @param  Collection<int, WorkshopMod>  $mods
+     */
+    public function dispatchBatchedDownloads(Collection $mods): void
+    {
+        if ($mods->isEmpty()) {
+            return;
+        }
+
+        $batchSize = SteamAccount::query()->latest()->first()?->mod_download_batch_size ?? 5;
+
+        foreach ($mods->chunk($batchSize) as $batch) {
+            if ($batch->count() === 1) {
+                DownloadModJob::dispatch($batch->first());
+            } else {
+                BatchDownloadModsJob::dispatch($batch);
+            }
+        }
     }
 }

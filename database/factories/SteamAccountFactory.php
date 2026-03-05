@@ -19,6 +19,7 @@ class SteamAccountFactory extends Factory
             'password' => fake()->password(),
             'auth_token' => null,
             'steam_api_key' => null,
+            'mod_download_batch_size' => 5,
         ];
     }
 

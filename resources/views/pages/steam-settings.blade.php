@@ -16,6 +16,8 @@ new #[Title('Steam Settings')] class extends Component
 
     public string $steam_api_key = '';
 
+    public int $mod_download_batch_size = 5;
+
     public ?bool $loginVerified = null;
 
     public ?string $loginError = null;
@@ -32,16 +34,16 @@ new #[Title('Steam Settings')] class extends Component
             $this->username = $account->username;
             $this->auth_token = $account->getRawOriginal('auth_token') ? '********' : '';
             $this->steam_api_key = $account->getRawOriginal('steam_api_key') ? '********' : '';
+            $this->mod_download_batch_size = $account->mod_download_batch_size ?? 5;
         }
     }
 
-    public function save(): void
+    public function saveCredentials(): void
     {
         $this->validate([
             'username' => ['required', 'string', 'max:255'],
             'password' => ['required', 'string', 'max:255'],
             'auth_token' => ['nullable', 'string', 'max:255'],
-            'steam_api_key' => ['nullable', 'string', 'max:255'],
         ]);
 
         $account = SteamAccount::query()->latest()->first();
@@ -55,24 +57,64 @@ new #[Title('Steam Settings')] class extends Component
             $data['auth_token'] = $this->auth_token ?: null;
         }
 
-        if ($this->steam_api_key !== '********') {
-            $data['steam_api_key'] = $this->steam_api_key ?: null;
-        }
-
         if ($account) {
             $account->update($data);
         } else {
-            $account = SteamAccount::query()->create($data);
+            SteamAccount::query()->create($data);
         }
 
-        Log::info('User '.auth()->id().' ('.auth()->user()->name.') updated Steam settings');
+        Log::info('User '.auth()->id().' ('.auth()->user()->name.') updated Steam credentials');
 
         $this->password = '';
         $this->loginVerified = null;
         $this->loginError = null;
+        $this->dispatch('credentials-saved');
+    }
+
+    public function saveApiKey(): void
+    {
+        $this->validate([
+            'steam_api_key' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $account = SteamAccount::query()->latest()->first();
+
+        if (! $account) {
+            $this->addError('steam_api_key', __('Please save Steam credentials first.'));
+
+            return;
+        }
+
+        if ($this->steam_api_key !== '********') {
+            $account->update(['steam_api_key' => $this->steam_api_key ?: null]);
+        }
+
+        Log::info('User '.auth()->id().' ('.auth()->user()->name.') updated Steam API key');
+
         $this->apiKeyVerified = null;
         $this->apiKeyError = null;
-        $this->dispatch('steam-settings-saved');
+        $this->dispatch('api-key-saved');
+    }
+
+    public function saveSettings(): void
+    {
+        $this->validate([
+            'mod_download_batch_size' => ['required', 'integer', 'min:1', 'max:50'],
+        ]);
+
+        $account = SteamAccount::query()->latest()->first();
+
+        if (! $account) {
+            $this->addError('mod_download_batch_size', __('Please save Steam credentials first.'));
+
+            return;
+        }
+
+        $account->update(['mod_download_batch_size' => $this->mod_download_batch_size]);
+
+        Log::info('User '.auth()->id().' ('.auth()->user()->name.') updated download settings');
+
+        $this->dispatch('settings-saved');
     }
 
     public function verifyLogin(): void
@@ -126,9 +168,9 @@ new #[Title('Steam Settings')] class extends Component
         <flux:text class="mt-2">{{ __('Configure Steam credentials used by SteamCMD to download server files and workshop mods. Credentials are stored encrypted.') }}</flux:text>
     </div>
 
-    <form wire:submit="save" class="space-y-6 max-w-xl">
+    <div class="space-y-6 max-w-xl">
         {{-- SteamCMD Login Section --}}
-        <div class="space-y-4">
+        <form wire:submit="saveCredentials" class="space-y-4">
             <flux:heading size="lg">{{ __('SteamCMD Login') }}</flux:heading>
             <flux:text>{{ __('Credentials used by SteamCMD to authenticate with Steam for downloading server files and workshop mods.') }}</flux:text>
 
@@ -155,12 +197,21 @@ new #[Title('Steam Settings')] class extends Component
                     <code class="rounded bg-zinc-100 px-2 py-1 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">{{ $loginError }}</code>
                 @endif
             </div>
-        </div>
+
+            <div class="flex items-center gap-4">
+                <flux:button variant="primary" type="submit">
+                    {{ __('Save Credentials') }}
+                </flux:button>
+                <x-action-message on="credentials-saved">
+                    {{ __('Saved.') }}
+                </x-action-message>
+            </div>
+        </form>
 
         <flux:separator />
 
         {{-- Steam Web API Key Section --}}
-        <div class="space-y-4">
+        <form wire:submit="saveApiKey" class="space-y-4">
             <flux:heading size="lg">{{ __('Steam Web API Key') }}</flux:heading>
             <flux:text>{{ __('Used to fetch workshop mod metadata (name, file size). Get one at') }} <a href="https://steamcommunity.com/dev/apikey" target="_blank" class="underline">steamcommunity.com/dev/apikey</a>. {{ __('Optional — the public API works without a key, but may be rate-limited.') }}</flux:text>
 
@@ -179,17 +230,42 @@ new #[Title('Steam Settings')] class extends Component
                     <code class="rounded bg-zinc-100 px-2 py-1 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">{{ $apiKeyError }}</code>
                 @endif
             </div>
-        </div>
+
+            <div class="flex items-center gap-4">
+                <flux:button variant="primary" type="submit">
+                    {{ __('Save API Key') }}
+                </flux:button>
+                <x-action-message on="api-key-saved">
+                    {{ __('Saved.') }}
+                </x-action-message>
+            </div>
+        </form>
 
         <flux:separator />
 
-        <div class="flex items-center gap-4">
-            <flux:button variant="primary" type="submit">
-                {{ __('Save Credentials') }}
-            </flux:button>
-            <x-action-message on="steam-settings-saved">
-                {{ __('Saved.') }}
-            </x-action-message>
-        </div>
-    </form>
+        {{-- Download Settings Section --}}
+        <form wire:submit="saveSettings" class="space-y-4">
+            <flux:heading size="lg">{{ __('Download Settings') }}</flux:heading>
+            <flux:text>{{ __('Configure how SteamCMD downloads workshop mods. Batching combines multiple mod downloads into a single SteamCMD invocation, reducing authentication overhead.') }}</flux:text>
+
+            <flux:input
+                wire:model="mod_download_batch_size"
+                :label="__('Mod Download Batch Size')"
+                :description="__('Number of mods to download per SteamCMD invocation when importing presets or retrying multiple mods. Set to 1 to download mods individually.')"
+                type="number"
+                min="1"
+                max="50"
+                required
+            />
+
+            <div class="flex items-center gap-4">
+                <flux:button variant="primary" type="submit">
+                    {{ __('Save Settings') }}
+                </flux:button>
+                <x-action-message on="settings-saved">
+                    {{ __('Saved.') }}
+                </x-action-message>
+            </div>
+        </form>
+    </div>
 </section>

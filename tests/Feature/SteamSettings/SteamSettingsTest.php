@@ -43,9 +43,9 @@ class SteamSettingsTest extends TestCase
         Livewire::test('pages::steam-settings')
             ->set('username', 'mysteamuser')
             ->set('password', 'supersecret')
-            ->call('save')
+            ->call('saveCredentials')
             ->assertHasNoErrors()
-            ->assertDispatched('steam-settings-saved');
+            ->assertDispatched('credentials-saved');
 
         $account = SteamAccount::latest()->first();
         $this->assertNotNull($account);
@@ -61,32 +61,32 @@ class SteamSettingsTest extends TestCase
         Livewire::test('pages::steam-settings')
             ->set('username', 'newuser')
             ->set('password', 'newpassword')
-            ->call('save')
+            ->call('saveCredentials')
             ->assertHasNoErrors();
 
         $this->assertEquals(1, SteamAccount::count());
         $this->assertEquals('newuser', SteamAccount::latest()->first()->username);
     }
 
-    public function test_save_validates_required_username(): void
+    public function test_save_credentials_validates_required_username(): void
     {
         $this->actingAs($this->user);
 
         Livewire::test('pages::steam-settings')
             ->set('username', '')
             ->set('password', 'secret')
-            ->call('save')
+            ->call('saveCredentials')
             ->assertHasErrors(['username']);
     }
 
-    public function test_save_validates_required_password(): void
+    public function test_save_credentials_validates_required_password(): void
     {
         $this->actingAs($this->user);
 
         Livewire::test('pages::steam-settings')
             ->set('username', 'user')
             ->set('password', '')
-            ->call('save')
+            ->call('saveCredentials')
             ->assertHasErrors(['password']);
     }
 
@@ -98,7 +98,7 @@ class SteamSettingsTest extends TestCase
             ->set('username', 'steamuser')
             ->set('password', 'steampass')
             ->set('auth_token', 'ABC12')
-            ->call('save')
+            ->call('saveCredentials')
             ->assertHasNoErrors();
 
         $account = SteamAccount::latest()->first();
@@ -110,16 +110,27 @@ class SteamSettingsTest extends TestCase
     {
         $this->actingAs($this->user);
 
+        SteamAccount::factory()->create();
+
         Livewire::test('pages::steam-settings')
-            ->set('username', 'steamuser')
-            ->set('password', 'steampass')
             ->set('steam_api_key', 'ABCDEF1234567890')
-            ->call('save')
-            ->assertHasNoErrors();
+            ->call('saveApiKey')
+            ->assertHasNoErrors()
+            ->assertDispatched('api-key-saved');
 
         $account = SteamAccount::latest()->first();
         $this->assertNotNull($account);
         $this->assertEquals('ABCDEF1234567890', $account->steam_api_key);
+    }
+
+    public function test_save_api_key_requires_existing_account(): void
+    {
+        $this->actingAs($this->user);
+
+        Livewire::test('pages::steam-settings')
+            ->set('steam_api_key', 'SOMEKEY')
+            ->call('saveApiKey')
+            ->assertHasErrors(['steam_api_key']);
     }
 
     public function test_existing_account_loads_username_on_mount(): void
@@ -139,7 +150,7 @@ class SteamSettingsTest extends TestCase
         Livewire::test('pages::steam-settings')
             ->set('username', 'steamuser')
             ->set('password', 'supersecret')
-            ->call('save')
+            ->call('saveCredentials')
             ->assertSet('password', '');
     }
 
@@ -150,7 +161,7 @@ class SteamSettingsTest extends TestCase
         Livewire::test('pages::steam-settings')
             ->set('username', 'encuser')
             ->set('password', 'encpass')
-            ->call('save');
+            ->call('saveCredentials');
 
         $account = SteamAccount::latest()->first();
 
@@ -171,7 +182,7 @@ class SteamSettingsTest extends TestCase
             ->set('username', 'tokenuser')
             ->set('password', 'newpass')
             ->set('auth_token', '********')
-            ->call('save');
+            ->call('saveCredentials');
 
         $this->assertEquals($originalToken, SteamAccount::latest()->first()->auth_token);
     }
@@ -185,10 +196,8 @@ class SteamSettingsTest extends TestCase
         $originalKey = SteamAccount::latest()->first()->steam_api_key;
 
         Livewire::test('pages::steam-settings')
-            ->set('username', 'apiuser')
-            ->set('password', 'newpass')
             ->set('steam_api_key', '********')
-            ->call('save');
+            ->call('saveApiKey');
 
         $this->assertEquals($originalKey, SteamAccount::latest()->first()->steam_api_key);
     }
@@ -310,7 +319,76 @@ class SteamSettingsTest extends TestCase
             ->assertSet('apiKeyError', null);
     }
 
-    public function test_save_resets_verification_state(): void
+    public function test_user_can_save_mod_download_batch_size(): void
+    {
+        $this->actingAs($this->user);
+
+        SteamAccount::factory()->create();
+
+        Livewire::test('pages::steam-settings')
+            ->set('mod_download_batch_size', 10)
+            ->call('saveSettings')
+            ->assertHasNoErrors()
+            ->assertDispatched('settings-saved');
+
+        $account = SteamAccount::latest()->first();
+        $this->assertNotNull($account);
+        $this->assertEquals(10, $account->mod_download_batch_size);
+    }
+
+    public function test_save_settings_requires_existing_account(): void
+    {
+        $this->actingAs($this->user);
+
+        Livewire::test('pages::steam-settings')
+            ->set('mod_download_batch_size', 10)
+            ->call('saveSettings')
+            ->assertHasErrors(['mod_download_batch_size']);
+    }
+
+    public function test_mod_download_batch_size_defaults_to_five(): void
+    {
+        $this->actingAs($this->user);
+
+        Livewire::test('pages::steam-settings')
+            ->assertSet('mod_download_batch_size', 5);
+    }
+
+    public function test_mod_download_batch_size_loads_from_existing_account(): void
+    {
+        $this->actingAs($this->user);
+
+        SteamAccount::factory()->create(['mod_download_batch_size' => 8]);
+
+        Livewire::test('pages::steam-settings')
+            ->assertSet('mod_download_batch_size', 8);
+    }
+
+    public function test_mod_download_batch_size_validates_minimum(): void
+    {
+        $this->actingAs($this->user);
+
+        SteamAccount::factory()->create();
+
+        Livewire::test('pages::steam-settings')
+            ->set('mod_download_batch_size', 0)
+            ->call('saveSettings')
+            ->assertHasErrors(['mod_download_batch_size']);
+    }
+
+    public function test_mod_download_batch_size_validates_maximum(): void
+    {
+        $this->actingAs($this->user);
+
+        SteamAccount::factory()->create();
+
+        Livewire::test('pages::steam-settings')
+            ->set('mod_download_batch_size', 51)
+            ->call('saveSettings')
+            ->assertHasErrors(['mod_download_batch_size']);
+    }
+
+    public function test_save_credentials_resets_login_verification_state(): void
     {
         $this->actingAs($this->user);
 
@@ -323,9 +401,26 @@ class SteamSettingsTest extends TestCase
             ->set('password', 'pass')
             ->call('verifyLogin')
             ->assertSet('loginVerified', true)
-            ->call('save')
+            ->call('saveCredentials')
             ->assertSet('loginVerified', null)
-            ->assertSet('loginError', null)
+            ->assertSet('loginError', null);
+    }
+
+    public function test_save_api_key_resets_api_key_verification_state(): void
+    {
+        $this->actingAs($this->user);
+
+        SteamAccount::factory()->withApiKey()->create();
+
+        $mock = Mockery::mock(SteamWorkshopService::class);
+        $mock->shouldReceive('validateApiKey')->andReturn(['valid' => true, 'error' => null]);
+        $this->app->instance(SteamWorkshopService::class, $mock);
+
+        Livewire::test('pages::steam-settings')
+            ->set('steam_api_key', 'VALID_KEY')
+            ->call('verifyApiKey')
+            ->assertSet('apiKeyVerified', true)
+            ->call('saveApiKey')
             ->assertSet('apiKeyVerified', null)
             ->assertSet('apiKeyError', null);
     }

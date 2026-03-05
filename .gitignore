@@ -8,6 +8,8 @@
 /storage/arma/servers
 /storage/arma/mods
 /storage/arma/missions
+/storage/arma/games
+arma-server-manager
 /vendor
 .env
 .env.backup

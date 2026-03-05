@@ -17,9 +17,25 @@ class ServerProcessServiceTest extends TestCase
 
     private ServerProcessService $service;
 
+    private string $testServersBasePath;
+
+    private string $testGamesBasePath;
+
+    private string $testModsBasePath;
+
     protected function setUp(): void
     {
         parent::setUp();
+
+        $this->testServersBasePath = sys_get_temp_dir().'/armaman_test_servers_'.uniqid();
+        $this->testGamesBasePath = sys_get_temp_dir().'/armaman_test_games_'.uniqid();
+        $this->testModsBasePath = sys_get_temp_dir().'/armaman_test_mods_'.uniqid();
+
+        config([
+            'arma.servers_base_path' => $this->testServersBasePath,
+            'arma.games_base_path' => $this->testGamesBasePath,
+            'arma.mods_base_path' => $this->testModsBasePath,
+        ]);
 
         $this->service = new ServerProcessService;
     }
@@ -146,6 +162,45 @@ class ServerProcessServiceTest extends TestCase
         $this->assertStringContainsString('difficulty = "Regular";', $contents);
     }
 
+    public function test_generate_basic_config_writes_file_to_profiles_path(): void
+    {
+        $server = $this->makeServer();
+
+        $profilesPath = $server->getProfilesPath();
+        @mkdir($profilesPath, 0755, true);
+
+        $this->invokeGenerateBasicConfig($server);
+
+        $this->assertFileExists($profilesPath.'/server_basic.cfg');
+
+        $contents = file_get_contents($profilesPath.'/server_basic.cfg');
+        $this->assertStringContainsString('MaxMsgSend = 128;', $contents);
+        $this->assertStringContainsString('MaxSizeGuaranteed = 512;', $contents);
+        $this->assertStringContainsString('MaxSizeNonguaranteed = 256;', $contents);
+        $this->assertStringContainsString('MinBandwidth = 131072;', $contents);
+        $this->assertStringContainsString('MaxBandwidth = 10000000000;', $contents);
+        $this->assertStringContainsString('MinErrorToSend = 0.001;', $contents);
+        $this->assertStringContainsString('MinErrorToSendNear = 0.01;', $contents);
+        $this->assertStringContainsString('MaxCustomFileSize = 0;', $contents);
+        $this->assertStringContainsString('class sockets {', $contents);
+        $this->assertStringContainsString('maxPacketSize = 1400;', $contents);
+    }
+
+    public function test_generate_basic_config_overwrites_existing_file(): void
+    {
+        $server = $this->makeServer();
+
+        $profilesPath = $server->getProfilesPath();
+        @mkdir($profilesPath, 0755, true);
+        file_put_contents($profilesPath.'/server_basic.cfg', 'old content');
+
+        $this->invokeGenerateBasicConfig($server);
+
+        $contents = file_get_contents($profilesPath.'/server_basic.cfg');
+        $this->assertStringNotContainsString('old content', $contents);
+        $this->assertStringContainsString('MaxMsgSend = 128;', $contents);
+    }
+
     public function test_generate_server_config_no_missions_block_when_no_pbo_files(): void
     {
         $server = $this->makeServer(['description' => null]);
@@ -216,17 +271,9 @@ class ServerProcessServiceTest extends TestCase
 
     protected function tearDown(): void
     {
-        $servers = Server::all();
-        foreach ($servers as $server) {
-            $this->recursiveDelete($server->getProfilesPath());
-            $this->recursiveDelete($server->getBinaryPath());
-        }
-
-        // Clean up mod installation directories
-        $mods = WorkshopMod::all();
-        foreach ($mods as $mod) {
-            $this->recursiveDelete($mod->getInstallationPath());
-        }
+        $this->recursiveDelete($this->testServersBasePath);
+        $this->recursiveDelete($this->testGamesBasePath);
+        $this->recursiveDelete($this->testModsBasePath);
 
         if (isset($this->missionsPath)) {
             $this->recursiveDelete($this->missionsPath);
@@ -287,6 +334,8 @@ class ServerProcessServiceTest extends TestCase
         $this->assertStringStartsWith($expectedBinary, $command);
         $this->assertStringContainsString('-port='.$server->port, $command);
         $this->assertStringContainsString('-profiles='.$server->getProfilesPath(), $command);
+        $this->assertStringContainsString('-config='.$server->getProfilesPath().'/server.cfg', $command);
+        $this->assertStringContainsString('-cfg='.$server->getProfilesPath().'/server_basic.cfg', $command);
     }
 
     public function test_symlink_mods_creates_symlinks_in_game_install_directory(): void
@@ -498,6 +547,12 @@ class ServerProcessServiceTest extends TestCase
     private function invokeCopyBiKeys(Server $server): void
     {
         $reflection = new \ReflectionMethod(ServerProcessService::class, 'copyBiKeys');
+        $reflection->invoke($this->service, $server);
+    }
+
+    private function invokeGenerateBasicConfig(Server $server): void
+    {
+        $reflection = new \ReflectionMethod(ServerProcessService::class, 'generateBasicConfig');
         $reflection->invoke($this->service, $server);
     }
 
