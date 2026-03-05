@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\ServerStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -22,6 +23,7 @@ class Server extends Model
         'description',
         'active_preset_id',
         'game_install_id',
+        'status',
         'headless_client_count',
         'additional_params',
         'verify_signatures',
@@ -38,6 +40,7 @@ class Server extends Model
     protected function casts(): array
     {
         return [
+            'status' => ServerStatus::class,
             'verify_signatures' => 'boolean',
             'allowed_file_patching' => 'boolean',
             'battle_eye' => 'boolean',

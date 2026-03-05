@@ -1,0 +1,38 @@
+<?php
+
+namespace App\Jobs;
+
+use App\Enums\ServerStatus;
+use App\Models\Server;
+use App\Services\ServerProcessService;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\Log;
+
+class StopServerJob implements ShouldQueue
+{
+    use Queueable;
+
+    public int $tries = 1;
+
+    public int $timeout = 30;
+
+    public function __construct(public Server $server) {}
+
+    public function handle(ServerProcessService $service): void
+    {
+        $context = "[Server:{$this->server->id} '{$this->server->name}']";
+
+        Log::info("{$context} Stopping server via queued job");
+        $service->stop($this->server);
+
+        $this->server->update(['status' => ServerStatus::Stopped]);
+        Log::info("{$context} Server stopped successfully");
+    }
+
+    public function failed(?\Throwable $exception): void
+    {
+        $this->server->update(['status' => ServerStatus::Stopped]);
+        Log::error("[Server:{$this->server->id}] StopServerJob failed: {$exception?->getMessage()}");
+    }
+}

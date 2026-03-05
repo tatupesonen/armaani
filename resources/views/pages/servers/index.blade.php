@@ -1,10 +1,14 @@
 <?php
 
 use App\Enums\GameInstallStatus;
+use App\Enums\ServerStatus;
+use App\Jobs\StartServerJob;
+use App\Jobs\StopServerJob;
 use App\Models\GameInstall;
 use App\Models\ModPreset;
 use App\Models\Server;
 use App\Services\ServerProcessService;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
@@ -212,20 +216,23 @@ new #[Title('Servers')] class extends Component
 
     public function startServer(Server $server): void
     {
-        app(ServerProcessService::class)->start($server);
-        Log::info('User '.auth()->id().' ('.auth()->user()->name.") started server '{$server->name}'");
+        $server->update(['status' => ServerStatus::Starting]);
+        StartServerJob::dispatch($server);
+        Log::info('User '.auth()->id().' ('.auth()->user()->name.") queued start for server '{$server->name}'");
     }
 
     public function stopServer(Server $server): void
     {
-        app(ServerProcessService::class)->stop($server);
-        Log::info('User '.auth()->id().' ('.auth()->user()->name.") stopped server '{$server->name}'");
+        $server->update(['status' => ServerStatus::Stopping]);
+        StopServerJob::dispatch($server);
+        Log::info('User '.auth()->id().' ('.auth()->user()->name.") queued stop for server '{$server->name}'");
     }
 
     public function restartServer(Server $server): void
     {
-        app(ServerProcessService::class)->restart($server);
-        Log::info('User '.auth()->id().' ('.auth()->user()->name.") restarted server '{$server->name}'");
+        $server->update(['status' => ServerStatus::Stopping]);
+        StartServerJob::dispatch($server, restart: true);
+        Log::info('User '.auth()->id().' ('.auth()->user()->name.") queued restart for server '{$server->name}'");
     }
 
     // --- Delete ---
@@ -536,7 +543,7 @@ new #[Title('Servers')] class extends Component
                         <div>
                             <div class="flex items-center gap-2">
                                 <flux:heading size="lg">{{ $server->name }}</flux:heading>
-                                <flux:badge :variant="$status === 'running' ? 'success' : 'secondary'" size="sm">
+                                <flux:badge :variant="match($status) { 'running' => 'success', 'starting', 'stopping' => 'warning', default => 'secondary' }" size="sm">
                                     {{ ucfirst($status) }}
                                 </flux:badge>
                             </div>
@@ -554,7 +561,11 @@ new #[Title('Servers')] class extends Component
                         </div>
 
                         <div class="flex items-center gap-2">
-                            @if ($status === 'running')
+                            @if (in_array($status, ['starting', 'stopping']))
+                                <flux:button size="sm" disabled icon="arrow-path" class="animate-spin-slow">
+                                    {{ ucfirst($status) }}...
+                                </flux:button>
+                            @elseif ($status === 'running')
                                 <flux:button size="sm" variant="danger" wire:click="stopServer({{ $server->id }})" icon="stop">
                                     {{ __('Stop') }}
                                 </flux:button>

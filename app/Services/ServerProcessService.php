@@ -28,6 +28,7 @@ class ServerProcessService
             mkdir($profilesPath, 0755, true);
         }
 
+        $server->load('activePreset.mods');
         $this->symlinkMods($server);
         $this->symlinkMissions($server);
         $this->copyBiKeys($server);
@@ -44,10 +45,10 @@ class ServerProcessService
         Log::info("{$context} Launch command: {$command}");
         Log::info("{$context} Log file: {$logFile}");
 
-        // Truncate/create log file and start tail BEFORE the server process,
-        // so the tail is already watching when the server writes its first lines.
+        // Truncate/create log file before the server process.
         file_put_contents($logFile, '');
-        $this->startLogTail($server);
+        // TODO: Re-enable log tailing once it no longer freezes `composer run dev`.
+        // $this->startLogTail($server);
 
         $fullCommand = sprintf(
             'cd %s && nohup %s > %s 2>&1 & echo $! > %s',
@@ -57,7 +58,9 @@ class ServerProcessService
             escapeshellarg($pidFile)
         );
 
-        exec($fullCommand);
+        // Wrap in subshell with output suppressed so the arma3server process
+        // does not inherit PHP's exec() pipe fd, which would block forever.
+        exec('('.$fullCommand.') > /dev/null 2>&1');
 
         $pid = $this->getPid($server);
         Log::info("{$context} Process started with PID {$pid}");
@@ -70,7 +73,8 @@ class ServerProcessService
     {
         $context = "[Server:{$server->id} '{$server->name}']";
 
-        $this->stopLogTail($server);
+        // TODO: Re-enable log tailing once it no longer freezes `composer run dev`.
+        // $this->stopLogTail($server);
 
         $pid = $this->getPid($server);
 
@@ -119,10 +123,24 @@ class ServerProcessService
 
     /**
      * Get the current status of a server.
+     *
+     * Transitional states (Starting, Stopping) are trusted from the DB column.
+     * Stable states are verified against the actual PID and corrected if needed.
      */
     public function getStatus(Server $server): ServerStatus
     {
-        return $this->isRunning($server) ? ServerStatus::Running : ServerStatus::Stopped;
+        if (in_array($server->status, [ServerStatus::Starting, ServerStatus::Stopping])) {
+            return $server->status;
+        }
+
+        $isRunning = $this->isRunning($server);
+        $expected = $isRunning ? ServerStatus::Running : ServerStatus::Stopped;
+
+        if ($server->status !== $expected) {
+            $server->updateQuietly(['status' => $expected]);
+        }
+
+        return $expected;
     }
 
     /**
@@ -466,8 +484,6 @@ class ServerProcessService
             }
         }
 
-        $preset->load('mods');
-
         foreach ($preset->mods as $mod) {
             $modInstallPath = $mod->getInstallationPath();
 
@@ -504,8 +520,6 @@ class ServerProcessService
         if (! is_dir($keysPath)) {
             mkdir($keysPath, 0755, true);
         }
-
-        $preset->load('mods');
 
         foreach ($preset->mods as $mod) {
             $modKeysPath = $mod->getInstallationPath().'/keys';
