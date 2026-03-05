@@ -65,6 +65,8 @@ new #[Title('Steam Settings')] class extends Component
             $account = SteamAccount::query()->create($data);
         }
 
+        Log::info('User '.auth()->id().' ('.auth()->user()->name.') updated Steam settings');
+
         $this->password = '';
         $this->loginVerified = null;
         $this->loginError = null;

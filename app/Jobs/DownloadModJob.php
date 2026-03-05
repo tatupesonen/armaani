@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Enums\InstallationStatus;
+use App\Events\ModDownloadOutput;
 use App\Models\WorkshopMod;
 use App\Services\SteamCmdService;
 use App\Services\SteamWorkshopService;
@@ -40,23 +41,42 @@ class DownloadModJob implements ShouldQueue
 
         $process = $steamCmd->startDownloadMod($installDir, $this->mod->workshop_id);
 
+        ModDownloadOutput::dispatch($this->mod->id, 0, 'Starting SteamCMD download...');
+
         $lastProgressUpdate = -1;
 
         while ($process->running()) {
-            sleep(2);
+            sleep(1);
 
             if ($expectedSize && $expectedSize > 0) {
                 $currentSize = $this->getDirectorySize($modPath);
                 $pct = min(99, (int) round(($currentSize / $expectedSize) * 100));
 
-                if ($pct >= $lastProgressUpdate + 2) {
+                if ($pct >= $lastProgressUpdate + 1) {
                     $lastProgressUpdate = $pct;
                     $this->mod->updateQuietly(['progress_pct' => $pct]);
+
+                    ModDownloadOutput::dispatch(
+                        $this->mod->id,
+                        $pct,
+                        "Downloading... {$pct}% ({$currentSize} / {$expectedSize} bytes)",
+                    );
                 }
             }
         }
 
         $result = $process->wait();
+
+        // Broadcast any SteamCMD output that was captured
+        $output = trim($result->output().' '.$result->errorOutput());
+        if ($output) {
+            foreach (explode("\n", $output) as $outputLine) {
+                $trimmed = trim($outputLine);
+                if ($trimmed !== '') {
+                    ModDownloadOutput::dispatch($this->mod->id, $lastProgressUpdate > 0 ? $lastProgressUpdate : 0, $trimmed);
+                }
+            }
+        }
 
         if ($result->successful()) {
             $actualSize = $this->getDirectorySize($modPath);
@@ -69,9 +89,13 @@ class DownloadModJob implements ShouldQueue
             ]);
 
             Log::info("{$context} Downloaded successfully (disk: {$actualSize} bytes)");
+
+            ModDownloadOutput::dispatch($this->mod->id, 100, 'Download completed successfully.');
         } else {
             Log::error("{$context} Download failed: {$result->errorOutput()}");
             $this->mod->update(['installation_status' => InstallationStatus::Failed]);
+
+            ModDownloadOutput::dispatch($this->mod->id, 0, 'Download failed: '.$result->errorOutput());
         }
     }
 

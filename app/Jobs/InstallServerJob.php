@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Enums\GameInstallStatus;
+use App\Events\GameInstallOutput;
 use App\Models\GameInstall;
 use App\Services\SteamCmdService;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -44,14 +45,17 @@ class InstallServerJob implements ShouldQueue
             function (string $line) use (&$lastProgressUpdate, $context): void {
                 Log::info("{$context} {$line}");
 
+                $pctToSend = $this->gameInstall->progress_pct;
+
                 // Parse: " Update state (0x61) downloading, progress: 44.53 (2397543803 / 5384428737)"
                 if (preg_match('/progress:\s*([\d.]+)\s*\((\d+)\s*\/\s*(\d+)\)/', $line, $m)) {
                     $pct = (int) round((float) $m[1]);
                     $totalBytes = (int) $m[3];
 
-                    // Throttle DB writes — only update every 2 percentage points
-                    if ($pct >= $lastProgressUpdate + 2 || $pct === 100) {
+                    // Throttle DB writes — only update every percentage point
+                    if ($pct >= $lastProgressUpdate + 1 || $pct === 100) {
                         $lastProgressUpdate = $pct;
+                        $pctToSend = $pct;
 
                         $this->gameInstall->updateQuietly([
                             'progress_pct' => $pct,
@@ -59,6 +63,12 @@ class InstallServerJob implements ShouldQueue
                         ]);
                     }
                 }
+
+                GameInstallOutput::dispatch(
+                    $this->gameInstall->id,
+                    $pctToSend,
+                    $line,
+                );
             }
         );
 
@@ -74,10 +84,14 @@ class InstallServerJob implements ShouldQueue
             ]);
 
             Log::info("Game install '{$this->gameInstall->name}' completed successfully (disk: {$diskSize} bytes)");
+
+            GameInstallOutput::dispatch($this->gameInstall->id, 100, 'Installation completed successfully.');
         } else {
             $this->gameInstall->update(['installation_status' => GameInstallStatus::Failed]);
 
             Log::error("Game installation failed for '{$this->gameInstall->name}': {$result->errorOutput()}");
+
+            GameInstallOutput::dispatch($this->gameInstall->id, 0, 'Installation failed: '.$result->errorOutput());
 
             $this->fail(new \RuntimeException('SteamCMD failed: '.$result->errorOutput()));
         }

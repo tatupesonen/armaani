@@ -13,6 +13,7 @@ This application is a Laravel application and its main Laravel ecosystems packag
 - laravel/fortify (FORTIFY) - v1
 - laravel/framework (LARAVEL) - v12
 - laravel/prompts (PROMPTS) - v0
+- laravel/reverb (REVERB) - v1
 - livewire/flux (FLUXUI_FREE) - v2
 - livewire/livewire (LIVEWIRE) - v4
 - laravel/boost (BOOST) - v2
@@ -21,6 +22,8 @@ This application is a Laravel application and its main Laravel ecosystems packag
 - laravel/pint (PINT) - v1
 - laravel/sail (SAIL) - v1
 - phpunit/phpunit (PHPUNIT) - v11
+- tailwindcss (TAILWINDCSS) - v4
+- laravel-echo (ECHO) - v2
 
 ## Skills Activation
 
@@ -28,6 +31,7 @@ This project has domain-specific skills available. You MUST activate the relevan
 
 - `fluxui-development` — Develops UIs with Flux UI Free components. Activates when creating buttons, forms, modals, inputs, dropdowns, checkboxes, or UI components; replacing HTML form elements with Flux; working with flux: components; or when the user mentions Flux, component library, UI components, form fields, or asks about available Flux components.
 - `livewire-development` — Develops reactive Livewire 4 components. Activates when creating, updating, or modifying Livewire components; working with wire:model, wire:click, wire:loading, or any wire: directives; adding real-time updates, loading states, or reactivity; debugging component behavior; writing Livewire tests; or when the user mentions Livewire, component, counter, or reactive UI.
+- `tailwindcss-development` — Styles applications using Tailwind CSS v4 utilities. Activates when adding styles, restyling components, working with gradients, spacing, layout, flex, grid, responsive design, dark mode, colors, typography, or borders; or when the user mentions CSS, styling, classes, Tailwind, restyle, hero section, cards, buttons, or any visual/UI changes.
 
 ## Conventions
 
@@ -262,6 +266,14 @@ protected function isAccessible(User $user, ?string $path = null): bool
 - To run all tests in a file: `php artisan test --compact tests/Feature/ExampleTest.php`.
 - To filter on a particular test name: `php artisan test --compact --filter=testName` (recommended after making a change to a related file).
 
+=== tailwindcss/core rules ===
+
+# Tailwind CSS
+
+- Always use existing Tailwind conventions; check project patterns before adding new ones.
+- IMPORTANT: Always use `search-docs` tool for version-specific Tailwind CSS documentation and updated code examples. Never rely on training data.
+- IMPORTANT: Activate `tailwindcss-development` every time you're working with a Tailwind CSS or styling-related task.
+
 </laravel-boost-guidelines>
 
 # ArmaMan - Arma 3 Server Manager
@@ -270,11 +282,9 @@ protected function isAccessible(User $user, ?string $path = null): bool
 
 ArmaMan is a web-based Arma 3 dedicated server manager built with Laravel 12, Livewire 4, and Flux UI. It allows users to install, configure, and manage multiple Arma 3 server instances (including starting/stopping/restarting processes), download Steam Workshop mods via SteamCMD, organize mods into presets, import Arma 3 Launcher HTML preset files, and assign presets to server instances. The application supports headless client management per server. It ships as a single Docker container with SteamCMD bundled inside.
 
-Inspired by: https://github.com/fugasjunior/arma-server-manager (Java/Spring Boot + React)
-
 ## Scope
 
-- **Arma 3 only** -- no DayZ, DayZ Experimental, or Arma Reforger support.
+- **Arma 3 only** — no DayZ, DayZ Experimental, or Arma Reforger support.
 - Full server process control (start/stop/restart) from the web UI.
 - Headless client support (launch/stop HC instances per server).
 - Arma 3 Launcher HTML preset import supported.
@@ -286,10 +296,11 @@ Inspired by: https://github.com/fugasjunior/arma-server-manager (Java/Spring Boo
 - Multiple installs can exist with different names and branches (public, contact, creatordlc, profiling, performance, legacy).
 - Branches are hardcoded — `GetAppBetas` Steam API requires a Steamworks partner token and returns 403 with a regular key.
 - Each install tracks: `name`, `branch`, `installation_status` (`GameInstallStatus` enum), `progress_pct` (0–100), `disk_size_bytes`, `installed_at`.
-- Installed via `InstallServerJob`, which streams SteamCMD output line-by-line via a callback, parses progress lines, and writes `progress_pct` + `disk_size_bytes` to DB (throttled every 2 percentage points using `updateQuietly`).
+- Installed via `InstallServerJob`, which streams SteamCMD output line-by-line via a callback, parses progress lines, and writes `progress_pct` + `disk_size_bytes` to DB (throttled every 1 percentage point using `updateQuietly`).
 - SteamCMD progress line format: `Update state (0x61) downloading, progress: 44.53 (2397543803 / 5384428737)` — emitted roughly every 2 seconds.
 - On completion, actual disk size is recorded via `du -sb`.
 - All SteamCMD output lines are logged with context prefix: `[GameInstall:1 'stable'] <line>`.
+- Each SteamCMD output line and progress update is broadcast via `GameInstallOutput` event for real-time UI updates.
 
 ### Server Instances
 - Each server **must** be linked to a `GameInstall` (`game_install_id` required — no server without one).
@@ -298,12 +309,14 @@ Inspired by: https://github.com/fugasjunior/arma-server-manager (Java/Spring Boo
 - Port uniqueness is validated across both `port` and `query_port` columns for all servers.
 - Servers can be started, stopped, and restarted from the web UI.
 - `Server::getBinaryPath()` derives the server binary path from the linked `GameInstall`.
+- `server.cfg` is regenerated on every server start by `ServerProcessService::generateServerConfig()`, so config changes take effect immediately.
 
 ### Workshop Mods
 - Mods are identified by their Steam Workshop ID (numeric).
 - Mods are downloaded using SteamCMD as queued Laravel jobs (one job per mod, `DownloadModJob`).
 - Each mod has: `workshop_id`, `name`, `file_size`, `installation_status` (`InstallationStatus` enum), `progress_pct` (0–100), `installed_at`.
-- **Progress tracking**: SteamCMD does NOT output progress lines for workshop downloads. Progress is tracked by polling `du -sb` on the mod directory in a loop while the SteamCMD process runs asynchronously (`Process::start()` + `while ($process->running())`). `progress_pct` is written to DB (throttled every 2%) using `updateQuietly`. The UI reads `progress_pct` directly from the model — no UI-side `du` calls.
+- **Progress tracking**: SteamCMD does NOT output progress lines for workshop downloads. Progress is tracked by polling `du -sb` on the mod directory every 1 second while the SteamCMD process runs asynchronously (`Process::start()` + `while ($process->running())`). `progress_pct` is written to DB (throttled every 1 percentage point) using `updateQuietly`.
+- Progress and SteamCMD output are broadcast via `ModDownloadOutput` event for real-time UI updates.
 - Mod metadata (name, file size) is fetched from the Steam Workshop API before download begins.
 - On completion, actual disk size is recorded via `du -sb` on the mod directory.
 - Mod files need to be converted to lowercase (Linux requirement for Arma 3).
@@ -315,6 +328,7 @@ Inspired by: https://github.com/fugasjunior/arma-server-manager (Java/Spring Boo
 - When importing an HTML preset, the system parses mod IDs from the file and queues individual download jobs for each mod.
 - A server instance uses one active preset at a time.
 - Presets can be shared across multiple server instances.
+- Presets have separate create and edit pages (unlike servers which use inline panels).
 
 ### Headless Clients
 - Each Arma 3 server instance can have headless clients launched alongside it.
@@ -325,10 +339,10 @@ Inspired by: https://github.com/fugasjunior/arma-server-manager (Java/Spring Boo
 ### SteamCMD Integration
 - SteamCMD is the command-line tool used to download server files and workshop mods.
 - SteamCMD commands are executed as queued jobs to prevent blocking the web UI.
-- Steam credentials (username, encrypted password) are managed via a settings page and stored encrypted in the database (`SteamAccount` model).
+- Steam credentials (username, encrypted password, auth_token, steam_api_key) are managed via a settings page and stored encrypted in the database (`SteamAccount` model).
 - The SteamCMD binary path is configurable via `STEAMCMD_PATH` env var (default: `/usr/games/steamcmd`).
-- Arma 3 server Steam App ID: 233780
-- Arma 3 game ID (for workshop mods): 107410
+- Arma 3 server Steam App ID: 233780 (hardcoded in `config/arma.php` as `server_app_id`)
+- Arma 3 game ID (for workshop mods): 107410 (hardcoded in `config/arma.php` as `game_id`)
 - `SteamCmdService::installServer()` accepts an optional `?callable $onOutput` and streams output line-by-line.
 - `SteamCmdService::startDownloadMod()` starts the process asynchronously and returns an `InvokedProcess` for polling.
 - `SteamCmdService::downloadMod()` (sync, no callback) still exists but is not used by the job.
@@ -341,11 +355,30 @@ Inspired by: https://github.com/fugasjunior/arma-server-manager (Java/Spring Boo
 - The queue worker processes one job at a time to avoid SteamCMD conflicts.
 - Uses the `database` queue driver (already configured).
 
-### Real-Time Updates
-- `wire:poll.5s` for server status and game install status.
-- `wire:poll.2s` for mod download progress.
-- No WebSocket/broadcasting infrastructure needed.
-- Progress (`progress_pct`) is written by the job to the DB; the UI reads it directly from the model on each poll.
+### Real-Time Updates via WebSocket (Laravel Reverb + Echo)
+- Laravel Reverb provides the WebSocket server; Laravel Echo (with pusher-js) handles client subscriptions.
+- Three broadcast events push real-time data from jobs/commands to the UI:
+  - `GameInstallOutput` — SteamCMD log lines + progress for game installs (channel: `game-install.{id}`)
+  - `ModDownloadOutput` — progress + SteamCMD output for mod downloads (channel: `mod-download.{id}`)
+  - `ServerLogOutput` — server log lines from the `server:tail-log` command (channel: `server-log.{id}`)
+- All broadcast events implement `ShouldBroadcastNow` (they are already dispatched from queue workers or commands).
+- All channels are public (no authorization needed) — no entries in `routes/channels.php`.
+- Livewire components use `getListeners()` to dynamically subscribe to per-entity Echo channels (e.g. `echo:game-install.{id},GameInstallOutput`).
+- Game installs and mods pages have **no `wire:poll`** — they rely entirely on Echo events for updates.
+- Servers page uses `wire:poll.5s` for process status checks + Echo for real-time log streaming.
+- Progress (`progress_pct`) is still written to DB by jobs; Echo events carry it too for instant UI updates.
+
+### Server Config Generation
+- `ServerProcessService::generateServerConfig()` writes `server.cfg` to `getProfilesPath()/server.cfg` before every server start.
+- Maps DB fields: `name` → `hostname`, `password`, `admin_password` → `passwordAdmin`, `max_players` → `maxPlayers`, `description` → `motd[]`.
+- Includes Arma 3 defaults (BattlEye=1, verifySignatures=2, etc.).
+- Config is always regenerated on start so changes take effect immediately.
+
+### Server Log Tailing
+- `TailServerLog` artisan command (`server:tail-log {server}`) tails a running server's `server.log` file.
+- Polls at 250ms intervals, handles file rotation.
+- Broadcasts each new line via `ServerLogOutput` event over WebSocket.
+- Started/stopped automatically by `ServerProcessService` alongside the server process (PID file managed).
 
 ### Livewire Components
 - Single-file Livewire components in `resources/views/pages/` using the `pages::` namespace.
@@ -354,7 +387,7 @@ Inspired by: https://github.com/fugasjunior/arma-server-manager (Java/Spring Boo
 - `flux:select` with a bound integer property: pre-initialise the property in the open method (e.g. `$this->gameInstalls->first()?->id`) to avoid the flux:select null-on-no-interaction bug.
 
 ### File System Layout
-- Game install files: `{SERVERS_BASE_PATH}/{game_install_id}/`
+- Game install files: `{SERVERS_BASE_PATH}/game/{game_install_id}/`
 - Workshop mods: `{MODS_BASE_PATH}/steamapps/workshop/content/107410/{workshop_id}/`
 - Mod symlinks into server dirs: `{server_path}/@{normalized_mod_name}`
 - All paths are configurable via environment variables.
@@ -362,7 +395,7 @@ Inspired by: https://github.com/fugasjunior/arma-server-manager (Java/Spring Boo
 ### Docker Deployment
 - The application ships as a single Docker container.
 - The container includes: PHP-FPM, Nginx, SteamCMD, Node.js (for asset building), SQLite.
-- Supervisord manages Nginx, PHP-FPM, and the Laravel queue worker.
+- Supervisord manages: Nginx, PHP-FPM, the Laravel queue worker, and Laravel Reverb (WebSocket server on port 8080).
 - Storage volumes for: database, server files, mod files, Laravel storage.
 - A `docker-compose.yml` is provided for easy deployment.
 - `storage/arma/servers` and `storage/arma/mods` are gitignored.
@@ -381,7 +414,7 @@ Inspired by: https://github.com/fugasjunior/arma-server-manager (Java/Spring Boo
 - `WorkshopMod` - A Steam Workshop mod (workshop_id, name, file_size, installation_status, progress_pct, installed_at)
 - `ModPreset` - A named collection of mods (name)
 - `mod_preset_workshop_mod` - Pivot table (mod_preset_id, workshop_mod_id)
-- `SteamAccount` - Steam credentials for SteamCMD (username, encrypted password)
+- `SteamAccount` - Steam credentials for SteamCMD (username, encrypted password, encrypted auth_token, encrypted steam_api_key)
 
 ### Enums
 - `InstallationStatus` - Queued, Installing, Installed, Failed (used by `WorkshopMod`)
@@ -391,29 +424,62 @@ Inspired by: https://github.com/fugasjunior/arma-server-manager (Java/Spring Boo
 ## Key Files
 
 ### Models
-- `app/Models/GameInstall.php` — `getInstallationPath()` returns the install dir
-- `app/Models/Server.php` — `gameInstall(): BelongsTo`, `getBinaryPath(): string`
-- `app/Models/WorkshopMod.php` — `getInstallationPath(): string`, `getNormalizedName(): string`
+- `app/Models/GameInstall.php` — `getInstallationPath(): string` returns `{servers_base_path}/game/{id}`
+- `app/Models/Server.php` — `gameInstall(): BelongsTo`, `activePreset(): BelongsTo`, `getInstallationPath(): string`, `getProfilesPath(): string`, `getBinaryPath(): string`
+- `app/Models/WorkshopMod.php` — `presets(): BelongsToMany`, `getInstallationPath(): string`, `getNormalizedName(): string`
+- `app/Models/ModPreset.php` — `mods(): BelongsToMany`, `servers(): HasMany`
+- `app/Models/SteamAccount.php` — stores encrypted credentials (password, auth_token, steam_api_key)
 
 ### Services
-- `app/Services/SteamCmdService.php` — `installServer(dir, branch, ?callable)`, `startDownloadMod(dir, id): InvokedProcess`, `downloadMod(dir, id): ProcessResult`, `validateCredentials(user, pass): bool`
+- `app/Services/SteamCmdService.php` — `installServer(dir, branch, ?callable): ProcessResult`, `startDownloadMod(dir, id): InvokedProcess`, `downloadMod(dir, id): ProcessResult`, `validateCredentials(user, pass): bool`
 - `app/Services/SteamWorkshopService.php` — `getModDetails(id): ?array`, `validateApiKey(key): array`, `getApiKey(): ?string`
-- `app/Services/ServerProcessService.php` — start/stop/restart server processes, uses `getBinaryPath()`
+- `app/Services/ServerProcessService.php` — `start()`, `stop()`, `restart()`, `isRunning()`, `getStatus()`, `startHeadlessClients()`, `stopHeadlessClients()`, `generateServerConfig()`, `startLogTail()`, `stopLogTail()`
+- `app/Services/PresetImportService.php` — `parseHtmlPreset(html): Collection`, `parsePresetName(html): ?string`, `importFromHtml(html, ?name): ModPreset`
+
+### Broadcast Events
+- `app/Events/GameInstallOutput.php` — broadcasts on `game-install.{id}`, carries `gameInstallId`, `progressPct`, `line`
+- `app/Events/ModDownloadOutput.php` — broadcasts on `mod-download.{id}`, carries `modId`, `progressPct`, `line`
+- `app/Events/ServerLogOutput.php` — broadcasts on `server-log.{id}`, carries `serverId`, `line`
+
+### Console Commands
+- `app/Console/Commands/TailServerLog.php` — `server:tail-log {server}`, tails server.log, broadcasts via `ServerLogOutput`, handles file rotation
 
 ### Jobs
-- `app/Jobs/InstallServerJob.php` — installs a `GameInstall`; streams SteamCMD output; parses `progress:` lines; throttled DB writes
-- `app/Jobs/DownloadModJob.php` — downloads a `WorkshopMod`; uses `startDownloadMod()` (async); polls `du -sb` every 2s; throttled DB writes
+- `app/Jobs/InstallServerJob.php` — installs a `GameInstall`; streams SteamCMD output; parses `progress:` lines; throttled DB writes (every 1 pct); broadcasts `GameInstallOutput` events; tries=2, timeout=7200s
+- `app/Jobs/DownloadModJob.php` — downloads a `WorkshopMod`; uses `startDownloadMod()` (async); polls `du -sb` every 1s; throttled DB writes (every 1 pct); broadcasts `ModDownloadOutput` events; tries=2, timeout=3600s
 
 ### Pages (Livewire single-file)
-- `resources/views/pages/game-installs/index.blade.php` — game installs list, create modal, reinstall/delete, `wire:poll.5s`
-- `resources/views/pages/servers/index.blade.php` — server list with inline create modal + configure panel, game install dropdown (required), `wire:poll.5s`
-- `resources/views/pages/mods/index.blade.php` — mod list, add by workshop ID, progress bar from `$mod->progress_pct`, `wire:poll.2s`
+- `resources/views/pages/game-installs/index.blade.php` — game installs list, create modal, reinstall/delete, collapsible log viewer per install, Echo listeners (no wire:poll)
+- `resources/views/pages/servers/index.blade.php` — server list with inline create modal + configure panel, game install dropdown (required), log viewer panel, `wire:poll.5s` for status + Echo for logs
+- `resources/views/pages/mods/index.blade.php` — mod list, add by workshop ID, progress bar, collapsible log viewer per mod in table rows, Echo listeners (no wire:poll)
+- `resources/views/pages/presets/index.blade.php` — preset list, delete
+- `resources/views/pages/presets/create.blade.php` — create preset with mod selection + HTML import
+- `resources/views/pages/presets/edit.blade.php` — edit preset, manage mods
+- `resources/views/pages/steam-settings.blade.php` — manage Steam credentials and API key
+
+### Frontend / JS
+- `resources/js/app.js` — Laravel Echo configured for Reverb (pusher-js transport)
+
+### Config
+- `config/arma.php` — `steamcmd_path`, `steam_api_key`, `servers_base_path`, `mods_base_path`, `server_app_id` (233780), `game_id` (107410)
+- `config/broadcasting.php` — Reverb connection configured
+- `config/reverb.php` — published Reverb config
+- `config/livewire.php` — `emoji => false`
+
+### Docker
+- `docker/supervisord.conf` — nginx, php-fpm, queue-worker (database driver), reverb (port 8080)
+- `docker-compose.yml` — single container deployment
 
 ### Tests
 - `tests/Feature/GameInstalls/GameInstallManagementTest.php`
 - `tests/Feature/Servers/ServerManagementTest.php`
+- `tests/Feature/Servers/ServerProcessServiceTest.php` — server.cfg generation tests
 - `tests/Feature/Mods/WorkshopModManagementTest.php`
 - `tests/Feature/Jobs/DownloadModJobTest.php` — mocks `SteamCmdService::startDownloadMod()` returning a mock `InvokedProcess`; uses `Process::fake(['du *' => ...])` for disk size
+- `tests/Feature/Presets/ModPresetManagementTest.php`
+- `tests/Feature/SteamSettings/SteamSettingsTest.php`
+- `tests/Feature/Events/BroadcastEventsTest.php` — broadcast event channel and property tests
+- `tests/Unit/Services/PresetImportServiceTest.php`
 
 ## SteamCMD Commands Reference
 
@@ -435,3 +501,5 @@ steamcmd +force_install_dir {mods_base_path} +login {username} {password} +works
 - For `InstallServerJob` tests: mock `installServer()` to invoke the callback with fake output lines if testing progress parsing.
 - `setUp()` in `ServerManagementTest` always creates a `GameInstall` — tests that need `createGameInstallId` to be null must explicitly `->set('createGameInstallId', null)` after `openCreateModal`.
 - `SteamWorkshopService` no longer has `getDownloadProgress()` or `getDownloadedSize()` — do not mock them.
+- Broadcast events use `ShouldBroadcastNow` — when testing dispatches from jobs, use `Event::fake([SpecificEvent::class])` to avoid breaking other event-driven behavior.
+- `Process::fake()` does not intercept `rm -rf` calls in Livewire component tests reliably — use real filesystem + `assertDirectoryDoesNotExist` instead.

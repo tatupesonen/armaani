@@ -114,11 +114,9 @@ class GameInstallManagementTest extends TestCase
 
         $install = GameInstall::factory()->create();
 
-        // Create a temporary directory so the rm -rf branch is exercised.
         $path = $install->getInstallationPath();
-        mkdir($path, 0755, true);
-
-        Process::fake(['rm *' => Process::result()]);
+        @mkdir($path, 0755, true);
+        $this->assertTrue(is_dir($path), 'Test setup: directory should exist before delete');
 
         Livewire::test('pages::game-installs.index')
             ->call('confirmDelete', $install->id)
@@ -127,11 +125,6 @@ class GameInstallManagementTest extends TestCase
             ->call('deleteInstall');
 
         $this->assertDatabaseMissing('game_installs', ['id' => $install->id]);
-        Process::assertRan(fn ($p) => in_array('rm', (array) $p->command));
-
-        // Clean up in case Process::fake didn't actually delete it.
-        if (is_dir($path)) {
-            rmdir($path);
-        }
+        $this->assertDirectoryDoesNotExist($path);
     }
 }

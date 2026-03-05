@@ -42,6 +42,12 @@ new #[Title('Servers')] class extends Component
 
     public string $createAdditionalParams = '';
 
+    /** @var array<int, bool> */
+    public array $showLogs = [];
+
+    /** @var array<int, string[]> */
+    public array $serverLogLines = [];
+
     // Inline edit state
     public ?int $editingServerId = null;
 
@@ -88,6 +94,66 @@ new #[Title('Servers')] class extends Component
             ->get();
     }
 
+    public function getListeners(): array
+    {
+        $listeners = [];
+
+        foreach ($this->servers as $server) {
+            $listeners["echo:server-log.{$server->id},ServerLogOutput"] = 'handleServerLog';
+        }
+
+        return $listeners;
+    }
+
+    public function handleServerLog(array $event): void
+    {
+        $id = $event['serverId'];
+        $line = $event['line'];
+
+        if (! isset($this->serverLogLines[$id])) {
+            $this->serverLogLines[$id] = [];
+        }
+
+        $this->serverLogLines[$id][] = $line;
+
+        // Keep only the last 200 lines
+        if (count($this->serverLogLines[$id]) > 200) {
+            $this->serverLogLines[$id] = array_slice($this->serverLogLines[$id], -200);
+        }
+    }
+
+    public function toggleServerLogs(int $serverId): void
+    {
+        $isShowing = $this->showLogs[$serverId] ?? false;
+        $this->showLogs[$serverId] = ! $isShowing;
+
+        // Load initial log content when opening
+        if (! $isShowing) {
+            $this->loadServerLog($serverId);
+        }
+    }
+
+    public function loadServerLog(int $serverId): void
+    {
+        $server = Server::query()->find($serverId);
+
+        if (! $server) {
+            return;
+        }
+
+        $logPath = $server->getProfilesPath().'/server.log';
+
+        if (! file_exists($logPath)) {
+            $this->serverLogLines[$serverId] = ['No log file found.'];
+
+            return;
+        }
+
+        // Read last 100 lines
+        $lines = file($logPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        $this->serverLogLines[$serverId] = $lines ? array_slice($lines, -100) : [];
+    }
+
     public function getStatus(Server $server): string
     {
         return app(ServerProcessService::class)->getStatus($server)->value;
@@ -98,16 +164,19 @@ new #[Title('Servers')] class extends Component
     public function startServer(Server $server): void
     {
         app(ServerProcessService::class)->start($server);
+        Log::info('User '.auth()->id().' ('.auth()->user()->name.") started server '{$server->name}'");
     }
 
     public function stopServer(Server $server): void
     {
         app(ServerProcessService::class)->stop($server);
+        Log::info('User '.auth()->id().' ('.auth()->user()->name.") stopped server '{$server->name}'");
     }
 
     public function restartServer(Server $server): void
     {
         app(ServerProcessService::class)->restart($server);
+        Log::info('User '.auth()->id().' ('.auth()->user()->name.") restarted server '{$server->name}'");
     }
 
     // --- Delete ---
@@ -121,7 +190,12 @@ new #[Title('Servers')] class extends Component
     public function deleteServer(): void
     {
         if ($this->deletingServerId) {
-            Server::query()->find($this->deletingServerId)?->delete();
+            $server = Server::query()->find($this->deletingServerId);
+
+            if ($server) {
+                $server->delete();
+                Log::info('User '.auth()->id().' ('.auth()->user()->name.") deleted server '{$server->name}'");
+            }
         }
 
         $this->confirmingDelete = false;
@@ -186,6 +260,8 @@ new #[Title('Servers')] class extends Component
             'headless_client_count' => $validated['createHeadlessClientCount'],
             'additional_params' => $validated['createAdditionalParams'] ?: null,
         ]);
+
+        Log::info('User '.auth()->id().' ('.auth()->user()->name.") created server '{$validated['createName']}' (port: {$validated['createPort']})");
 
         $this->showCreateModal = false;
         unset($this->servers);
@@ -258,6 +334,8 @@ new #[Title('Servers')] class extends Component
             'additional_params' => $validated['editAdditionalParams'] ?: null,
         ]);
 
+        Log::info('User '.auth()->id().' ('.auth()->user()->name.") updated server '{$validated['editName']}'");
+
         $this->editingServerId = null;
         unset($this->servers);
 
@@ -327,6 +405,10 @@ new #[Title('Servers')] class extends Component
                                 </flux:button>
                             @endif
 
+                            <flux:button size="sm" variant="ghost" wire:click="toggleServerLogs({{ $server->id }})" icon="command-line">
+                                {{ __('Logs') }}
+                            </flux:button>
+
                             @if ($editingServerId === $server->id)
                                 <flux:button size="sm" wire:click="cancelEditing" icon="x-mark">
                                     {{ __('Cancel') }}
@@ -342,6 +424,26 @@ new #[Title('Servers')] class extends Component
                             </flux:button>
                         </div>
                     </div>
+
+                    {{-- Server log panel --}}
+                    @if ($this->showLogs[$server->id] ?? false)
+                        <div class="border-t border-zinc-200 dark:border-zinc-700 p-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <flux:text class="text-xs font-medium text-zinc-500 dark:text-zinc-400">{{ __('Server Log') }}</flux:text>
+                                <flux:button size="sm" variant="ghost" wire:click="loadServerLog({{ $server->id }})" icon="arrow-path">
+                                    {{ __('Refresh') }}
+                                </flux:button>
+                            </div>
+                            @php $lines = $this->serverLogLines[$server->id] ?? []; @endphp
+                            <div class="rounded bg-zinc-900 text-zinc-100 p-3 font-mono text-xs max-h-64 overflow-y-auto" x-data x-init="$nextTick(() => $el.scrollTop = $el.scrollHeight)" wire:key="server-logs-{{ $server->id }}">
+                                @forelse ($lines as $logLine)
+                                    <div class="whitespace-pre-wrap break-all">{{ $logLine }}</div>
+                                @empty
+                                    <div class="text-zinc-500">{{ __('No log output yet.') }}</div>
+                                @endforelse
+                            </div>
+                        </div>
+                    @endif
 
                     {{-- Inline configuration panel --}}
                     @if ($editingServerId === $server->id)

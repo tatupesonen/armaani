@@ -10,6 +10,7 @@
     "sail": false,
     "skills": [
         "fluxui-development",
-        "livewire-development"
+        "livewire-development",
+        "tailwindcss-development"
     ]
 }

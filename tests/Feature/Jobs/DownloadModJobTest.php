@@ -3,6 +3,7 @@
 namespace Tests\Feature\Jobs;
 
 use App\Enums\InstallationStatus;
+use App\Events\ModDownloadOutput;
 use App\Jobs\DownloadModJob;
 use App\Models\SteamAccount;
 use App\Models\WorkshopMod;
@@ -11,6 +12,7 @@ use App\Services\SteamWorkshopService;
 use Illuminate\Contracts\Process\ProcessResult;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Process\InvokedProcess;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Process;
 use Mockery;
 use Tests\TestCase;
@@ -24,6 +26,7 @@ class DownloadModJobTest extends TestCase
         parent::setUp();
 
         SteamAccount::factory()->create();
+        Event::fake([ModDownloadOutput::class]);
     }
 
     public function test_successful_download_marks_mod_as_installed(): void
@@ -181,6 +184,36 @@ class DownloadModJobTest extends TestCase
         $this->assertEquals(InstallationStatus::Installing, $statusDuringDownload);
     }
 
+    public function test_successful_download_dispatches_broadcast_events(): void
+    {
+        $mod = WorkshopMod::factory()->create([
+            'name' => 'Broadcast Mod',
+            'file_size' => 50000000,
+            'installation_status' => InstallationStatus::Queued,
+        ]);
+
+        Process::fake(['du *' => Process::result('50000000	/fake/path')]);
+
+        $steamCmd = Mockery::mock(SteamCmdService::class);
+        $steamCmd->shouldReceive('startDownloadMod')->once()->andReturn($this->makeInvokedProcess(true));
+
+        $workshop = Mockery::mock(SteamWorkshopService::class);
+
+        $this->app->instance(SteamCmdService::class, $steamCmd);
+        $this->app->instance(SteamWorkshopService::class, $workshop);
+
+        $job = new DownloadModJob($mod);
+        $job->handle($steamCmd, $workshop);
+
+        Event::assertDispatched(ModDownloadOutput::class, function (ModDownloadOutput $event) use ($mod): bool {
+            return $event->modId === $mod->id && str_contains($event->line, 'Starting SteamCMD download');
+        });
+
+        Event::assertDispatched(ModDownloadOutput::class, function (ModDownloadOutput $event) use ($mod): bool {
+            return $event->modId === $mod->id && str_contains($event->line, 'completed successfully');
+        });
+    }
+
     /**
      * Build a mock InvokedProcess that finishes immediately with the given exit status.
      */
@@ -188,6 +221,7 @@ class DownloadModJobTest extends TestCase
     {
         $processResult = Mockery::mock(ProcessResult::class);
         $processResult->shouldReceive('successful')->andReturn($successful);
+        $processResult->shouldReceive('output')->andReturn('');
         $processResult->shouldReceive('errorOutput')->andReturn('');
 
         $invokedProcess = Mockery::mock(InvokedProcess::class);

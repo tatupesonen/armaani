@@ -39,6 +39,8 @@ new #[Title('Edit Preset')] class extends Component
         $this->modPreset->update(['name' => $this->name]);
         $this->modPreset->mods()->sync($this->selectedMods);
 
+        Log::info('User '.auth()->id().' ('.auth()->user()->name.") updated preset '{$this->name}' with ".count($this->selectedMods).' mods');
+
         session()->flash('status', "Preset '{$this->name}' updated successfully.");
 
         $this->redirect(route('presets.index'), navigate: true);

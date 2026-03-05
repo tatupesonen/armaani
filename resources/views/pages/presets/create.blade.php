@@ -30,6 +30,8 @@ new #[Title('Create Preset')] class extends Component
         $preset = ModPreset::query()->create(['name' => $this->name]);
         $preset->mods()->sync($this->selectedMods);
 
+        Log::info('User '.auth()->id().' ('.auth()->user()->name.") created preset '{$preset->name}' with ".count($this->selectedMods).' mods');
+
         session()->flash('status', "Preset '{$this->name}' created successfully.");
 
         $this->redirect(route('presets.index'), navigate: true);

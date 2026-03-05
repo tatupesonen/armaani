@@ -44,6 +44,15 @@ class Server extends Model
     }
 
     /**
+     * Get the per-server profiles directory path.
+     * Arma 3 stores RPT logs, bans, player profiles, and config here.
+     */
+    public function getProfilesPath(): string
+    {
+        return $this->getInstallationPath().'/profiles';
+    }
+
+    /**
      * Get the binary directory — uses the linked game install if set,
      * otherwise falls back to the server's own install path.
      */

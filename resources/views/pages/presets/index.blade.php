@@ -32,6 +32,7 @@ new #[Title('Mod Presets')] class extends Component
         try {
             $preset = app(PresetImportService::class)->importFromHtml($htmlContent);
 
+            Log::info('User '.auth()->id().' ('.auth()->user()->name.") imported preset '{$preset->name}' with {$preset->mods()->count()} mods");
             session()->flash('status', "Preset '{$preset->name}' imported. Mod downloads have been queued.");
         } catch (\InvalidArgumentException $e) {
             $this->addError('importFile', $e->getMessage());
@@ -47,6 +48,7 @@ new #[Title('Mod Presets')] class extends Component
     public function deletePreset(ModPreset $preset): void
     {
         $preset->delete();
+        Log::info('User '.auth()->id().' ('.auth()->user()->name.") deleted preset '{$preset->name}'");
         unset($this->presets);
     }
 }; ?>

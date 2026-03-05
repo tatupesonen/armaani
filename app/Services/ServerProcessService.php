@@ -16,17 +16,27 @@ class ServerProcessService
             return;
         }
 
+        $profilesPath = $server->getProfilesPath();
+
+        if (! is_dir($profilesPath)) {
+            mkdir($profilesPath, 0755, true);
+        }
+
+        $this->generateServerConfig($server);
+
         $command = $this->buildLaunchCommand($server);
         $pidFile = $this->getPidFilePath($server);
 
         $fullCommand = sprintf(
             'nohup %s > %s 2>&1 & echo $! > %s',
             $command,
-            $server->getBinaryPath().'/server.log',
+            $profilesPath.'/server.log',
             $pidFile
         );
 
         exec($fullCommand);
+
+        $this->startLogTail($server);
     }
 
     /**
@@ -34,6 +44,8 @@ class ServerProcessService
      */
     public function stop(Server $server): void
     {
+        $this->stopLogTail($server);
+
         $pid = $this->getPid($server);
 
         if ($pid && $this->isProcessRunning($pid)) {
@@ -125,7 +137,8 @@ class ServerProcessService
 
         $params[] = '-port='.$server->port;
         $params[] = '-name=arma3_'.$server->id;
-        $params[] = '-config=server.cfg';
+        $params[] = '-profiles='.$server->getProfilesPath();
+        $params[] = '-config='.$server->getProfilesPath().'/server.cfg';
         $params[] = '-nosplash';
         $params[] = '-skipIntro';
         $params[] = '-world=empty';
@@ -161,6 +174,57 @@ class ServerProcessService
         $mods = $preset->mods()->get();
 
         return $mods->map(fn ($mod) => $mod->getNormalizedName())->implode(';');
+    }
+
+    /**
+     * Generate and write server.cfg to the profiles directory.
+     * The file is always regenerated on start so config changes take effect immediately.
+     */
+    protected function generateServerConfig(Server $server): void
+    {
+        $lines = [];
+
+        $lines[] = '// GLOBAL SETTINGS';
+        $lines[] = 'hostname = "'.addslashes($server->name).'";';
+        $lines[] = 'password = "'.addslashes((string) $server->password).'";';
+        $lines[] = 'passwordAdmin = "'.addslashes((string) $server->admin_password).'";';
+        $lines[] = '';
+        $lines[] = '// JOINING RULES';
+        $lines[] = 'maxPlayers = '.(int) $server->max_players.';';
+        $lines[] = 'kickDuplicate = 1;';
+        $lines[] = 'verifySignatures = 2;';
+        $lines[] = 'allowedFilePatching = 0;';
+        $lines[] = '';
+        $lines[] = '// INGAME SETTINGS';
+        $lines[] = 'disableVoN = 0;';
+        $lines[] = 'vonCodec = 1;';
+        $lines[] = 'vonCodecQuality = 30;';
+        $lines[] = 'persistent = 0;';
+        $lines[] = 'timeStampFormat = "short";';
+        $lines[] = 'BattlEye = 1;';
+        $lines[] = '';
+        $lines[] = '// SIGNATURE VERIFICATION';
+        $lines[] = 'onUnsignedData = "kick (_this select 0)";';
+        $lines[] = 'onHackedData = "kick (_this select 0)";';
+        $lines[] = 'onDifferentData = "";';
+
+        if ($server->description) {
+            $lines[] = '';
+            $lines[] = '// MOTD';
+            $motdLines = explode("\n", $server->description);
+            $lines[] = 'motd[] = {';
+            $motdEntries = array_map(
+                fn (string $line) => '    "'.addslashes(trim($line)).'"',
+                $motdLines
+            );
+            $lines[] = implode(",\n", $motdEntries);
+            $lines[] = '};';
+        }
+
+        file_put_contents(
+            $server->getProfilesPath().'/server.cfg',
+            implode("\n", $lines)."\n"
+        );
     }
 
     protected function startHeadlessClient(Server $server, int $index): void
@@ -233,5 +297,46 @@ class ServerProcessService
         if (file_exists($pidFile)) {
             @unlink($pidFile);
         }
+    }
+
+    /**
+     * Start a background process that tails the server log and broadcasts new lines.
+     */
+    protected function startLogTail(Server $server): void
+    {
+        $pidFile = $this->getLogTailPidFilePath($server);
+        $artisan = base_path('artisan');
+
+        $command = sprintf(
+            'nohup php %s server:tail-log %d > /dev/null 2>&1 & echo $! > %s',
+            $artisan,
+            $server->id,
+            $pidFile
+        );
+
+        exec($command);
+    }
+
+    /**
+     * Stop the log tail process for a server.
+     */
+    protected function stopLogTail(Server $server): void
+    {
+        $pidFile = $this->getLogTailPidFilePath($server);
+
+        if (file_exists($pidFile)) {
+            $pid = (int) trim(file_get_contents($pidFile));
+
+            if ($pid > 0 && $this->isProcessRunning($pid)) {
+                posix_kill($pid, SIGTERM);
+            }
+
+            @unlink($pidFile);
+        }
+    }
+
+    protected function getLogTailPidFilePath(Server $server): string
+    {
+        return storage_path('app/server_'.$server->id.'_tail.pid');
     }
 }

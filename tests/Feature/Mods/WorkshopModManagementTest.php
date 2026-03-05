@@ -9,7 +9,6 @@ use App\Models\User;
 use App\Models\WorkshopMod;
 use App\Services\SteamWorkshopService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
 use Mockery;
@@ -164,11 +163,9 @@ class WorkshopModManagementTest extends TestCase
 
         $mod = WorkshopMod::factory()->installed()->create();
 
-        // Create a temporary directory so the rm -rf branch is exercised.
         $path = $mod->getInstallationPath();
-        mkdir($path, 0755, true);
-
-        Process::fake(['rm *' => Process::result()]);
+        @mkdir($path, 0755, true);
+        $this->assertTrue(is_dir($path), 'Test setup: directory should exist before delete');
 
         $this->mockWorkshopService();
 
@@ -176,12 +173,7 @@ class WorkshopModManagementTest extends TestCase
             ->call('deleteMod', $mod->id);
 
         $this->assertDatabaseMissing('workshop_mods', ['id' => $mod->id]);
-        Process::assertRan(fn ($p) => in_array('rm', (array) $p->command));
-
-        // Clean up in case Process::fake didn't actually delete it.
-        if (is_dir($path)) {
-            rmdir($path);
-        }
+        $this->assertDirectoryDoesNotExist($path);
     }
 
     public function test_deleting_mod_detaches_from_presets(): void
