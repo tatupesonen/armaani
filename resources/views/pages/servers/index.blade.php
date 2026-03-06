@@ -7,16 +7,22 @@ use App\Jobs\StopServerJob;
 use App\Models\GameInstall;
 use App\Models\ModPreset;
 use App\Models\Server;
+use App\Models\ServerBackup;
+use App\Services\ServerBackupService;
 use App\Services\ServerProcessService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Title;
+use Livewire\Attributes\Validate;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 
 new #[Title('Servers')] class extends Component
 {
+    use WithFileUploads;
+
     // List state
     public bool $confirmingDelete = false;
 
@@ -144,6 +150,19 @@ new #[Title('Servers')] class extends Component
     public string $editSkillAi = '0.50';
 
     public string $editPrecisionAi = '0.50';
+
+    // Backup state
+    public bool $confirmingRestore = false;
+
+    public ?int $restoringBackupId = null;
+
+    public string $backupName = '';
+
+    /** @var \Livewire\Features\SupportFileUploads\TemporaryUploadedFile|null */
+    #[Validate(['backupUploadFile' => ['required', 'file', 'max:10240']])]
+    public $backupUploadFile = null;
+
+    public string $backupUploadName = '';
 
     #[Computed]
     public function servers()
@@ -279,6 +298,12 @@ new #[Title('Servers')] class extends Component
 
     public function confirmDelete(int $serverId): void
     {
+        $server = Server::query()->findOrFail($serverId);
+
+        if ($this->getStatus($server) !== 'stopped') {
+            return;
+        }
+
         $this->confirmingDelete = true;
         $this->deletingServerId = $serverId;
     }
@@ -288,7 +313,7 @@ new #[Title('Servers')] class extends Component
         if ($this->deletingServerId) {
             $server = Server::query()->find($this->deletingServerId);
 
-            if ($server) {
+            if ($server && $this->getStatus($server) === 'stopped') {
                 $server->delete();
                 Log::info('User '.auth()->id().' ('.auth()->user()->name.") deleted server '{$server->name}'");
             }
@@ -544,6 +569,94 @@ new #[Title('Servers')] class extends Component
 
         session()->flash('status', "Server '{$validated['editName']}' updated successfully.");
     }
+
+    // --- Backups ---
+
+    public function getBackups(Server $server)
+    {
+        return $server->backups()->get();
+    }
+
+    public function createBackup(Server $server): void
+    {
+        $service = app(ServerBackupService::class);
+        $backup = $service->createFromServer($server, $this->backupName ?: null);
+
+        $this->backupName = '';
+
+        if ($backup) {
+            Log::info('User '.auth()->id().' ('.auth()->user()->name.") created backup for server '{$server->name}'");
+            session()->flash('backup-status-'.$server->id, __('Backup created successfully.'));
+        } else {
+            session()->flash('backup-error-'.$server->id, __('No .vars.Arma3Profile file found for this server. Start the server at least once first.'));
+        }
+    }
+
+    public function uploadBackup(Server $server): void
+    {
+        $this->validate([
+            'backupUploadFile' => ['required', 'file', 'max:10240'],
+        ]);
+
+        $data = file_get_contents($this->backupUploadFile->getRealPath());
+
+        app(ServerBackupService::class)->createFromUpload(
+            $server,
+            $data,
+            $this->backupUploadName ?: $this->backupUploadFile->getClientOriginalName(),
+        );
+
+        Log::info('User '.auth()->id().' ('.auth()->user()->name.") uploaded backup for server '{$server->name}'");
+
+        $this->backupUploadFile = null;
+        $this->backupUploadName = '';
+
+        session()->flash('backup-status-'.$server->id, __('Backup uploaded successfully.'));
+    }
+
+    public function confirmRestore(int $backupId): void
+    {
+        $this->confirmingRestore = true;
+        $this->restoringBackupId = $backupId;
+    }
+
+    public function restoreBackup(): void
+    {
+        if (! $this->restoringBackupId) {
+            return;
+        }
+
+        $backup = ServerBackup::query()->findOrFail($this->restoringBackupId);
+        $server = $backup->server;
+
+        if ($this->getStatus($server) !== 'stopped') {
+            session()->flash('backup-error-'.$server->id, __('Cannot restore while the server is running. Stop it first.'));
+            $this->confirmingRestore = false;
+            $this->restoringBackupId = null;
+
+            return;
+        }
+
+        app(ServerBackupService::class)->restore($backup);
+
+        Log::info('User '.auth()->id().' ('.auth()->user()->name.") restored backup #{$backup->id} for server '{$server->name}'");
+
+        $this->confirmingRestore = false;
+        $this->restoringBackupId = null;
+
+        session()->flash('backup-status-'.$server->id, __('Backup restored successfully.'));
+    }
+
+    public function deleteBackup(ServerBackup $backup): void
+    {
+        $server = $backup->server;
+        $backupId = $backup->id;
+        $backup->delete();
+
+        Log::info('User '.auth()->id().' ('.auth()->user()->name.") deleted backup #{$backupId} from server '{$server->name}'");
+
+        session()->flash('backup-status-'.$server->id, __('Backup deleted.'));
+    }
 }; ?>
 
 <section class="w-full">
@@ -611,41 +724,41 @@ new #[Title('Servers')] class extends Component
                                     <flux:icon.arrow-path class="size-4 animate-spin" />
                                     {{ __('Booting') }}...
                                 </flux:button>
-                                <flux:button size="sm" variant="danger" wire:click="stopServer({{ $server->id }})" icon="stop">
+                                <flux:button size="sm" variant="danger" wire:click="stopServer({{ $server->id }})" :loading="false" icon="stop">
                                     {{ __('Stop') }}
                                 </flux:button>
                             @elseif ($status === 'running')
-                                <flux:button size="sm" variant="danger" wire:click="stopServer({{ $server->id }})" icon="stop">
+                                <flux:button size="sm" variant="danger" wire:click="stopServer({{ $server->id }})" :loading="false" icon="stop">
                                     {{ __('Stop') }}
                                 </flux:button>
-                                <flux:button size="sm" wire:click="restartServer({{ $server->id }})" icon="arrow-path">
+                                <flux:button size="sm" wire:click="restartServer({{ $server->id }})" :loading="false" icon="arrow-path">
                                     {{ __('Restart') }}
                                 </flux:button>
                             @else
-                                <flux:button size="sm" variant="primary" wire:click="startServer({{ $server->id }})" icon="play">
+                                <flux:button size="sm" variant="primary" wire:click="startServer({{ $server->id }})" :loading="false" icon="play">
                                     {{ __('Start') }}
                                 </flux:button>
                             @endif
 
-                            <flux:button size="sm" variant="ghost" wire:click="toggleServerLogs({{ $server->id }})" icon="command-line">
+                            <flux:button size="sm" variant="ghost" wire:click="toggleServerLogs({{ $server->id }})" :loading="false" icon="command-line">
                                 {{ __('Logs') }}
                             </flux:button>
 
-                            <flux:button size="sm" variant="ghost" wire:click="toggleCommand({{ $server->id }})" icon="code-bracket">
+                            <flux:button size="sm" variant="ghost" wire:click="toggleCommand({{ $server->id }})" :loading="false" icon="code-bracket">
                                 {{ __('Command') }}
                             </flux:button>
 
                             @if ($editingServerId === $server->id)
-                                <flux:button size="sm" wire:click="cancelEditing" icon="x-mark">
+                                <flux:button size="sm" wire:click="cancelEditing" :loading="false" icon="x-mark">
                                     {{ __('Cancel') }}
                                 </flux:button>
                             @else
-                                <flux:button size="sm" wire:click="startEditing({{ $server->id }})" icon="pencil">
+                                <flux:button size="sm" wire:click="startEditing({{ $server->id }})" :loading="false" icon="pencil">
                                     {{ __('Configure') }}
                                 </flux:button>
                             @endif
 
-                            <flux:button size="sm" variant="danger" wire:click="confirmDelete({{ $server->id }})" icon="trash">
+                            <flux:button size="sm" variant="danger" wire:click="confirmDelete({{ $server->id }})" :loading="false" icon="trash" :disabled="$status !== 'stopped'">
                                 {{ __('Delete') }}
                             </flux:button>
                         </div>
@@ -654,11 +767,11 @@ new #[Title('Servers')] class extends Component
                     {{-- Headless client controls --}}
                     @if ($status === 'running')
                         @php $hcCount = $this->getHeadlessClientCount($server); @endphp
-                        <div class="flex items-center gap-2 px-4 pt-1 pb-3">
+                        <div class="flex items-center gap-2 px-4 py-3">
                             <flux:text class="text-sm font-medium">{{ __('Headless Clients') }}</flux:text>
-                            <flux:button size="xs" variant="ghost" wire:click="removeHeadlessClient({{ $server->id }})" icon="minus" :disabled="$hcCount < 1" />
+                            <flux:button size="xs" variant="ghost" wire:click="removeHeadlessClient({{ $server->id }})" :loading="false" icon="minus" :disabled="$hcCount < 1" />
                             <flux:badge :variant="$hcCount > 0 ? 'primary' : 'secondary'" size="sm">{{ $hcCount }}</flux:badge>
-                            <flux:button size="xs" variant="ghost" wire:click="addHeadlessClient({{ $server->id }})" icon="plus" :disabled="$hcCount >= 10" />
+                            <flux:button size="xs" variant="ghost" wire:click="addHeadlessClient({{ $server->id }})" :loading="false" icon="plus" :disabled="$hcCount >= 10" />
                         </div>
                     @endif
 
@@ -901,6 +1014,124 @@ new #[Title('Servers')] class extends Component
                                     <flux:button wire:click="cancelEditing">{{ __('Cancel') }}</flux:button>
                                 </div>
                             </form>
+
+                            {{-- Backups section (outside config form) --}}
+                            <div class="mt-6 pt-6 border-t border-zinc-200 dark:border-zinc-700">
+                                <flux:heading size="lg" class="mb-4">{{ __('State Backups') }}</flux:heading>
+                                <flux:text class="mb-4">{{ __('Back up and restore the .vars.Arma3Profile file, which stores this server\'s runtime state.') }}</flux:text>
+
+                                @if (session('backup-status-'.$server->id))
+                                    <flux:callout variant="success" class="mb-4">
+                                        {{ session('backup-status-'.$server->id) }}
+                                    </flux:callout>
+                                @endif
+
+                                @if (session('backup-error-'.$server->id))
+                                    <flux:callout variant="danger" class="mb-4">
+                                        {{ session('backup-error-'.$server->id) }}
+                                    </flux:callout>
+                                @endif
+
+                                {{-- Create backup from current state --}}
+                                <div class="flex items-end gap-3 mb-4">
+                                    <div class="flex-1 max-w-xs">
+                                        <flux:input wire:model="backupName" :label="__('Backup Name')" :placeholder="__('Optional label')" size="sm" />
+                                    </div>
+                                    <flux:button size="sm" wire:click="createBackup({{ $server->id }})" icon="arrow-down-on-square" :disabled="$status !== 'stopped'">
+                                        {{ __('Backup Current State') }}
+                                    </flux:button>
+                                </div>
+
+                                {{-- Upload a .vars file --}}
+                                <div class="flex items-end gap-3 mb-6"
+                                    x-data="{ uploading: false, progress: 0 }"
+                                    x-on:livewire-upload-start="uploading = true; progress = 0"
+                                    x-on:livewire-upload-finish="uploading = false"
+                                    x-on:livewire-upload-cancel="uploading = false"
+                                    x-on:livewire-upload-error="uploading = false"
+                                    x-on:livewire-upload-progress="progress = $event.detail.progress"
+                                >
+                                    <div class="flex-1 max-w-xs">
+                                        <flux:input wire:model="backupUploadName" :label="__('Upload Name')" :placeholder="__('Optional label')" size="sm" />
+                                    </div>
+                                    <div class="flex-1 max-w-xs">
+                                        <flux:field>
+                                            <flux:label>{{ __('.vars File') }}</flux:label>
+                                            <input type="file" wire:model="backupUploadFile"
+                                                class="block w-full text-sm text-zinc-500 dark:text-zinc-400
+                                                    file:mr-4 file:py-1.5 file:px-3
+                                                    file:rounded-lg file:border-0
+                                                    file:text-sm file:font-semibold
+                                                    file:bg-zinc-100 file:text-zinc-700
+                                                    dark:file:bg-zinc-700 dark:file:text-zinc-200
+                                                    hover:file:bg-zinc-200 dark:hover:file:bg-zinc-600
+                                                    file:cursor-pointer cursor-pointer"
+                                            />
+                                            <flux:error name="backupUploadFile" />
+                                        </flux:field>
+                                    </div>
+                                    <flux:button size="sm" wire:click="uploadBackup({{ $server->id }})" icon="arrow-up-tray" x-bind:disabled="uploading" :disabled="!$backupUploadFile">
+                                        {{ __('Upload') }}
+                                    </flux:button>
+                                    <template x-if="uploading">
+                                        <div class="text-xs text-zinc-500" x-text="progress + '%'"></div>
+                                    </template>
+                                </div>
+
+                                {{-- Backup list --}}
+                                @php $backups = $this->getBackups($server); @endphp
+                                @if ($backups->isEmpty())
+                                    <flux:text class="text-sm text-zinc-500">{{ __('No backups yet.') }}</flux:text>
+                                @else
+                                    <div class="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
+                                        <table class="min-w-full divide-y divide-zinc-200 dark:divide-zinc-700">
+                                            <thead class="bg-zinc-50 dark:bg-zinc-800">
+                                                <tr>
+                                                    <th class="px-3 py-2 text-left text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase">{{ __('Name') }}</th>
+                                                    <th class="px-3 py-2 text-left text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase">{{ __('Date') }}</th>
+                                                    <th class="px-3 py-2 text-left text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase">{{ __('Size') }}</th>
+                                                    <th class="px-3 py-2 text-left text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase">{{ __('Type') }}</th>
+                                                    <th class="px-3 py-2 text-right text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase">{{ __('Actions') }}</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="divide-y divide-zinc-200 dark:divide-zinc-700">
+                                                @foreach ($backups as $backup)
+                                                    <tr wire:key="backup-{{ $backup->id }}">
+                                                        <td class="px-3 py-2 text-sm">
+                                                            {{ $backup->name ?? __('Unnamed') }}
+                                                        </td>
+                                                        <td class="px-3 py-2 text-sm text-zinc-500">
+                                                            {{ $backup->created_at->format('M j, Y g:i A') }}
+                                                        </td>
+                                                        <td class="px-3 py-2 text-sm text-zinc-500 font-mono">
+                                                            {{ Number::fileSize($backup->file_size) }}
+                                                        </td>
+                                                        <td class="px-3 py-2 text-sm">
+                                                            <flux:badge size="sm" :variant="$backup->is_automatic ? 'secondary' : 'primary'">
+                                                                {{ $backup->is_automatic ? __('Auto') : __('Manual') }}
+                                                            </flux:badge>
+                                                        </td>
+                                                        <td class="px-3 py-2 text-right">
+                                                            <div class="flex items-center justify-end gap-1">
+                                                                <flux:button size="xs" variant="ghost" :href="route('servers.backups.download', $backup)" icon="arrow-down-tray">
+                                                                </flux:button>
+                                                                <flux:button size="xs" variant="ghost" wire:click="confirmRestore({{ $backup->id }})" icon="arrow-uturn-left" :disabled="$status !== 'stopped'">
+                                                                </flux:button>
+                                                                <flux:button size="xs" variant="ghost" wire:click="deleteBackup({{ $backup->id }})" icon="trash">
+                                                                </flux:button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                @endforeach
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    <flux:text class="mt-2 text-xs text-zinc-400">
+                                        {{ __('Retention limit: :count backups per server.', ['count' => config('arma.max_backups_per_server') ?: __('Unlimited')]) }}
+                                    </flux:text>
+                                @endif
+                            </div>
                         </div>
                     @endif
                 </div>
@@ -1002,6 +1233,16 @@ new #[Title('Servers')] class extends Component
         <div class="flex justify-end gap-2 mt-4">
             <flux:button wire:click="$set('confirmingDelete', false)">{{ __('Cancel') }}</flux:button>
             <flux:button variant="danger" wire:click="deleteServer">{{ __('Delete') }}</flux:button>
+        </div>
+    </flux:modal>
+
+    {{-- Restore backup confirmation modal --}}
+    <flux:modal wire:model="confirmingRestore">
+        <flux:heading>{{ __('Restore Backup') }}</flux:heading>
+        <flux:text>{{ __('Are you sure you want to restore this backup? This will overwrite the server\'s current .vars.Arma3Profile state. The server must be stopped.') }}</flux:text>
+        <div class="flex justify-end gap-2 mt-4">
+            <flux:button wire:click="$set('confirmingRestore', false)">{{ __('Cancel') }}</flux:button>
+            <flux:button variant="primary" wire:click="restoreBackup" icon="arrow-uturn-left">{{ __('Restore') }}</flux:button>
         </div>
     </flux:modal>
 </section>

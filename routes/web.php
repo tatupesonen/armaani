@@ -10,6 +10,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::livewire('game-installs', 'pages::game-installs.index')->name('game-installs.index');
 
     Route::livewire('servers', 'pages::servers.index')->name('servers.index');
+    Route::get('servers/backups/{serverBackup}/download', function (App\Models\ServerBackup $serverBackup) {
+        $filename = 'arma3_'.$serverBackup->server_id.'.vars.Arma3Profile';
+
+        return response($serverBackup->data, 200, [
+            'Content-Type' => 'application/octet-stream',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+            'Content-Length' => $serverBackup->file_size,
+        ]);
+    })->name('servers.backups.download');
 
     Route::livewire('mods', 'pages::mods.index')->name('mods.index');
 

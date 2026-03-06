@@ -89,4 +89,17 @@ return [
 
     'game_id' => 107410,
 
+    /*
+    |--------------------------------------------------------------------------
+    | Max Backups Per Server
+    |--------------------------------------------------------------------------
+    |
+    | The maximum number of .vars.Arma3Profile backups to retain per server.
+    | When the limit is reached, the oldest backup is automatically deleted
+    | to make room for new ones. Set to 0 for unlimited.
+    |
+    */
+
+    'max_backups_per_server' => (int) env('MAX_BACKUPS_PER_SERVER', 20),
+
 ];

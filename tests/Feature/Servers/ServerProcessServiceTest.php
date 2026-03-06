@@ -331,6 +331,11 @@ class ServerProcessServiceTest extends TestCase
     {
         $server = $this->makeServer();
 
+        // Auto-backup logs "skipping backup" when no .vars file exists
+        Log::shouldReceive('info')
+            ->withArgs(fn (string $msg) => str_contains($msg, 'skipping backup'))
+            ->atMost()->once();
+
         Log::shouldReceive('info')
             ->withArgs(fn (string $msg) => str_contains($msg, "[Server:{$server->id}") && str_contains($msg, 'Starting server from'))
             ->once();

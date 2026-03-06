@@ -28,6 +28,9 @@ class ServerProcessService
             mkdir($profilesPath, 0755, true);
         }
 
+        // Auto-backup the .vars.Arma3Profile before overwriting configs
+        app(ServerBackupService::class)->createFromServer($server, 'Auto-backup before start', isAutomatic: true);
+
         $server->load('activePreset.mods');
         $this->symlinkMods($server);
         $this->symlinkMissions($server);

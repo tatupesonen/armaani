@@ -6,6 +6,7 @@ use App\Enums\ServerStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Server extends Model
@@ -61,6 +62,11 @@ class Server extends Model
     public function difficultySettings(): HasOne
     {
         return $this->hasOne(DifficultySettings::class);
+    }
+
+    public function backups(): HasMany
+    {
+        return $this->hasMany(ServerBackup::class)->latest();
     }
 
     /**

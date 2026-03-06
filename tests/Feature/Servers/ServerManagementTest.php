@@ -316,6 +316,44 @@ class ServerManagementTest extends TestCase
         $this->assertDatabaseMissing('servers', ['id' => $server->id]);
     }
 
+    public function test_user_cannot_delete_non_stopped_server(): void
+    {
+        $this->actingAs($this->user);
+
+        $server = Server::factory()->create();
+
+        $this->mockServerProcessService(ServerStatus::Running);
+
+        Livewire::test('pages::servers.index')
+            ->call('confirmDelete', $server->id)
+            ->assertSet('confirmingDelete', false)
+            ->assertSet('deletingServerId', null);
+
+        $this->assertDatabaseHas('servers', ['id' => $server->id]);
+    }
+
+    public function test_delete_server_blocked_if_status_changed_before_confirm(): void
+    {
+        $this->actingAs($this->user);
+
+        $server = Server::factory()->create();
+
+        // Confirm delete while stopped
+        $this->mockServerProcessService(ServerStatus::Stopped);
+
+        $component = Livewire::test('pages::servers.index')
+            ->call('confirmDelete', $server->id)
+            ->assertSet('confirmingDelete', true)
+            ->assertSet('deletingServerId', $server->id);
+
+        // Status changes to running before user clicks delete
+        $this->mockServerProcessService(ServerStatus::Running);
+
+        $component->call('deleteServer');
+
+        $this->assertDatabaseHas('servers', ['id' => $server->id]);
+    }
+
     public function test_load_server_log_returns_log_lines(): void
     {
         $this->actingAs($this->user);
