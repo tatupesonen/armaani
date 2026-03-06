@@ -5,6 +5,7 @@ namespace Tests\Feature\Events;
 use App\Events\GameInstallOutput;
 use App\Events\ModDownloadOutput;
 use App\Events\ServerLogOutput;
+use App\Events\ServerStatusChanged;
 use Illuminate\Broadcasting\Channel;
 use Tests\TestCase;
 
@@ -86,5 +87,29 @@ class BroadcastEventsTest extends TestCase
 
         $this->assertEquals(4, $event->serverId);
         $this->assertEquals('Player connected', $event->line);
+    }
+
+    public function test_server_status_changed_broadcasts_on_correct_channel(): void
+    {
+        $event = new ServerStatusChanged(
+            serverId: 3,
+            status: 'running',
+        );
+
+        $channel = $event->broadcastOn();
+
+        $this->assertInstanceOf(Channel::class, $channel);
+        $this->assertEquals('servers', $channel->name);
+    }
+
+    public function test_server_status_changed_has_public_properties(): void
+    {
+        $event = new ServerStatusChanged(
+            serverId: 5,
+            status: 'booting',
+        );
+
+        $this->assertEquals(5, $event->serverId);
+        $this->assertEquals('booting', $event->status);
     }
 }

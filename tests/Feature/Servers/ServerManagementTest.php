@@ -358,6 +358,20 @@ class ServerManagementTest extends TestCase
             ->assertReturned(['No log file found.']);
     }
 
+    public function test_booting_status_shows_booting_badge_and_stop_button(): void
+    {
+        $this->actingAs($this->user);
+
+        Server::factory()->create(['name' => 'Booting Server']);
+
+        $this->mockServerProcessService(ServerStatus::Booting);
+
+        Livewire::test('pages::servers.index')
+            ->assertSee('Booting')
+            ->assertSee('Stop')
+            ->assertDontSee('Headless Clients');
+    }
+
     public function test_headless_client_controls_hidden_when_server_stopped(): void
     {
         $this->actingAs($this->user);

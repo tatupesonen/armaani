@@ -47,8 +47,7 @@ class ServerProcessService
 
         // Truncate/create log file before the server process.
         file_put_contents($logFile, '');
-        // TODO: Re-enable log tailing once it no longer freezes `composer run dev`.
-        // $this->startLogTail($server);
+        $this->startLogTail($server);
 
         // Start the server as a detached child process using proc_open.
         // The 'exec' prefix replaces the shell with the server binary so
@@ -78,8 +77,7 @@ class ServerProcessService
     {
         $context = "[Server:{$server->id} '{$server->name}']";
 
-        // TODO: Re-enable log tailing once it no longer freezes `composer run dev`.
-        // $this->stopLogTail($server);
+        $this->stopLogTail($server);
 
         $pid = $this->getPid($server);
 
@@ -136,6 +134,18 @@ class ServerProcessService
     {
         if (in_array($server->status, [ServerStatus::Starting, ServerStatus::Stopping])) {
             return $server->status;
+        }
+
+        // Booting is semi-transitional: trust DB while the process is alive,
+        // but self-heal to Stopped if the process died during boot.
+        if ($server->status === ServerStatus::Booting) {
+            if ($this->isRunning($server)) {
+                return ServerStatus::Booting;
+            }
+
+            $server->updateQuietly(['status' => ServerStatus::Stopped]);
+
+            return ServerStatus::Stopped;
         }
 
         $isRunning = $this->isRunning($server);

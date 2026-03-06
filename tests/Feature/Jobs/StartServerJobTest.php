@@ -14,7 +14,7 @@ class StartServerJobTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_start_job_calls_service_and_sets_running_status(): void
+    public function test_start_job_calls_service_and_sets_booting_status(): void
     {
         $server = Server::factory()->create(['status' => ServerStatus::Starting]);
 
@@ -25,7 +25,7 @@ class StartServerJobTest extends TestCase
 
         (new StartServerJob($server))->handle($service);
 
-        $this->assertEquals(ServerStatus::Running, $server->fresh()->status);
+        $this->assertEquals(ServerStatus::Booting, $server->fresh()->status);
     }
 
     public function test_start_job_sets_stopped_when_process_fails_to_start(): void
@@ -56,7 +56,7 @@ class StartServerJobTest extends TestCase
 
         (new StartServerJob($server, restart: true))->handle($service);
 
-        $this->assertEquals(ServerStatus::Running, $server->fresh()->status);
+        $this->assertEquals(ServerStatus::Booting, $server->fresh()->status);
     }
 
     public function test_restart_job_restores_headless_clients(): void
@@ -74,7 +74,7 @@ class StartServerJobTest extends TestCase
 
         (new StartServerJob($server, restart: true))->handle($service);
 
-        $this->assertEquals(ServerStatus::Running, $server->fresh()->status);
+        $this->assertEquals(ServerStatus::Booting, $server->fresh()->status);
     }
 
     public function test_restart_job_does_not_restore_headless_clients_on_failed_start(): void

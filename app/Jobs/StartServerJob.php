@@ -34,8 +34,8 @@ class StartServerJob implements ShouldQueue
         $service->start($this->server);
 
         if ($service->isRunning($this->server)) {
-            $this->server->update(['status' => ServerStatus::Running]);
-            Log::info("{$context} Server started successfully");
+            $this->server->update(['status' => ServerStatus::Booting]);
+            Log::info("{$context} Server process started, booting (waiting for Steam connection)");
 
             if ($this->restart && $hcCount > 0) {
                 Log::info("{$context} Restoring {$hcCount} headless client(s)");

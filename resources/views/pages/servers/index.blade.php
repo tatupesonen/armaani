@@ -11,6 +11,7 @@ use App\Services\ServerProcessService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\On;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
@@ -206,6 +207,12 @@ new #[Title('Servers')] class extends Component
     public function getStatus(Server $server): string
     {
         return app(ServerProcessService::class)->getStatus($server)->value;
+    }
+
+    #[On('echo:servers,ServerStatusChanged')]
+    public function onServerStatusChanged(): void
+    {
+        // Re-render triggered automatically by Livewire.
     }
 
     // --- Process control ---
@@ -564,15 +571,21 @@ new #[Title('Servers')] class extends Component
         <div class="space-y-4" wire:poll.5s>
             @foreach ($this->servers as $server)
                 @php $status = $this->getStatus($server); @endphp
-                <div class="rounded-lg border border-zinc-200 dark:border-zinc-700" wire:key="server-{{ $server->id }}">
+                <div class="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700" wire:key="server-{{ $server->id }}">
                     {{-- Server header row --}}
-                    <div class="flex items-center justify-between p-4">
-                        <div>
+                    <div class="relative flex items-center justify-between p-4">
+                        {{-- Status gradient overlays — always present, cross-fade on status change --}}
+                        <div class="absolute inset-0 bg-gradient-to-r from-amber-400/20 to-zinc-300/5 transition-opacity duration-700 dark:from-amber-500/15 dark:to-zinc-600/5 {{ $status === 'starting' ? 'opacity-100' : 'opacity-0' }}"></div>
+                        <div class="absolute inset-0 bg-gradient-to-r from-blue-400/20 to-zinc-300/5 transition-opacity duration-700 dark:from-blue-500/15 dark:to-zinc-600/5 {{ $status === 'booting' ? 'opacity-100' : 'opacity-0' }}"></div>
+                        <div class="absolute inset-0 bg-gradient-to-r from-emerald-400/20 to-zinc-300/5 transition-opacity duration-700 dark:from-emerald-500/15 dark:to-zinc-600/5 {{ $status === 'running' ? 'opacity-100' : 'opacity-0' }}"></div>
+                        <div class="absolute inset-0 bg-gradient-to-r from-red-400/20 to-zinc-300/5 transition-opacity duration-700 dark:from-red-500/15 dark:to-zinc-600/5 {{ $status === 'stopping' ? 'opacity-100' : 'opacity-0' }}"></div>
+
+                        <div class="relative">
                             <div class="flex items-center gap-2">
                                 <flux:heading size="lg">{{ $server->name }}</flux:heading>
-                                <flux:badge :variant="match($status) { 'running' => 'success', 'starting', 'stopping' => 'warning', default => 'secondary' }" size="sm">
-                                    {{ ucfirst($status) }}
-                                </flux:badge>
+                                <flux:badge :variant="match($status) { 'running' => 'success', 'starting', 'stopping', 'booting' => 'warning', default => 'secondary' }" size="sm">
+                                     {{ ucfirst($status) }}
+                                 </flux:badge>
                             </div>
                             <flux:text class="mt-1">
                                 {{ __('Port') }}: {{ $server->port }} &middot;
@@ -587,10 +600,19 @@ new #[Title('Servers')] class extends Component
                             </flux:text>
                         </div>
 
-                        <div class="flex items-center gap-2">
+                        <div class="relative flex items-center gap-2">
                             @if (in_array($status, ['starting', 'stopping']))
-                                <flux:button size="sm" disabled icon="arrow-path" class="animate-spin-slow">
+                                <flux:button size="sm" disabled>
+                                    <flux:icon.arrow-path class="size-4 animate-spin" />
                                     {{ ucfirst($status) }}...
+                                </flux:button>
+                            @elseif ($status === 'booting')
+                                <flux:button size="sm" disabled>
+                                    <flux:icon.arrow-path class="size-4 animate-spin" />
+                                    {{ __('Booting') }}...
+                                </flux:button>
+                                <flux:button size="sm" variant="danger" wire:click="stopServer({{ $server->id }})" icon="stop">
+                                    {{ __('Stop') }}
                                 </flux:button>
                             @elseif ($status === 'running')
                                 <flux:button size="sm" variant="danger" wire:click="stopServer({{ $server->id }})" icon="stop">
@@ -632,7 +654,7 @@ new #[Title('Servers')] class extends Component
                     {{-- Headless client controls --}}
                     @if ($status === 'running')
                         @php $hcCount = $this->getHeadlessClientCount($server); @endphp
-                        <div class="flex items-center gap-2 px-4 pb-3">
+                        <div class="flex items-center gap-2 px-4 pt-1 pb-3">
                             <flux:text class="text-sm font-medium">{{ __('Headless Clients') }}</flux:text>
                             <flux:button size="xs" variant="ghost" wire:click="removeHeadlessClient({{ $server->id }})" icon="minus" :disabled="$hcCount < 1" />
                             <flux:badge :variant="$hcCount > 0 ? 'primary' : 'secondary'" size="sm">{{ $hcCount }}</flux:badge>
@@ -641,7 +663,7 @@ new #[Title('Servers')] class extends Component
                     @endif
 
                     {{-- Server log panel --}}
-                    @if ($this->showLogs[$server->id] ?? ($status === 'running'))
+                    @if ($this->showLogs[$server->id] ?? in_array($status, ['booting', 'running']))
                         <div class="border-t border-zinc-200 dark:border-zinc-700 p-4"
                             x-data="{
                                 lines: [],
