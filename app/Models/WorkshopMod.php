@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use App\Enums\GameType;
 use App\Enums\InstallationStatus;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -13,6 +15,7 @@ class WorkshopMod extends Model
     use HasFactory;
 
     protected $fillable = [
+        'game_type',
         'workshop_id',
         'name',
         'file_size',
@@ -28,6 +31,7 @@ class WorkshopMod extends Model
     protected function casts(): array
     {
         return [
+            'game_type' => GameType::class,
             'workshop_id' => 'integer',
             'file_size' => 'integer',
             'installation_status' => InstallationStatus::class,
@@ -67,10 +71,18 @@ class WorkshopMod extends Model
     }
 
     /**
+     * @param  Builder<WorkshopMod>  $query
+     */
+    public function scopeForGame(Builder $query, GameType $gameType): Builder
+    {
+        return $query->where('game_type', $gameType);
+    }
+
+    /**
      * Get the path where SteamCMD downloads this mod's files.
      */
     public function getInstallationPath(): string
     {
-        return config('arma.mods_base_path').'/steamapps/workshop/content/'.config('arma.game_id').'/'.$this->workshop_id;
+        return config('arma.mods_base_path').'/steamapps/workshop/content/'.$this->game_type->gameId().'/'.$this->workshop_id;
     }
 }

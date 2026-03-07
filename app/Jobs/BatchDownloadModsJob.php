@@ -52,7 +52,8 @@ class BatchDownloadModsJob implements ShouldQueue
         $installDir = config('arma.mods_base_path');
         $workshopIds = $this->mods->pluck('workshop_id')->all();
 
-        $process = $steamCmd->startBatchDownloadMods($installDir, $workshopIds);
+        $gameType = $this->mods->first()->game_type;
+        $process = $steamCmd->startBatchDownloadMods($installDir, $workshopIds, $gameType);
 
         ModDownloadOutput::dispatch(
             $this->mods->first()->id,
@@ -157,7 +158,9 @@ class BatchDownloadModsJob implements ShouldQueue
         foreach ($this->mods as $mod) {
             $modPath = $mod->getInstallationPath();
 
-            $this->convertToLowercase($modPath);
+            if ($mod->game_type->requiresLowercaseConversion()) {
+                $this->convertToLowercase($modPath);
+            }
             $actualSize = $this->getDirectorySize($modPath);
 
             $mod->update([

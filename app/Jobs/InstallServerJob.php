@@ -44,7 +44,8 @@ class InstallServerJob implements ShouldQueue
         $result = $steamCmd->installServer(
             $installDir,
             $this->gameInstall->branch,
-            function (string $line) use (&$lastProgressUpdate, $context): void {
+            gameType: $this->gameInstall->game_type,
+            onOutput: function (string $line) use (&$lastProgressUpdate, $context): void {
                 Log::info("{$context} {$line}");
 
                 $pctToSend = $this->gameInstall->progress_pct;
@@ -103,7 +104,7 @@ class InstallServerJob implements ShouldQueue
      */
     protected function parseBuildId(string $installDir): ?string
     {
-        $manifestPath = $installDir.'/steamapps/appmanifest_'.config('arma.server_app_id').'.acf';
+        $manifestPath = $installDir.'/steamapps/appmanifest_'.$this->gameInstall->game_type->serverAppId().'.acf';
 
         if (! file_exists($manifestPath)) {
             Log::warning("[GameInstall:{$this->gameInstall->id}] Appmanifest not found at {$manifestPath}");

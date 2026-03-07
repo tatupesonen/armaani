@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\GameType;
 use App\Models\GameInstall;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -18,6 +19,7 @@ class ServerFactory extends Factory
         $port = fake()->numberBetween(2302, 2400);
 
         return [
+            'game_type' => GameType::Arma3,
             'name' => fake()->words(2, true).' Server',
             'port' => $port,
             'query_port' => $port + 1,
@@ -42,6 +44,25 @@ class ServerFactory extends Factory
         return $this->state(fn (): array => [
             'password' => fake()->password(6, 12),
             'admin_password' => fake()->password(6, 12),
+        ]);
+    }
+
+    public function forReforger(): static
+    {
+        return $this->state(fn (): array => [
+            'game_type' => GameType::ArmaReforger,
+            'game_install_id' => GameInstall::factory()->installed()->reforger(),
+            'port' => 2001,
+            'query_port' => 17777,
+        ]);
+    }
+
+    public function forDayZ(): static
+    {
+        return $this->state(fn (): array => [
+            'game_type' => GameType::DayZ,
+            'game_install_id' => GameInstall::factory()->installed()->dayz(),
+            'query_port' => 27016,
         ]);
     }
 }

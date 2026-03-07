@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Events\ServerLogOutput;
+use App\GameManager;
 use App\Models\Server;
 use Illuminate\Console\Command;
 
@@ -15,7 +16,7 @@ class TailServerLog extends Command
     public function handle(): int
     {
         $server = Server::query()->findOrFail($this->argument('server'));
-        $logPath = $server->getProfilesPath().'/server.log';
+        $logPath = app(GameManager::class)->for($server)->getServerLogPath($server);
 
         if (! file_exists($logPath)) {
             $this->error("Log file not found: {$logPath}");

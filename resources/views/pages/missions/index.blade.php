@@ -183,4 +183,15 @@ new #[Title('Missions')] class extends Component
             </table>
         </div>
     @endif
+
+    <flux:callout icon="information-circle" variant="secondary" class="mt-6">
+        <flux:callout.heading>{{ __('Other game types') }}</flux:callout.heading>
+        <flux:callout.text>
+            <p>{{ __('This page manages PBO mission files for Arma 3 servers. For other games:') }}</p>
+            <ul class="mt-1 list-disc list-inside">
+                <li>{{ __('Arma Reforger scenarios are configured directly in server settings.') }}</li>
+                <li>{{ __('DayZ maps are configured in the server config.') }}</li>
+            </ul>
+        </flux:callout.text>
+    </flux:callout>
 </section>

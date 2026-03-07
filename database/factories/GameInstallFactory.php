@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\GameType;
 use App\Enums\InstallationStatus;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -16,6 +17,7 @@ class GameInstallFactory extends Factory
     public function definition(): array
     {
         return [
+            'game_type' => GameType::Arma3,
             'name' => 'Arma 3 Server',
             'branch' => 'public',
             'installation_status' => InstallationStatus::Queued,
@@ -39,6 +41,22 @@ class GameInstallFactory extends Factory
         return $this->state(fn (): array => [
             'installation_status' => InstallationStatus::Failed,
             'installed_at' => null,
+        ]);
+    }
+
+    public function reforger(): static
+    {
+        return $this->state(fn (): array => [
+            'game_type' => GameType::ArmaReforger,
+            'name' => 'Reforger Server',
+        ]);
+    }
+
+    public function dayz(): static
+    {
+        return $this->state(fn (): array => [
+            'game_type' => GameType::DayZ,
+            'name' => 'DayZ Server',
         ]);
     }
 }

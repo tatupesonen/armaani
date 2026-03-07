@@ -1,9 +1,11 @@
 <?php
 
+use App\Enums\GameType;
 use App\Enums\InstallationStatus;
 use App\Jobs\InstallServerJob;
 use App\Livewire\Concerns\AuditsActions;
 use App\Models\GameInstall;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -13,6 +15,8 @@ new #[Title('Game Installs')] class extends Component
     use AuditsActions;
 
     public bool $showCreateModal = false;
+
+    public string $createGameType = 'arma3';
 
     public string $name = 'Arma 3 Server';
 
@@ -38,6 +42,15 @@ new #[Title('Game Installs')] class extends Component
         );
     }
 
+    /**
+     * @return string[]
+     */
+    #[Computed]
+    public function availableBranches(): array
+    {
+        return GameType::from($this->createGameType)->branches();
+    }
+
     public function toggleLogs(int $installId): void
     {
         $install = $this->installs->firstWhere('id', $installId);
@@ -47,21 +60,31 @@ new #[Title('Game Installs')] class extends Component
 
     public function openCreateModal(): void
     {
-        $this->name = 'Arma 3 Server';
+        $this->createGameType = GameType::default()->value;
+        $this->name = GameType::default()->label().' Server';
         $this->branch = 'public';
         $this->resetErrorBag();
         $this->showCreateModal = true;
     }
 
+    public function updatedCreateGameType(): void
+    {
+        $this->name = GameType::from($this->createGameType)->label().' Server';
+        $this->branch = 'public';
+    }
+
     public function create(): void
     {
+        $gameType = GameType::from($this->createGameType);
+
         $validated = $this->validate([
             'name' => ['required', 'string', 'max:255'],
-            'branch' => ['required', 'string', 'max:64'],
+            'branch' => ['required', 'string', Rule::in($gameType->branches())],
         ]);
 
         $install = GameInstall::query()->create([
             ...$validated,
+            'game_type' => $gameType,
             'installation_status' => InstallationStatus::Queued,
         ]);
 
@@ -126,7 +149,7 @@ new #[Title('Game Installs')] class extends Component
     <div class="flex items-center justify-between mb-6">
         <div>
             <flux:heading size="xl">{{ __('Game Installs') }}</flux:heading>
-            <flux:text class="mt-2">{{ __('Manage Arma 3 dedicated server installations.') }}</flux:text>
+            <flux:text class="mt-2">{{ __('Manage dedicated server installations.') }}</flux:text>
         </div>
         <flux:button variant="primary" wire:click="openCreateModal" icon="plus">
             {{ __('New Install') }}
@@ -135,7 +158,7 @@ new #[Title('Game Installs')] class extends Component
 
     @if ($this->installs->isEmpty())
         <flux:callout>
-            {{ __('No game installs yet. Create one to download the Arma 3 dedicated server files via SteamCMD.') }}
+            {{ __('No game installs yet. Create one to download dedicated server files via SteamCMD.') }}
         </flux:callout>
     @else
         <div class="space-y-4">
@@ -152,6 +175,7 @@ new #[Title('Game Installs')] class extends Component
                         <div class="flex-1 min-w-0">
                             <div class="flex items-center gap-2">
                                 <flux:heading size="lg">{{ $install->name }}</flux:heading>
+                                <flux:badge size="sm" color="zinc">{{ $install->game_type->label() }}</flux:badge>
                                 <flux:badge :variant="$install->installation_status->badgeVariant()" size="sm">
                                     {{ ucfirst($install->installation_status->value) }}
                                 </flux:badge>
@@ -229,20 +253,23 @@ new #[Title('Game Installs')] class extends Component
     {{-- Create modal --}}
     <flux:modal wire:model="showCreateModal" class="max-w-md">
         <flux:heading>{{ __('New Game Install') }}</flux:heading>
-        <flux:text class="mt-1 mb-4">{{ __('Downloads the Arma 3 dedicated server via SteamCMD. Only the public branch is officially supported.') }}</flux:text>
+        <flux:text class="mt-1 mb-4">{{ __('Downloads a dedicated server via SteamCMD. Only the public branch is officially supported.') }}</flux:text>
 
         <form wire:submit="create" class="space-y-4">
-            <flux:input wire:model="name" :label="__('Name')" :placeholder="__('Arma 3 Server')" required />
+            <flux:select wire:model.change="createGameType" :label="__('Game')">
+                @foreach (App\Enums\GameType::cases() as $gameType)
+                    <flux:select.option :value="$gameType->value">{{ $gameType->label() }}</flux:select.option>
+                @endforeach
+            </flux:select>
+
+            <flux:input wire:model="name" :label="__('Name')" :placeholder="__('Server Name')" required />
 
             <flux:field>
                 <flux:label>{{ __('Branch') }}</flux:label>
                 <flux:select wire:model="branch">
-                    <flux:select.option value="public">public — stable</flux:select.option>
-                    <flux:select.option value="contact">contact — Contact DLC</flux:select.option>
-                    <flux:select.option value="creatordlc">creatordlc — Creator DLC</flux:select.option>
-                    <flux:select.option value="profiling">profiling — Performance Profiling</flux:select.option>
-                    <flux:select.option value="performance">performance — Performance (legacy)</flux:select.option>
-                    <flux:select.option value="legacy">legacy</flux:select.option>
+                    @foreach ($this->availableBranches as $branchOption)
+                        <flux:select.option :value="$branchOption">{{ $branchOption }}</flux:select.option>
+                    @endforeach
                 </flux:select>
                 <flux:error name="branch" />
             </flux:field>

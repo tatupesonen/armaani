@@ -52,7 +52,7 @@ class InstallServerJobTest extends TestCase
         @mkdir($manifestDir, 0755, true);
 
         file_put_contents(
-            $manifestDir.'/appmanifest_'.config('arma.server_app_id').'.acf',
+            $manifestDir.'/appmanifest_'.$install->game_type->serverAppId().'.acf',
             <<<'ACF'
             "AppState"
             {

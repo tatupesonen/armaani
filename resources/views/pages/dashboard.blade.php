@@ -196,7 +196,7 @@ new #[Title('Dashboard')] class extends Component
 <section class="w-full" wire:poll.30s>
     <div class="mb-6">
         <flux:heading size="xl">{{ __('Dashboard') }}</flux:heading>
-        <flux:text class="mt-2">{{ __('Overview of your Arma 3 server manager.') }}</flux:text>
+        <flux:text class="mt-2">{{ __('Overview of your server manager.') }}</flux:text>
     </div>
 
     {{-- Stat Cards --}}
@@ -271,7 +271,7 @@ new #[Title('Dashboard')] class extends Component
                     <div class="text-2xl font-bold text-zinc-900 dark:text-white">{{ $this->missionCount }}</div>
                 </div>
             </div>
-            <flux:text class="mt-3 text-xs">{{ __('PBO files') }}</flux:text>
+            <flux:text class="mt-3 text-xs">{{ __('PBO mission files') }}</flux:text>
         </a>
     </div>
 

@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use App\Enums\GameType;
 use App\Enums\ServerStatus;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,6 +17,7 @@ class Server extends Model
     use HasFactory;
 
     protected $fillable = [
+        'game_type',
         'name',
         'port',
         'query_port',
@@ -45,6 +48,7 @@ class Server extends Model
     protected function casts(): array
     {
         return [
+            'game_type' => GameType::class,
             'status' => ServerStatus::class,
             'verify_signatures' => 'boolean',
             'allowed_file_patching' => 'boolean',
@@ -74,9 +78,27 @@ class Server extends Model
         return $this->hasOne(NetworkSettings::class);
     }
 
+    public function reforgerSettings(): HasOne
+    {
+        return $this->hasOne(ReforgerSettings::class);
+    }
+
+    public function dayzSettings(): HasOne
+    {
+        return $this->hasOne(DayZSettings::class);
+    }
+
     public function backups(): HasMany
     {
         return $this->hasMany(ServerBackup::class)->latest();
+    }
+
+    /**
+     * @param  Builder<Server>  $query
+     */
+    public function scopeForGame(Builder $query, GameType $gameType): Builder
+    {
+        return $query->where('game_type', $gameType);
     }
 
     /**

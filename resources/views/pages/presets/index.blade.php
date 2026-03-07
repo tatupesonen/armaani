@@ -27,7 +27,10 @@ new #[Title('Mod Presets')] class extends Component
     #[Computed]
     public function presets()
     {
-        return ModPreset::query()->withCount('mods')->orderBy('name')->get();
+        return ModPreset::query()
+            ->withCount(['mods', 'reforgerMods'])
+            ->orderBy('name')
+            ->get();
     }
 
     public function importPreset(): void
@@ -85,10 +88,18 @@ new #[Title('Mod Presets')] class extends Component
     @else
         <div class="space-y-3">
             @foreach ($this->presets as $preset)
+                @php
+                    $modCount = $preset->game_type === \App\Enums\GameType::ArmaReforger
+                        ? $preset->reforger_mods_count
+                        : $preset->mods_count;
+                @endphp
                 <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4 flex items-center justify-between" wire:key="preset-{{ $preset->id }}">
                     <div>
-                        <flux:heading>{{ $preset->name }}</flux:heading>
-                        <flux:text class="mt-1">{{ $preset->mods_count }} {{ __('mods') }}</flux:text>
+                        <div class="flex items-center gap-2">
+                            <flux:heading>{{ $preset->name }}</flux:heading>
+                            <flux:badge variant="secondary" size="sm">{{ $preset->game_type->label() }}</flux:badge>
+                        </div>
+                        <flux:text class="mt-1">{{ $modCount }} {{ __('mods') }}</flux:text>
                     </div>
                     <div class="flex items-center gap-2">
                         <flux:button size="sm" :href="route('presets.edit', $preset)" wire:navigate icon="pencil">

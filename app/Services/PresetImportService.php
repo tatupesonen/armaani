@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\GameType;
 use App\Enums\InstallationStatus;
 use App\Jobs\BatchDownloadModsJob;
 use App\Jobs\DownloadModJob;
@@ -66,7 +67,10 @@ class PresetImportService
 
         $metadataMap = $this->fetchBulkMetadata($workshopIds->all());
 
-        $preset = ModPreset::query()->create(['name' => $name]);
+        $preset = ModPreset::query()->create([
+            'game_type' => GameType::Arma3,
+            'name' => $name,
+        ]);
         $modIds = [];
         $modsToDownload = collect();
 
@@ -74,7 +78,7 @@ class PresetImportService
             $metadata = $metadataMap[$workshopId] ?? [];
 
             $mod = WorkshopMod::query()->firstOrCreate(
-                ['workshop_id' => $workshopId],
+                ['workshop_id' => $workshopId, 'game_type' => GameType::Arma3],
                 [
                     'name' => $metadata['name'] ?? null,
                     'file_size' => $metadata['file_size'] ?? null,

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\GameType;
 use App\Models\SteamAccount;
 use Illuminate\Contracts\Process\ProcessResult;
 use Illuminate\Process\InvokedProcess;
@@ -18,18 +19,19 @@ class SteamCmdService
     }
 
     /**
-     * Build and run a SteamCMD command to install or update the Arma 3 server,
+     * Build and run a SteamCMD command to install or update a game server,
      * streaming output line-by-line to the given callback.
      *
      * The callback receives each output line as a string.
      *
      * @param  callable(string): void  $onOutput
      */
-    public function installServer(string $installDir, string $branch = 'public', ?callable $onOutput = null): ProcessResult
+    public function installServer(string $installDir, string $branch = 'public', ?callable $onOutput = null, ?GameType $gameType = null): ProcessResult
     {
         $args = $this->baseArgs($installDir);
 
-        $appUpdate = '+app_update '.config('arma.server_app_id');
+        $appId = ($gameType ?? GameType::default())->serverAppId();
+        $appUpdate = '+app_update '.$appId;
 
         if ($branch !== 'public') {
             $appUpdate .= ' -beta '.$branch;
@@ -57,10 +59,11 @@ class SteamCmdService
      * Start a SteamCMD workshop mod download asynchronously.
      * Returns a pending process so the caller can poll while it runs.
      */
-    public function startDownloadMod(string $installDir, int $workshopId): InvokedProcess
+    public function startDownloadMod(string $installDir, int $workshopId, ?GameType $gameType = null): InvokedProcess
     {
         $args = $this->baseArgs($installDir);
-        $args[] = '+workshop_download_item '.config('arma.game_id').' '.$workshopId.' validate';
+        $gameId = ($gameType ?? GameType::default())->gameId();
+        $args[] = '+workshop_download_item '.$gameId.' '.$workshopId.' validate';
         $args[] = '+quit';
 
         return Process::timeout(3600)
@@ -74,11 +77,11 @@ class SteamCmdService
      *
      * @param  list<int>  $workshopIds
      */
-    public function startBatchDownloadMods(string $installDir, array $workshopIds): InvokedProcess
+    public function startBatchDownloadMods(string $installDir, array $workshopIds, ?GameType $gameType = null): InvokedProcess
     {
         $args = $this->baseArgs($installDir);
 
-        $gameId = config('arma.game_id');
+        $gameId = ($gameType ?? GameType::default())->gameId();
 
         foreach ($workshopIds as $workshopId) {
             $args[] = '+workshop_download_item '.$gameId.' '.$workshopId.' validate';

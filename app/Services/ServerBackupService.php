@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\GameManager;
 use App\Models\Server;
 use App\Models\ServerBackup;
 use Illuminate\Support\Facades\Log;
@@ -9,26 +10,29 @@ use Illuminate\Support\Facades\Log;
 class ServerBackupService
 {
     /**
-     * Get the path to the .vars.Arma3Profile file for a server.
+     * Get the path to the profile backup file for a server.
+     * Returns null if this game type has no profile backup concept.
      */
-    public function getVarsFilePath(Server $server): string
+    public function getVarsFilePath(Server $server): ?string
     {
-        $profileName = $server->getProfileName();
-
-        return $server->getProfilesPath().'/home/'.$profileName.'/'.$profileName.'.vars.Arma3Profile';
+        return app(GameManager::class)->for($server)->getBackupFilePath($server);
     }
 
     /**
-     * Create a backup from the server's current .vars.Arma3Profile file.
+     * Create a backup from the server's current profile file.
      *
-     * @return ServerBackup|null The backup, or null if no .vars file exists.
+     * @return ServerBackup|null The backup, or null if no profile file exists or game doesn't support backups.
      */
     public function createFromServer(Server $server, ?string $name = null, bool $isAutomatic = false): ?ServerBackup
     {
         $varsPath = $this->getVarsFilePath($server);
 
+        if ($varsPath === null) {
+            return null;
+        }
+
         if (! file_exists($varsPath)) {
-            Log::info("[Server:{$server->id} '{$server->name}'] No .vars.Arma3Profile file found, skipping backup");
+            Log::info("[Server:{$server->id} '{$server->name}'] No profile backup file found, skipping backup");
 
             return null;
         }
@@ -67,12 +71,18 @@ class ServerBackupService
     }
 
     /**
-     * Restore a backup by writing its data to the server's .vars.Arma3Profile path.
+     * Restore a backup by writing its data to the server's profile backup path.
      */
     public function restore(ServerBackup $backup): void
     {
         $server = $backup->server;
         $varsPath = $this->getVarsFilePath($server);
+
+        if ($varsPath === null) {
+            Log::warning("[Server:{$server->id} '{$server->name}'] Game type does not support profile backups, cannot restore");
+
+            return;
+        }
         $varsDir = dirname($varsPath);
 
         if (! is_dir($varsDir)) {

@@ -3,19 +3,23 @@
 namespace App\Services;
 
 use App\Enums\ServerStatus;
-use App\Models\DifficultySettings;
-use App\Models\NetworkSettings;
+use App\GameManager;
 use App\Models\Server;
 use Illuminate\Support\Facades\Log;
 
 class ServerProcessService
 {
+    public function __construct(
+        protected GameManager $gameManager,
+    ) {}
+
     /**
-     * Start an Arma 3 server instance.
+     * Start a game server instance.
      */
     public function start(Server $server): void
     {
         $context = "[Server:{$server->id} '{$server->name}']";
+        $handler = $this->gameManager->for($server);
 
         if ($this->isRunning($server)) {
             Log::info("{$context} Server is already running, skipping start");
@@ -29,21 +33,21 @@ class ServerProcessService
             mkdir($profilesPath, 0755, true);
         }
 
-        // Auto-backup the .vars.Arma3Profile before overwriting configs
-        app(ServerBackupService::class)->createFromServer($server, 'Auto-backup before start', isAutomatic: true);
+        // Auto-backup profile data before overwriting configs (only for games that support it)
+        if ($handler->getBackupFilePath($server)) {
+            app(ServerBackupService::class)->createFromServer($server, 'Auto-backup before start', isAutomatic: true);
+        }
 
         $server->load('activePreset.mods');
-        $this->symlinkMods($server);
-        $this->symlinkMissions($server);
-        $this->copyBiKeys($server);
-        $this->generateServerConfig($server);
-        $this->generateBasicConfig($server);
-        $this->generateProfileConfig($server);
+        $handler->symlinkMods($server);
+        $handler->symlinkMissions($server);
+        $handler->copyBiKeys($server);
+        $handler->generateConfigFiles($server);
 
-        $command = $this->buildLaunchCommand($server);
+        $command = $handler->buildLaunchCommand($server);
         $pidFile = $this->getPidFilePath($server);
-        $logFile = $this->getServerLogPath($server);
-        $binaryDir = $server->getBinaryPath();
+        $logFile = $handler->getServerLogPath($server);
+        $binaryDir = $server->gameInstall->getInstallationPath();
 
         Log::info("{$context} Starting server from {$binaryDir}");
         Log::info("{$context} Launch command: {$command}");
@@ -60,7 +64,7 @@ class ServerProcessService
     }
 
     /**
-     * Stop an Arma 3 server instance.
+     * Stop a game server instance.
      */
     public function stop(Server $server): void
     {
@@ -94,7 +98,7 @@ class ServerProcessService
     }
 
     /**
-     * Restart an Arma 3 server instance.
+     * Restart a game server instance.
      */
     public function restart(Server $server): void
     {
@@ -149,10 +153,16 @@ class ServerProcessService
 
     /**
      * Add a single headless client to a running server.
-     * Returns the index assigned to the new HC, or null if the cap is reached.
+     * Returns the index assigned to the new HC, or null if the cap is reached or not supported.
      */
     public function addHeadlessClient(Server $server): ?int
     {
+        $handler = $this->gameManager->for($server);
+
+        if (! $handler->supportsHeadlessClients()) {
+            return null;
+        }
+
         $runningIndices = $this->getRunningHcIndices($server);
 
         if (count($runningIndices) >= 10) {
@@ -211,6 +221,22 @@ class ServerProcessService
     }
 
     /**
+     * Get the path to the server's log file via the game handler.
+     */
+    public function getServerLogPath(Server $server): string
+    {
+        return $this->gameManager->for($server)->getServerLogPath($server);
+    }
+
+    /**
+     * Get the path to a headless client's log file.
+     */
+    public function getHeadlessClientLogPath(Server $server, int $index): string
+    {
+        return $server->getProfilesPath().'/hc_'.$index.'.log';
+    }
+
+    /**
      * Get sorted indices of all running headless clients.
      * Removes stale PID files (crashed HCs) as a side effect.
      *
@@ -248,437 +274,22 @@ class ServerProcessService
         $this->terminateProcess($this->getHcPidFilePath($server, $index), $context);
     }
 
-    /**
-     * Build the Arma 3 server launch command string.
-     */
-    public function buildLaunchCommand(Server $server): string
-    {
-        $binary = $server->getBinaryPath().'/arma3server_x64';
-        $params = [];
-
-        $params[] = '-port='.$server->port;
-        $params[] = '-name='.$server->getProfileName();
-        $params[] = '-profiles='.$server->getProfilesPath();
-        $params[] = '-config='.$server->getProfilesPath().'/server.cfg';
-        $params[] = '-cfg='.$server->getProfilesPath().'/server_basic.cfg';
-        $params[] = '-nosplash';
-        $params[] = '-skipIntro';
-        $params[] = '-world=empty';
-
-        foreach ($this->getModNames($server) as $modName) {
-            $params[] = '-mod='.$modName;
-        }
-
-        if ($server->additional_params) {
-            $params[] = $server->additional_params;
-        }
-
-        return $binary.' '.implode(' ', $params);
-    }
-
-    /**
-     * Get the list of normalized mod directory names from the server's active preset.
-     *
-     * @return array<int, string>
-     */
-    protected function getModNames(Server $server): array
-    {
-        $preset = $server->activePreset;
-
-        if (! $preset) {
-            return [];
-        }
-
-        return $preset->mods->map(fn ($mod) => $mod->getNormalizedName())->all();
-    }
-
-    /**
-     * Generate and write server.cfg to the profiles directory.
-     * The file is always regenerated on start so config changes take effect immediately.
-     */
-    protected function generateServerConfig(Server $server): void
-    {
-        $lines = [];
-
-        $lines[] = '// GLOBAL SETTINGS';
-        $lines[] = 'hostname = "'.addslashes($server->name).'";';
-        $lines[] = 'password = "'.addslashes((string) $server->password).'";';
-        $lines[] = 'passwordAdmin = "'.addslashes((string) $server->admin_password).'";';
-        $lines[] = '';
-        $lines[] = '// JOINING RULES';
-        $lines[] = 'maxPlayers = '.(int) $server->max_players.';';
-        $lines[] = 'kickDuplicate = 1;';
-        $lines[] = 'verifySignatures = '.($server->verify_signatures ? '2' : '0').';';
-        $lines[] = 'allowedFilePatching = '.($server->allowed_file_patching ? '2' : '0').';';
-        $lines[] = '';
-        $lines[] = '// INGAME SETTINGS';
-        $lines[] = 'disableVoN = '.($server->von_enabled ? '0' : '1').';';
-        $lines[] = 'vonCodec = 1;';
-        $lines[] = 'vonCodecQuality = 30;';
-        $lines[] = 'persistent = '.($server->persistent ? '1' : '0').';';
-        $lines[] = 'timeStampFormat = "short";';
-        $lines[] = 'BattlEye = '.($server->battle_eye ? '1' : '0').';';
-        $lines[] = '';
-        $lines[] = '// SIGNATURE VERIFICATION';
-        $lines[] = 'onUnsignedData = "kick (_this select 0)";';
-        $lines[] = 'onHackedData = "kick (_this select 0)";';
-        $lines[] = 'onDifferentData = "";';
-        $lines[] = '';
-        $lines[] = '// HEADLESS CLIENT';
-        $lines[] = 'headlessClients[] = {"127.0.0.1"};';
-        $lines[] = 'localClient[] = {"127.0.0.1"};';
-
-        if ($server->description) {
-            $lines[] = '';
-            $lines[] = '// MOTD';
-            $motdLines = explode("\n", $server->description);
-            $lines[] = 'motd[] = {';
-            $motdEntries = array_map(
-                fn (string $line) => '    "'.addslashes(trim($line)).'"',
-                $motdLines
-            );
-            $lines[] = implode(",\n", $motdEntries);
-            $lines[] = '};';
-        }
-
-        if ($server->additional_server_options) {
-            $lines[] = '';
-            $lines[] = '// ADDITIONAL OPTIONS';
-            $lines[] = $server->additional_server_options;
-        }
-
-        file_put_contents(
-            $server->getProfilesPath().'/server.cfg',
-            implode("\n", $lines)."\n"
-        );
-    }
-
-    /**
-     * Generate and write server_basic.cfg (network tuning) to the profiles directory.
-     * The file is always regenerated on start so config changes take effect immediately.
-     */
-    protected function generateBasicConfig(Server $server): void
-    {
-        $settings = $server->networkSettings ?? $this->getDefaultNetworkSettings();
-
-        $lines = [];
-
-        $lines[] = '// BASIC NETWORK CONFIGURATION';
-        $lines[] = 'MaxMsgSend = '.$settings->max_msg_send.';';
-        $lines[] = 'MaxSizeGuaranteed = '.$settings->max_size_guaranteed.';';
-        $lines[] = 'MaxSizeNonguaranteed = '.$settings->max_size_nonguaranteed.';';
-        $lines[] = 'MinBandwidth = '.$settings->min_bandwidth.';';
-        $lines[] = 'MaxBandwidth = '.$settings->max_bandwidth.';';
-        $lines[] = 'MinErrorToSend = '.$this->formatDecimal($settings->min_error_to_send).';';
-        $lines[] = 'MinErrorToSendNear = '.$this->formatDecimal($settings->min_error_to_send_near).';';
-        $lines[] = 'MaxCustomFileSize = '.$settings->max_custom_file_size.';';
-        $lines[] = '';
-        $lines[] = 'class sockets {';
-        $lines[] = '    maxPacketSize = '.$settings->max_packet_size.';';
-        $lines[] = '};';
-
-        if ((int) $settings->view_distance > 0) {
-            $lines[] = '';
-            $lines[] = '// SERVER VIEW DISTANCE';
-            $lines[] = 'viewDistance = '.$settings->view_distance.';';
-        }
-
-        if ((float) $settings->terrain_grid > 0) {
-            $lines[] = '';
-            $lines[] = '// TERRAIN GRID';
-            $lines[] = 'terrainGrid = '.$this->formatDecimal($settings->terrain_grid).';';
-        }
-
-        file_put_contents(
-            $server->getProfilesPath().'/server_basic.cfg',
-            implode("\n", $lines)."\n"
-        );
-    }
-
-    /**
-     * Build a default NetworkSettings object (not persisted) for servers
-     * that don't have custom network settings configured yet.
-     */
-    protected function getDefaultNetworkSettings(): NetworkSettings
-    {
-        $settings = new NetworkSettings;
-        $settings->max_msg_send = 128;
-        $settings->max_size_guaranteed = 512;
-        $settings->max_size_nonguaranteed = 256;
-        $settings->min_bandwidth = 131072;
-        $settings->max_bandwidth = 10000000000;
-        $settings->min_error_to_send = 0.001;
-        $settings->min_error_to_send_near = 0.01;
-        $settings->max_packet_size = 1400;
-        $settings->max_custom_file_size = 0;
-        $settings->terrain_grid = 25.0;
-        $settings->view_distance = 0;
-
-        return $settings;
-    }
-
-    /**
-     * Format a decimal value for config output, stripping unnecessary trailing zeros.
-     */
-    protected function formatDecimal(string|float $value): string
-    {
-        return rtrim(rtrim(number_format((float) $value, 4, '.', ''), '0'), '.');
-    }
-
-    /**
-     * Generate the .Arma3Profile file with difficulty and AI settings.
-     * Written to {profiles}/home/{name}/{name}.Arma3Profile where {name} matches
-     * the -name= launch parameter (arma3_{id}).
-     */
-    protected function generateProfileConfig(Server $server): void
-    {
-        $settings = $server->difficultySettings ?? $this->getDefaultDifficultySettings();
-        $profileName = $server->getProfileName();
-        $profileDir = $server->getProfilesPath().'/home/'.$profileName;
-
-        if (! is_dir($profileDir)) {
-            mkdir($profileDir, 0755, true);
-        }
-
-        $lines = [];
-        $lines[] = 'version=1;';
-        $lines[] = 'blood=1;';
-        $lines[] = 'singleVoice=0;';
-        $lines[] = 'gamma=1;';
-        $lines[] = 'brightness=1;';
-        $lines[] = 'volumeCD=5;';
-        $lines[] = 'volumeFX=5;';
-        $lines[] = 'volumeSpeech=5;';
-        $lines[] = 'volumeVoN=5;';
-        $lines[] = 'soundEnableEAX=1;';
-        $lines[] = 'soundEnableHW=0;';
-        $lines[] = 'volumeMapDucking=1;';
-        $lines[] = 'volumeUI=1;';
-        $lines[] = 'class DifficultyPresets';
-        $lines[] = '{';
-        $lines[] = '    class CustomDifficulty';
-        $lines[] = '    {';
-        $lines[] = '        class Options';
-        $lines[] = '        {';
-        $lines[] = '            /* Simulation */';
-        $lines[] = '            reducedDamage = '.($settings->reduced_damage ? '1' : '0').';';
-        $lines[] = '';
-        $lines[] = '            /* Situational awareness */';
-        $lines[] = '            groupIndicators = '.$settings->group_indicators.';';
-        $lines[] = '            friendlyTags = '.$settings->friendly_tags.';';
-        $lines[] = '            enemyTags = '.$settings->enemy_tags.';';
-        $lines[] = '            detectedMines = '.$settings->detected_mines.';';
-        $lines[] = '            commands = '.$settings->commands.';';
-        $lines[] = '            waypoints = '.$settings->waypoints.';';
-        $lines[] = '            tacticalPing = '.$settings->tactical_ping.';';
-        $lines[] = '';
-        $lines[] = '            /* Personal awareness */';
-        $lines[] = '            weaponInfo = '.$settings->weapon_info.';';
-        $lines[] = '            stanceIndicator = '.$settings->stance_indicator.';';
-        $lines[] = '            staminaBar = '.($settings->stamina_bar ? '1' : '0').';';
-        $lines[] = '            weaponCrosshair = '.($settings->weapon_crosshair ? '1' : '0').';';
-        $lines[] = '            visionAid = '.($settings->vision_aid ? '1' : '0').';';
-        $lines[] = '';
-        $lines[] = '            /* View */';
-        $lines[] = '            thirdPersonView = '.$settings->third_person_view.';';
-        $lines[] = '            cameraShake = '.($settings->camera_shake ? '1' : '0').';';
-        $lines[] = '';
-        $lines[] = '            /* Multiplayer */';
-        $lines[] = '            scoreTable = '.($settings->score_table ? '1' : '0').';';
-        $lines[] = '            deathMessages = '.($settings->death_messages ? '1' : '0').';';
-        $lines[] = '            vonID = '.($settings->von_id ? '1' : '0').';';
-        $lines[] = '';
-        $lines[] = '            /* Misc */';
-        $lines[] = '            mapContent = '.($settings->map_content ? '1' : '0').';';
-        $lines[] = '            autoReport = '.($settings->auto_report ? '1' : '0').';';
-        $lines[] = '            multipleSaves = 0;';
-        $lines[] = '        };';
-        $lines[] = '';
-        $lines[] = '        aiLevelPreset = '.$settings->ai_level_preset.';';
-        $lines[] = '    };';
-        $lines[] = '';
-        $lines[] = '    class CustomAILevel';
-        $lines[] = '    {';
-        $lines[] = '        skillAI = '.$settings->skill_ai.';';
-        $lines[] = '        precisionAI = '.$settings->precision_ai.';';
-        $lines[] = '    };';
-        $lines[] = '};';
-
-        file_put_contents(
-            $profileDir.'/'.$profileName.'.Arma3Profile',
-            implode("\n", $lines)."\n"
-        );
-    }
-
-    /**
-     * Build a default DifficultySettings object (not persisted) for servers
-     * that don't have custom difficulty settings configured yet.
-     */
-    protected function getDefaultDifficultySettings(): DifficultySettings
-    {
-        $settings = new DifficultySettings;
-        $settings->reduced_damage = false;
-        $settings->group_indicators = 2;
-        $settings->friendly_tags = 2;
-        $settings->enemy_tags = 0;
-        $settings->detected_mines = 2;
-        $settings->commands = 2;
-        $settings->waypoints = 2;
-        $settings->tactical_ping = 3;
-        $settings->weapon_info = 2;
-        $settings->stance_indicator = 2;
-        $settings->stamina_bar = true;
-        $settings->weapon_crosshair = true;
-        $settings->vision_aid = false;
-        $settings->third_person_view = 1;
-        $settings->camera_shake = true;
-        $settings->score_table = true;
-        $settings->death_messages = true;
-        $settings->von_id = true;
-        $settings->map_content = true;
-        $settings->auto_report = false;
-        $settings->ai_level_preset = 1;
-        $settings->skill_ai = 0.50;
-        $settings->precision_ai = 0.50;
-
-        return $settings;
-    }
-
-    /**
-     * Symlink all PBO mission files from the shared missions pool
-     * into the game install's mpmissions directory.
-     */
-    protected function symlinkMissions(Server $server): void
-    {
-        $missionsPath = config('arma.missions_base_path');
-        $mpmissionsPath = $server->getBinaryPath().'/mpmissions';
-
-        if (! is_dir($missionsPath)) {
-            return;
-        }
-
-        if (! is_dir($mpmissionsPath)) {
-            mkdir($mpmissionsPath, 0755, true);
-        }
-
-        $existingLinks = glob($mpmissionsPath.'/*.pbo') ?: [];
-        foreach ($existingLinks as $link) {
-            if (is_link($link)) {
-                unlink($link);
-            }
-        }
-
-        $pboFiles = glob($missionsPath.'/*.pbo') ?: [];
-        foreach ($pboFiles as $pboFile) {
-            $linkPath = $mpmissionsPath.'/'.basename($pboFile);
-            symlink($pboFile, $linkPath);
-        }
-    }
-
-    /**
-     * Create symlinks for all mods in the active preset into the game install directory.
-     * Each mod is symlinked as {game_install_dir}/@NormalizedName -> {mod_download_path}.
-     */
-    protected function symlinkMods(Server $server): void
-    {
-        $preset = $server->activePreset;
-
-        if (! $preset) {
-            return;
-        }
-
-        $gameInstallPath = $server->getBinaryPath();
-
-        // Remove existing mod symlinks (anything starting with @)
-        $existingLinks = glob($gameInstallPath.'/@*') ?: [];
-        foreach ($existingLinks as $link) {
-            if (is_link($link)) {
-                unlink($link);
-            }
-        }
-
-        foreach ($preset->mods as $mod) {
-            $modInstallPath = $mod->getInstallationPath();
-
-            if (! is_dir($modInstallPath)) {
-                Log::warning("[Server:{$server->id}] Mod '{$mod->name}' (ID {$mod->id}) directory not found at {$modInstallPath}, skipping symlink");
-
-                continue;
-            }
-
-            $linkPath = $gameInstallPath.'/'.$mod->getNormalizedName();
-
-            if (! file_exists($linkPath)) {
-                symlink($modInstallPath, $linkPath);
-                Log::info("[Server:{$server->id}] Symlinked mod {$mod->getNormalizedName()} -> {$modInstallPath}");
-            }
-        }
-    }
-
-    /**
-     * Symlink .bikey files from all mods in the active preset to the game install's keys/ directory.
-     * BiKeys are required for signature verification (verifySignatures=2).
-     * Only the conventional keys/ subdirectory within each mod is checked (no recursive scan).
-     */
-    protected function copyBiKeys(Server $server): void
-    {
-        $preset = $server->activePreset;
-
-        if (! $preset) {
-            return;
-        }
-
-        $keysPath = $server->getBinaryPath().'/keys';
-
-        if (! is_dir($keysPath)) {
-            mkdir($keysPath, 0755, true);
-        }
-
-        foreach ($preset->mods as $mod) {
-            $modKeysPath = $mod->getInstallationPath().'/keys';
-
-            if (! is_dir($modKeysPath)) {
-                continue;
-            }
-
-            foreach (glob($modKeysPath.'/*.bikey') ?: [] as $bikeyFile) {
-                $destPath = $keysPath.'/'.basename($bikeyFile);
-
-                if (! file_exists($destPath)) {
-                    symlink($bikeyFile, $destPath);
-                    Log::info("[Server:{$server->id}] Symlinked BiKey ".basename($bikeyFile)." from mod '{$mod->name}'");
-                }
-            }
-        }
-    }
-
     protected function startHeadlessClient(Server $server, int $index): void
     {
+        $handler = $this->gameManager->for($server);
         $context = "[Server:{$server->id} '{$server->name}' HC:{$index}]";
-        $binary = $server->getBinaryPath().'/arma3server_x64';
-        $binaryDir = $server->getBinaryPath();
+        $binaryDir = $server->gameInstall->getInstallationPath();
         $pidFile = $this->getHcPidFilePath($server, $index);
         $logFile = $this->getHeadlessClientLogPath($server, $index);
 
-        $params = [
-            '-client',
-            '-connect=127.0.0.1',
-            '-port='.$server->port,
-            '-nosound',
-            '-nosplash',
-            '-skipIntro',
-            '-world=empty',
-        ];
+        $command = $handler->buildHeadlessClientCommand($server, $index);
 
-        if ($server->password) {
-            $params[] = '-password='.$server->password;
+        if ($command === null) {
+            Log::warning("{$context} Game type does not support headless clients");
+
+            return;
         }
 
-        foreach ($this->getModNames($server) as $modName) {
-            $params[] = '-mod='.$modName;
-        }
-
-        $command = $binary.' '.implode(' ', $params);
         Log::info("{$context} Starting headless client: {$command}");
 
         file_put_contents($logFile, '');
@@ -763,22 +374,6 @@ class ServerProcessService
     protected function getHcPidFilePath(Server $server, int $index): string
     {
         return storage_path('app/server_'.$server->id.'_hc_'.$index.'.pid');
-    }
-
-    /**
-     * Get the path to the server's log file.
-     */
-    public function getServerLogPath(Server $server): string
-    {
-        return $server->getProfilesPath().'/server.log';
-    }
-
-    /**
-     * Get the path to a headless client's log file.
-     */
-    public function getHeadlessClientLogPath(Server $server, int $index): string
-    {
-        return $server->getProfilesPath().'/hc_'.$index.'.log';
     }
 
     protected function cleanupPidFile(Server $server): void

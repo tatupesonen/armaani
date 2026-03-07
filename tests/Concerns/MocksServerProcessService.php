@@ -17,7 +17,6 @@ trait MocksServerProcessService
         $mock->shouldReceive('stop')->andReturnNull();
         $mock->shouldReceive('restart')->andReturnNull();
         $mock->shouldReceive('getRunningHeadlessClientCount')->andReturn(0);
-        $mock->shouldReceive('buildLaunchCommand')->andReturn('/fake/binary --test');
         $mock->shouldReceive('getServerLogPath')->andReturn('/tmp/fake.log');
         $mock->shouldReceive('addHeadlessClient')->andReturn(0);
         $mock->shouldReceive('removeHeadlessClient')->andReturn(0);

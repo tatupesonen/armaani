@@ -40,7 +40,7 @@ class DownloadModJob implements ShouldQueue
         $modPath = $this->mod->getInstallationPath();
         $expectedSize = $this->mod->file_size;
 
-        $process = $steamCmd->startDownloadMod($installDir, $this->mod->workshop_id);
+        $process = $steamCmd->startDownloadMod($installDir, $this->mod->workshop_id, $this->mod->game_type);
 
         ModDownloadOutput::dispatch($this->mod->id, 0, 'Starting SteamCMD download...');
 
@@ -79,7 +79,9 @@ class DownloadModJob implements ShouldQueue
         }
 
         if ($result->successful()) {
-            $this->convertToLowercase($modPath);
+            if ($this->mod->game_type->requiresLowercaseConversion()) {
+                $this->convertToLowercase($modPath);
+            }
 
             $actualSize = $this->getDirectorySize($modPath);
 

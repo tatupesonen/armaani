@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Servers;
 
+use App\GameHandlers\Arma3Handler;
 use App\Models\GameInstall;
 use App\Models\ModPreset;
 use App\Models\NetworkSettings;
@@ -18,7 +19,7 @@ class ServerProcessServiceTest extends TestCase
 {
     use RefreshDatabase;
 
-    private ServerProcessService $service;
+    private Arma3Handler $handler;
 
     private string $testServersBasePath;
 
@@ -50,7 +51,7 @@ class ServerProcessServiceTest extends TestCase
             'arma.mods_base_path' => $this->testModsBasePath,
         ]);
 
-        $this->service = new ServerProcessService;
+        $this->handler = new Arma3Handler;
     }
 
     public function test_generate_server_config_writes_file_to_profiles_path(): void
@@ -66,7 +67,7 @@ class ServerProcessServiceTest extends TestCase
         $profilesPath = $server->getProfilesPath();
         @mkdir($profilesPath, 0755, true);
 
-        $this->invokeGenerateServerConfig($server);
+        $this->handler->generateConfigFiles($server);
 
         $this->assertFileExists($profilesPath.'/server.cfg');
 
@@ -87,7 +88,7 @@ class ServerProcessServiceTest extends TestCase
         $profilesPath = $server->getProfilesPath();
         @mkdir($profilesPath, 0755, true);
 
-        $this->invokeGenerateServerConfig($server);
+        $this->handler->generateConfigFiles($server);
 
         $contents = file_get_contents($profilesPath.'/server.cfg');
         $this->assertStringContainsString('password = "";', $contents);
@@ -103,7 +104,7 @@ class ServerProcessServiceTest extends TestCase
         $profilesPath = $server->getProfilesPath();
         @mkdir($profilesPath, 0755, true);
 
-        $this->invokeGenerateServerConfig($server);
+        $this->handler->generateConfigFiles($server);
 
         $contents = file_get_contents($profilesPath.'/server.cfg');
         $this->assertStringContainsString('motd[] = {', $contents);
@@ -118,7 +119,7 @@ class ServerProcessServiceTest extends TestCase
         $profilesPath = $server->getProfilesPath();
         @mkdir($profilesPath, 0755, true);
 
-        $this->invokeGenerateServerConfig($server);
+        $this->handler->generateConfigFiles($server);
 
         $contents = file_get_contents($profilesPath.'/server.cfg');
         $this->assertStringNotContainsString('motd[]', $contents);
@@ -132,7 +133,7 @@ class ServerProcessServiceTest extends TestCase
         @mkdir($profilesPath, 0755, true);
         file_put_contents($profilesPath.'/server.cfg', 'old content');
 
-        $this->invokeGenerateServerConfig($server);
+        $this->handler->generateConfigFiles($server);
 
         $contents = file_get_contents($profilesPath.'/server.cfg');
         $this->assertStringNotContainsString('old content', $contents);
@@ -146,7 +147,7 @@ class ServerProcessServiceTest extends TestCase
         $profilesPath = $server->getProfilesPath();
         @mkdir($profilesPath, 0755, true);
 
-        $this->invokeGenerateServerConfig($server);
+        $this->handler->generateConfigFiles($server);
 
         $contents = file_get_contents($profilesPath.'/server.cfg');
         $this->assertStringContainsString('hostname = "Server with \\"quotes\\"";', $contents);
@@ -159,7 +160,7 @@ class ServerProcessServiceTest extends TestCase
         $profilesPath = $server->getProfilesPath();
         @mkdir($profilesPath, 0755, true);
 
-        $this->invokeGenerateBasicConfig($server);
+        $this->handler->generateConfigFiles($server);
 
         $this->assertFileExists($profilesPath.'/server_basic.cfg');
 
@@ -184,7 +185,7 @@ class ServerProcessServiceTest extends TestCase
         @mkdir($profilesPath, 0755, true);
         file_put_contents($profilesPath.'/server_basic.cfg', 'old content');
 
-        $this->invokeGenerateBasicConfig($server);
+        $this->handler->generateConfigFiles($server);
 
         $contents = file_get_contents($profilesPath.'/server_basic.cfg');
         $this->assertStringNotContainsString('old content', $contents);
@@ -214,7 +215,7 @@ class ServerProcessServiceTest extends TestCase
         $profilesPath = $server->getProfilesPath();
         @mkdir($profilesPath, 0755, true);
 
-        $this->invokeGenerateBasicConfig($server);
+        $this->handler->generateConfigFiles($server);
 
         $contents = file_get_contents($profilesPath.'/server_basic.cfg');
         $this->assertStringContainsString('MaxMsgSend = 2048;', $contents);
@@ -237,7 +238,7 @@ class ServerProcessServiceTest extends TestCase
         $profilesPath = $server->getProfilesPath();
         @mkdir($profilesPath, 0755, true);
 
-        $this->invokeGenerateBasicConfig($server);
+        $this->handler->generateConfigFiles($server);
 
         $contents = file_get_contents($profilesPath.'/server_basic.cfg');
         $this->assertStringContainsString('MaxMsgSend = 128;', $contents);
@@ -260,7 +261,7 @@ class ServerProcessServiceTest extends TestCase
         $profilesPath = $server->getProfilesPath();
         @mkdir($profilesPath, 0755, true);
 
-        $this->invokeGenerateBasicConfig($server);
+        $this->handler->generateConfigFiles($server);
 
         $contents = file_get_contents($profilesPath.'/server_basic.cfg');
         $this->assertStringNotContainsString('viewDistance', $contents);
@@ -279,7 +280,7 @@ class ServerProcessServiceTest extends TestCase
         $profilesPath = $server->getProfilesPath();
         @mkdir($profilesPath, 0755, true);
 
-        $this->invokeGenerateBasicConfig($server);
+        $this->handler->generateConfigFiles($server);
 
         $contents = file_get_contents($profilesPath.'/server_basic.cfg');
         $this->assertStringContainsString('viewDistance = 3000;', $contents);
@@ -292,7 +293,7 @@ class ServerProcessServiceTest extends TestCase
         $profilesPath = $server->getProfilesPath();
         @mkdir($profilesPath, 0755, true);
 
-        $this->invokeGenerateServerConfig($server);
+        $this->handler->generateConfigFiles($server);
 
         $contents = file_get_contents($profilesPath.'/server.cfg');
         $this->assertStringNotContainsString('class Missions', $contents);
@@ -302,7 +303,7 @@ class ServerProcessServiceTest extends TestCase
     {
         $server = $this->makeServer();
         $missionsPath = $this->missionsPath;
-        $mpmissionsPath = $server->getBinaryPath().'/mpmissions';
+        $mpmissionsPath = $server->gameInstall->getInstallationPath().'/mpmissions';
 
         mkdir($missionsPath, 0755, true);
         file_put_contents($missionsPath.'/co40_Domination.Altis.pbo', 'fake');
@@ -310,7 +311,7 @@ class ServerProcessServiceTest extends TestCase
 
         config(['arma.missions_base_path' => $missionsPath]);
 
-        $this->invokeSymlinkMissions($server);
+        $this->handler->symlinkMissions($server);
 
         $this->assertDirectoryExists($mpmissionsPath);
         $this->assertTrue(is_link($mpmissionsPath.'/co40_Domination.Altis.pbo'));
@@ -322,7 +323,7 @@ class ServerProcessServiceTest extends TestCase
     {
         $server = $this->makeServer();
         $missionsPath = $this->missionsPath;
-        $mpmissionsPath = $server->getBinaryPath().'/mpmissions';
+        $mpmissionsPath = $server->gameInstall->getInstallationPath().'/mpmissions';
 
         mkdir($missionsPath, 0755, true);
         mkdir($mpmissionsPath, 0755, true);
@@ -335,7 +336,7 @@ class ServerProcessServiceTest extends TestCase
 
         config(['arma.missions_base_path' => $missionsPath]);
 
-        $this->invokeSymlinkMissions($server);
+        $this->handler->symlinkMissions($server);
 
         $this->assertTrue(is_link($mpmissionsPath.'/new_mission.pbo'));
         $this->assertFalse(file_exists($mpmissionsPath.'/stale_target.pbo'));
@@ -344,11 +345,11 @@ class ServerProcessServiceTest extends TestCase
     public function test_symlink_missions_skips_when_missions_directory_does_not_exist(): void
     {
         $server = $this->makeServer();
-        $mpmissionsPath = $server->getBinaryPath().'/mpmissions';
+        $mpmissionsPath = $server->gameInstall->getInstallationPath().'/mpmissions';
 
         config(['arma.missions_base_path' => '/nonexistent/path']);
 
-        $this->invokeSymlinkMissions($server);
+        $this->handler->symlinkMissions($server);
 
         $this->assertDirectoryDoesNotExist($mpmissionsPath);
     }
@@ -375,40 +376,44 @@ class ServerProcessServiceTest extends TestCase
 
         $expected = $server->getProfilesPath().'/server.log';
 
-        $this->assertEquals($expected, $this->service->getServerLogPath($server));
+        $this->assertEquals($expected, $this->handler->getServerLogPath($server));
     }
 
     public function test_get_headless_client_log_path_returns_profiles_path_with_index(): void
     {
         $server = $this->makeServer();
+        $service = app(ServerProcessService::class);
 
         $expected = $server->getProfilesPath().'/hc_0.log';
 
-        $this->assertEquals($expected, $this->service->getHeadlessClientLogPath($server, 0));
+        $this->assertEquals($expected, $service->getHeadlessClientLogPath($server, 0));
     }
 
     public function test_get_running_headless_client_count_returns_zero_when_no_pid_files(): void
     {
         $server = $this->makeServer();
+        $service = app(ServerProcessService::class);
 
-        $this->assertEquals(0, $this->service->getRunningHeadlessClientCount($server));
+        $this->assertEquals(0, $service->getRunningHeadlessClientCount($server));
     }
 
     public function test_get_running_headless_client_count_cleans_stale_pid_files(): void
     {
         $server = $this->makeServer();
+        $service = app(ServerProcessService::class);
 
         // Create a PID file with a non-existent process
         $pidFile = storage_path('app/server_'.$server->id.'_hc_0.pid');
         file_put_contents($pidFile, '999999999');
 
-        $this->assertEquals(0, $this->service->getRunningHeadlessClientCount($server));
+        $this->assertEquals(0, $service->getRunningHeadlessClientCount($server));
         $this->assertFileDoesNotExist($pidFile);
     }
 
     public function test_stop_all_headless_clients_removes_all_pid_files(): void
     {
         $server = $this->makeServer();
+        $service = app(ServerProcessService::class);
 
         // Create multiple PID files with non-existent processes
         for ($i = 0; $i < 3; $i++) {
@@ -416,7 +421,7 @@ class ServerProcessServiceTest extends TestCase
             file_put_contents($pidFile, '999999999');
         }
 
-        $this->service->stopAllHeadlessClients($server);
+        $service->stopAllHeadlessClients($server);
 
         for ($i = 0; $i < 3; $i++) {
             $this->assertFileDoesNotExist(storage_path('app/server_'.$server->id.'_hc_'.$i.'.pid'));
@@ -430,7 +435,7 @@ class ServerProcessServiceTest extends TestCase
         $profilesPath = $server->getProfilesPath();
         @mkdir($profilesPath, 0755, true);
 
-        $this->invokeGenerateServerConfig($server);
+        $this->handler->generateConfigFiles($server);
 
         $contents = file_get_contents($profilesPath.'/server.cfg');
         $this->assertStringContainsString('headlessClients[] = {"127.0.0.1"};', $contents);
@@ -440,13 +445,13 @@ class ServerProcessServiceTest extends TestCase
     public function test_start_logs_launch_command_to_application_log(): void
     {
         $server = $this->makeServer();
+        $service = app(ServerProcessService::class);
 
         // Use a partial mock to prevent real proc_open / exec calls
-        // (the arma3server binary doesn't exist in the test environment).
-        $service = Mockery::mock(ServerProcessService::class)->makePartial();
-        $service->shouldAllowMockingProtectedMethods();
-        $service->shouldReceive('spawnProcess')->once()->andReturn(12345);
-        $service->shouldReceive('startLogTail')->once();
+        $mockService = Mockery::mock(ServerProcessService::class, [app(\App\GameManager::class)])->makePartial();
+        $mockService->shouldAllowMockingProtectedMethods();
+        $mockService->shouldReceive('spawnProcess')->once()->andReturn(12345);
+        $mockService->shouldReceive('startLogTail')->once();
 
         // Auto-backup logs "skipping backup" when no .vars file exists
         Log::shouldReceive('info')
@@ -465,17 +470,16 @@ class ServerProcessServiceTest extends TestCase
             ->withArgs(fn (string $msg) => str_contains($msg, 'Log file:'))
             ->once();
 
-        $service->start($server);
+        $mockService->start($server);
     }
 
     public function test_build_launch_command_uses_game_install_binary_path(): void
     {
         $server = $this->makeServer();
 
-        $reflection = new \ReflectionMethod(ServerProcessService::class, 'buildLaunchCommand');
-        $command = $reflection->invoke($this->service, $server);
+        $command = $this->handler->buildLaunchCommand($server);
 
-        $expectedBinary = $server->getBinaryPath().'/arma3server_x64';
+        $expectedBinary = $server->gameInstall->getInstallationPath().'/arma3server_x64';
         $this->assertStringStartsWith($expectedBinary, $command);
         $this->assertStringContainsString('-port='.$server->port, $command);
         $this->assertStringContainsString('-profiles='.$server->getProfilesPath(), $command);
@@ -486,7 +490,7 @@ class ServerProcessServiceTest extends TestCase
     public function test_symlink_mods_creates_symlinks_in_game_install_directory(): void
     {
         $server = $this->makeServer();
-        $gameInstallPath = $server->getBinaryPath();
+        $gameInstallPath = $server->gameInstall->getInstallationPath();
         @mkdir($gameInstallPath, 0755, true);
 
         $mod1 = WorkshopMod::factory()->installed()->create(['name' => 'CBA A3']);
@@ -504,7 +508,7 @@ class ServerProcessServiceTest extends TestCase
         $server->update(['active_preset_id' => $preset->id]);
         $server->refresh();
 
-        $this->invokeSymlinkMods($server);
+        $this->handler->symlinkMods($server);
 
         $this->assertTrue(is_link($gameInstallPath.'/'.$mod1->getNormalizedName()));
         $this->assertTrue(is_link($gameInstallPath.'/'.$mod2->getNormalizedName()));
@@ -515,7 +519,7 @@ class ServerProcessServiceTest extends TestCase
     public function test_symlink_mods_removes_stale_mod_symlinks(): void
     {
         $server = $this->makeServer();
-        $gameInstallPath = $server->getBinaryPath();
+        $gameInstallPath = $server->gameInstall->getInstallationPath();
 
         // Create a stale symlink
         @mkdir($gameInstallPath, 0755, true);
@@ -527,7 +531,7 @@ class ServerProcessServiceTest extends TestCase
         $server->update(['active_preset_id' => $preset->id]);
         $server->refresh();
 
-        $this->invokeSymlinkMods($server);
+        $this->handler->symlinkMods($server);
 
         $this->assertFalse(is_link($gameInstallPath.'/@OldMod'));
 
@@ -541,9 +545,9 @@ class ServerProcessServiceTest extends TestCase
         $server->update(['active_preset_id' => null]);
         $server->refresh();
 
-        $gameInstallPath = $server->getBinaryPath();
+        $gameInstallPath = $server->gameInstall->getInstallationPath();
 
-        $this->invokeSymlinkMods($server);
+        $this->handler->symlinkMods($server);
 
         // No symlinks should be created, and no errors
         $modLinks = glob($gameInstallPath.'/@*') ?: [];
@@ -567,16 +571,16 @@ class ServerProcessServiceTest extends TestCase
             ->withArgs(fn (string $msg) => str_contains($msg, 'directory not found'))
             ->once();
 
-        $this->invokeSymlinkMods($server);
+        $this->handler->symlinkMods($server);
 
-        $gameInstallPath = $server->getBinaryPath();
+        $gameInstallPath = $server->gameInstall->getInstallationPath();
         $this->assertFalse(file_exists($gameInstallPath.'/'.$mod->getNormalizedName()));
     }
 
     public function test_copy_bikeys_copies_bikey_files_to_keys_directory(): void
     {
         $server = $this->makeServer();
-        $gameInstallPath = $server->getBinaryPath();
+        $gameInstallPath = $server->gameInstall->getInstallationPath();
 
         $mod = WorkshopMod::factory()->installed()->create(['name' => 'TestMod']);
         $modPath = $mod->getInstallationPath();
@@ -590,7 +594,7 @@ class ServerProcessServiceTest extends TestCase
         $server->update(['active_preset_id' => $preset->id]);
         $server->refresh();
 
-        $this->invokeCopyBiKeys($server);
+        $this->handler->copyBiKeys($server);
 
         $this->assertFileExists($gameInstallPath.'/keys/testmod.bikey');
         $this->assertEquals('fake bikey content', file_get_contents($gameInstallPath.'/keys/testmod.bikey'));
@@ -599,7 +603,7 @@ class ServerProcessServiceTest extends TestCase
     public function test_copy_bikeys_only_checks_keys_subdirectory(): void
     {
         $server = $this->makeServer();
-        $gameInstallPath = $server->getBinaryPath();
+        $gameInstallPath = $server->gameInstall->getInstallationPath();
 
         $mod = WorkshopMod::factory()->installed()->create(['name' => 'DeepMod']);
         $modPath = $mod->getInstallationPath();
@@ -619,7 +623,7 @@ class ServerProcessServiceTest extends TestCase
         $server->update(['active_preset_id' => $preset->id]);
         $server->refresh();
 
-        $this->invokeCopyBiKeys($server);
+        $this->handler->copyBiKeys($server);
 
         $this->assertFileExists($gameInstallPath.'/keys/found.bikey');
         $this->assertFileDoesNotExist($gameInstallPath.'/keys/deep.bikey');
@@ -628,7 +632,7 @@ class ServerProcessServiceTest extends TestCase
     public function test_copy_bikeys_creates_keys_directory_if_not_exists(): void
     {
         $server = $this->makeServer();
-        $gameInstallPath = $server->getBinaryPath();
+        $gameInstallPath = $server->gameInstall->getInstallationPath();
 
         // Ensure keys dir does not exist
         $keysPath = $gameInstallPath.'/keys';
@@ -645,7 +649,7 @@ class ServerProcessServiceTest extends TestCase
         $server->update(['active_preset_id' => $preset->id]);
         $server->refresh();
 
-        $this->invokeCopyBiKeys($server);
+        $this->handler->copyBiKeys($server);
 
         $this->assertDirectoryExists($keysPath);
         $this->assertFileExists($keysPath.'/keymod.bikey');
@@ -658,10 +662,26 @@ class ServerProcessServiceTest extends TestCase
         $server->refresh();
 
         // Should not throw or create keys dir
-        $this->invokeCopyBiKeys($server);
+        $this->handler->copyBiKeys($server);
 
-        $keysPath = $server->getBinaryPath().'/keys';
+        $keysPath = $server->gameInstall->getInstallationPath().'/keys';
         $this->assertDirectoryDoesNotExist($keysPath);
+    }
+
+    public function test_generate_server_config_includes_additional_options(): void
+    {
+        $server = $this->makeServer([
+            'additional_server_options' => 'allowedLoadFileExtensions[] = {"hpp","sqs","sqf"};',
+        ]);
+
+        $profilesPath = $server->getProfilesPath();
+        @mkdir($profilesPath, 0755, true);
+
+        $this->handler->generateConfigFiles($server);
+
+        $contents = file_get_contents($profilesPath.'/server.cfg');
+        $this->assertStringContainsString('// ADDITIONAL OPTIONS', $contents);
+        $this->assertStringContainsString('allowedLoadFileExtensions[] = {"hpp","sqs","sqf"};', $contents);
     }
 
     private string $missionsPath;
@@ -676,35 +696,5 @@ class ServerProcessServiceTest extends TestCase
             ['game_install_id' => $gameInstall->id],
             $attributes
         ));
-    }
-
-    private function invokeGenerateServerConfig(Server $server): void
-    {
-        $reflection = new \ReflectionMethod(ServerProcessService::class, 'generateServerConfig');
-        $reflection->invoke($this->service, $server);
-    }
-
-    private function invokeSymlinkMissions(Server $server): void
-    {
-        $reflection = new \ReflectionMethod(ServerProcessService::class, 'symlinkMissions');
-        $reflection->invoke($this->service, $server);
-    }
-
-    private function invokeSymlinkMods(Server $server): void
-    {
-        $reflection = new \ReflectionMethod(ServerProcessService::class, 'symlinkMods');
-        $reflection->invoke($this->service, $server);
-    }
-
-    private function invokeCopyBiKeys(Server $server): void
-    {
-        $reflection = new \ReflectionMethod(ServerProcessService::class, 'copyBiKeys');
-        $reflection->invoke($this->service, $server);
-    }
-
-    private function invokeGenerateBasicConfig(Server $server): void
-    {
-        $reflection = new \ReflectionMethod(ServerProcessService::class, 'generateBasicConfig');
-        $reflection->invoke($this->service, $server);
     }
 }

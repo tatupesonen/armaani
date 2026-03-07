@@ -31,7 +31,7 @@ return [
     | Games Base Path
     |--------------------------------------------------------------------------
     |
-    | The base directory where Arma 3 game installations are stored.
+    | The base directory where game server installations are stored.
     | Each game install gets its own subdirectory: {base_path}/{game_install_id}/
     |
     */
@@ -43,7 +43,7 @@ return [
     | Servers Base Path
     |--------------------------------------------------------------------------
     |
-    | The base directory where Arma 3 server instance data is stored.
+    | The base directory where server instance data is stored.
     | Each server gets its own subdirectory: {base_path}/{server_id}/
     |
     */
@@ -56,7 +56,7 @@ return [
     |--------------------------------------------------------------------------
     |
     | The base directory where SteamCMD downloads workshop mods.
-    | Mods end up at: {base_path}/steamapps/workshop/content/107410/{mod_id}/
+    | Mods end up at: {base_path}/steamapps/workshop/content/{game_id}/{mod_id}/
     |
     */
 
@@ -77,24 +77,10 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Arma 3 Steam IDs
-    |--------------------------------------------------------------------------
-    |
-    | Steam App ID for the Arma 3 dedicated server, and the game ID
-    | used when downloading workshop items.
-    |
-    */
-
-    'server_app_id' => 233780,
-
-    'game_id' => 107410,
-
-    /*
-    |--------------------------------------------------------------------------
     | Max Backups Per Server
     |--------------------------------------------------------------------------
     |
-    | The maximum number of .vars.Arma3Profile backups to retain per server.
+    | The maximum number of profile backups to retain per server.
     | When the limit is reached, the oldest backup is automatically deleted
     | to make room for new ones. Set to 0 for unlimited.
     |

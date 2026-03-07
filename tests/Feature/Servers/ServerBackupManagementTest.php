@@ -303,16 +303,24 @@ class ServerBackupManagementTest extends TestCase
         $this->assertDatabaseCount('server_backups', 0);
     }
 
-    public function test_start_method_includes_auto_backup_call(): void
+    public function test_start_method_creates_auto_backup_when_vars_file_exists(): void
     {
-        // Verify ServerProcessService::start() contains the auto-backup integration.
-        // We don't call the real start() to avoid side effects (PID files, proc_open).
-        $source = file_get_contents(app_path('Services/ServerProcessService.php'));
+        // Verify that starting a server creates an automatic backup when a .vars file exists.
+        // We use a partial mock of ServerProcessService to avoid side effects (PID files, proc_open).
+        $this->createVarsFileForServer($this->server, "version=148;\nauto=1;\n");
 
-        $this->assertStringContainsString(
-            "app(ServerBackupService::class)->createFromServer(\$server, 'Auto-backup before start', isAutomatic: true)",
-            $source,
-        );
+        $mockService = \Mockery::mock(ServerProcessService::class, [app(\App\GameManager::class)])->makePartial();
+        $mockService->shouldAllowMockingProtectedMethods();
+        $mockService->shouldReceive('spawnProcess')->once()->andReturn(12345);
+        $mockService->shouldReceive('startLogTail')->once();
+
+        $mockService->start($this->server);
+
+        $this->assertDatabaseHas('server_backups', [
+            'server_id' => $this->server->id,
+            'name' => 'Auto-backup before start',
+            'is_automatic' => true,
+        ]);
     }
 
     // --- Helpers ---

@@ -276,28 +276,29 @@ protected function isAccessible(User $user, ?string $path = null): bool
 
 </laravel-boost-guidelines>
 
-# ArmaMan - Arma 3 Server Manager
+# ArmaMan - Game Server Manager
 
 ## Project Overview
 
-ArmaMan is a web-based Arma 3 dedicated server manager built with Laravel 12, Livewire 4, and Flux UI. It allows users to install, configure, and manage multiple Arma 3 server instances (including starting/stopping/restarting processes), download Steam Workshop mods via SteamCMD, organize mods into presets, import Arma 3 Launcher HTML preset files, and assign presets to server instances. The application supports dynamic headless client management per server, server difficulty settings, and `.vars.Arma3Profile` backup/restore. It ships as a single Docker container with SteamCMD bundled inside.
+ArmaMan is a web-based game server manager built with Laravel 12, Livewire 4, and Flux UI. It supports Arma 3, Arma Reforger, and DayZ (scaffolded). It allows users to install, configure, and manage multiple server instances (including starting/stopping/restarting processes), download Steam Workshop mods via SteamCMD, organize mods into presets, import Arma 3 Launcher HTML preset files, and assign presets to server instances. Game-specific logic is handled by the GameHandler pattern (Manager pattern). The application supports dynamic headless client management (Arma 3), server difficulty settings, and profile backup/restore. It ships as a single Docker container with SteamCMD bundled inside.
 
 ## Scope
 
-- **Arma 3 only** — no DayZ, DayZ Experimental, or Arma Reforger support.
-- Full server process control (start/stop/restart) from the web UI via queued jobs (`StartServerJob`, `StopServerJob`).
-- Dynamic headless client support (add/remove individual HC instances per server, max 10).
+- **Multi-game support** — Arma 3 (full), Arma Reforger (full), DayZ (scaffolded — throws RuntimeException for unimplemented features).
+- Game-specific logic isolated into handler classes via the `GameManager` (Laravel Manager pattern).
+- Full server process control (start/stop/restart) from the web UI via queued jobs.
+- Dynamic headless client support (Arma 3 only, max 10).
 - Arma 3 Launcher HTML preset import supported.
-- Server difficulty settings (per-server Arma 3 difficulty options).
-- `.vars.Arma3Profile` backup and restore (automatic on server start, manual upload/download).
+- Per-game server settings: difficulty (Arma 3), network (Arma 3), Reforger settings, DayZ settings.
+- `.vars.Arma3Profile` backup and restore (Arma 3 only).
 
 ## Domain Concepts
 
 ### Game Installs
-- A `GameInstall` represents a downloaded copy of the Arma 3 dedicated server files (Steam App ID 233780).
-- Multiple installs can exist with different names and branches (public, contact, creatordlc, profiling, performance, legacy).
+- A `GameInstall` represents a downloaded copy of a game's dedicated server files. Each install has a `game_type` (`GameType` enum) that determines which Steam App ID to use (Arma 3: 233780, Reforger: 1874900, DayZ: 223350).
+- Multiple installs can exist with different names and branches (game-specific, defined in `GameType::branches()`).
 - Branches are hardcoded — `GetAppBetas` Steam API requires a Steamworks partner token and returns 403 with a regular key.
-- Each install tracks: `name`, `branch`, `installation_status` (`InstallationStatus` enum — same enum used for both game installs and mods), `progress_pct` (0–100), `disk_size_bytes`, `installed_at`.
+- Each install tracks: `name`, `branch`, `installation_status` (`InstallationStatus` enum — same enum used for both game installs and mods), `progress_pct` (0–100), `disk_size_bytes`, `installed_at`, `game_type` (GameType enum — Arma3, ArmaReforger, DayZ).
 - Installed via `InstallServerJob`, which streams SteamCMD output line-by-line via a callback, parses progress lines, and writes `progress_pct` + `disk_size_bytes` to DB (throttled every 1 percentage point using `updateQuietly`).
 - SteamCMD progress line format: `Update state (0x61) downloading, progress: 44.53 (2397543803 / 5384428737)` — emitted roughly every 2 seconds.
 - On completion, actual disk size is recorded via `du -sb`.
@@ -307,31 +308,34 @@ ArmaMan is a web-based Arma 3 dedicated server manager built with Laravel 12, Li
 ### Server Instances
 - Each server **must** be linked to a `GameInstall` (`game_install_id` required — no server without one).
 - Configuration is managed inline on the servers index page (expand/collapse panel) — no separate create/edit pages.
-- Each server has: name, port, query_port, max_players, password, admin_password, description, additional_params, active_preset_id, game_install_id, status, verify_signatures, allowed_file_patching, battle_eye, persistent, von_enabled, additional_server_options.
+- Each server has: name, port, query_port, max_players, password, admin_password, description, additional_params, active_preset_id, game_install_id, game_type, status, verify_signatures, allowed_file_patching, battle_eye, persistent, von_enabled, additional_server_options.
 - Port uniqueness is validated across both `port` and `query_port` columns for all servers.
 - Servers are started/stopped via queued jobs (`StartServerJob`, `StopServerJob`) dispatched from the web UI.
 - `Server::getBinaryPath()` derives the server binary path from the linked `GameInstall`.
-- On every server start, `ServerProcessService` regenerates `server.cfg`, `server_basic.cfg`, and the `.Arma3Profile` difficulty file, symlinks mods and missions, copies BiKeys, and creates an automatic `.vars.Arma3Profile` backup.
-- Server status transitions through: Stopped → Starting → Booting → Running (and Stopping when shutting down). The `Booting` → `Running` transition is detected by `DetectServerBooted` listener when the server log contains "Connected to Steam servers".
+- On every server start, `ServerProcessService` delegates to the game's `GameHandler` to generate config files, symlink mods/missions, copy BiKeys, and create backups.
+- Server status transitions through: Stopped → Starting → Booting → Running (and Stopping when shutting down). The `Booting` → `Running` transition is detected by `DetectServerBooted` listener when the server log contains the game handler's boot detection string (Arma 3: "Connected to Steam servers"; other games: null, meaning no auto-detection).
 - Shared form fields are extracted into `resources/views/pages/servers/partials/form-fields.blade.php`.
 
 ### Workshop Mods
 - Mods are identified by their Steam Workshop ID (numeric).
 - Mods can be downloaded individually (`DownloadModJob`) or in batches (`BatchDownloadModsJob`) via SteamCMD as queued Laravel jobs.
-- Each mod has: `workshop_id`, `name`, `file_size`, `installation_status` (`InstallationStatus` enum), `progress_pct` (0–100), `installed_at`.
+- Each mod has: `workshop_id`, `name`, `file_size`, `installation_status` (`InstallationStatus` enum), `progress_pct` (0–100), `installed_at`, `game_type` (GameType enum).
 - **Progress tracking**: SteamCMD does NOT output progress lines for workshop downloads. Progress is tracked by polling `du -sb` on the mod directory every 1 second while the SteamCMD process runs asynchronously (`Process::start()` + `while ($process->running())`). `progress_pct` is written to DB (throttled every 1 percentage point) using `updateQuietly`.
 - Progress and SteamCMD output are broadcast via `ModDownloadOutput` event for real-time UI updates.
 - Mod metadata (name, file size) is fetched from the Steam Workshop API before download begins. Bulk metadata fetching is supported via `SteamWorkshopService::getMultipleModDetails()`.
 - On completion, actual disk size is recorded via `du -sb` on the mod directory.
 - Mod files need to be converted to lowercase (Linux requirement for Arma 3) — handled by the `InteractsWithFileSystem` trait.
+- Workshop mods have a composite unique constraint on `(workshop_id, game_type)` — the same workshop ID can exist for different games.
 - Mods are symlinked into server directories when assigned via presets.
 
 ### Mod Presets
-- A preset is a named collection of workshop mods.
+- A preset is a named collection of workshop mods, scoped by `game_type`.
 - Presets can be created manually (selecting individual mods) or by importing an Arma 3 Launcher HTML preset file.
 - When importing an HTML preset, the system parses mod IDs from the file and dispatches batched download jobs (batch size configured via `SteamAccount::mod_download_batch_size`). Single-mod batches use `DownloadModJob`, multi-mod batches use `BatchDownloadModsJob`.
 - A server instance uses one active preset at a time.
 - Presets can be shared across multiple server instances.
+- Presets have a composite unique constraint on `(name, game_type)`.
+- Reforger presets use `reforgerMods()` relationship instead of workshop mods.
 - Presets have separate create and edit pages (unlike servers which use inline panels).
 - Shared form fields are extracted into `resources/views/pages/presets/partials/form-fields.blade.php`.
 
@@ -346,6 +350,12 @@ ArmaMan is a web-based Arma 3 dedicated server manager built with Laravel 12, Li
 - Uploading a file with the same name silently overwrites it.
 - Livewire `WithFileUploads` trait handles file uploads; max upload size configured to 512MB in `config/livewire.php`.
 
+### Reforger Mods
+- Reforger mods are identified by a GUID string (`mod_id`), not a numeric workshop ID.
+- Stored in the `reforger_mods` table via the `ReforgerMod` model.
+- Managed via simple CRUD on the Mods page (Reforger Mods tab) — no SteamCMD download, as Reforger servers self-download mods at startup.
+- Linked to presets via the `mod_preset_reforger_mod` pivot table.
+
 ### Headless Clients
 - Each Arma 3 server instance can have headless clients launched alongside it (max 10).
 - Headless clients offload AI processing from the main server.
@@ -354,7 +364,7 @@ ArmaMan is a web-based Arma 3 dedicated server manager built with Laravel 12, Li
 - On server restart, the previous HC count is automatically restored.
 
 ### Server Backups
-- `ServerBackupService` manages `.vars.Arma3Profile` file backups per server.
+- `ServerBackupService` manages `.vars.Arma3Profile` file backups per server. The backup file path is determined by `GameHandler::getBackupFilePath()` (Arma 3: `.vars.Arma3Profile`; Reforger/DayZ: null, no backup support).
 - An automatic backup is created on every server start.
 - Users can manually create named backups, upload backup data, download, and restore backups.
 - Old backups are auto-pruned based on `config('arma.max_backups_per_server')` (default: 20).
@@ -364,14 +374,14 @@ ArmaMan is a web-based Arma 3 dedicated server manager built with Laravel 12, Li
 - Each server has a `DifficultySettings` model (one-to-one relationship) that configures Arma 3 difficulty options.
 - Settings include: reduced_damage, group_indicators, friendly_tags, enemy_tags, detected_mines, commands, waypoints, tactical_ping, weapon_info, stance_indicator, stamina_bar, weapon_crosshair, vision_aid, third_person_view, camera_shake, score_table, death_messages, von_id, map_content, auto_report, ai_level_preset, skill_ai, precision_ai.
 - On server start, `ServerProcessService::generateProfileConfig()` writes these settings to the `.Arma3Profile` file.
+- Difficulty settings are Arma 3-specific. Reforger servers have `ReforgerSettings` (scenario_id, third_person_view_enabled). DayZ servers have `DayZSettings` (respawn_time, time_acceleration, night_time_acceleration, force_same_build, third_person_view_enabled, crosshair_enabled, persistent).
 
 ### SteamCMD Integration
 - SteamCMD is the command-line tool used to download server files and workshop mods.
 - SteamCMD commands are executed as queued jobs to prevent blocking the web UI.
 - Steam credentials (username, encrypted password, auth_token, steam_api_key, mod_download_batch_size) are managed via a settings page and stored encrypted in the database (`SteamAccount` model).
 - The SteamCMD binary path is configurable via `STEAMCMD_PATH` env var (default: `/usr/games/steamcmd`).
-- Arma 3 server Steam App ID: 233780 (hardcoded in `config/arma.php` as `server_app_id`)
-- Arma 3 game ID (for workshop mods): 107410 (hardcoded in `config/arma.php` as `game_id`)
+- Steam App IDs and game IDs are defined per game in `GameType::serverAppId()` and `GameType::gameId()`.
 - `SteamCmdService::installServer()` accepts an optional `?callable $onOutput` and streams output line-by-line.
 - `SteamCmdService::startDownloadMod()` starts the process asynchronously and returns an `InvokedProcess` for polling.
 - `SteamCmdService::startBatchDownloadMods()` stacks multiple `+workshop_download_item` commands in a single SteamCMD invocation; timeout scales at 1hr per mod.
@@ -403,16 +413,14 @@ ArmaMan is a web-based Arma 3 dedicated server manager built with Laravel 12, Li
 - Progress (`progress_pct`) is still written to DB by jobs; Echo events carry it too for instant UI updates.
 
 ### Event Listeners
-- `DetectServerBooted` listener — listens to `ServerLogOutput` events. When a log line contains "Connected to Steam servers" and the server status is `Booting`, transitions the server to `Running` and dispatches a `ServerStatusChanged` event.
+- `DetectServerBooted` listener — listens to `ServerLogOutput` events. When a log line matches the handler's `getBootDetectionString()` (Arma 3: "Connected to Steam servers"; other games: null, skipping auto-detection) and the server status is `Booting`, transitions the server to `Running` and dispatches a `ServerStatusChanged` event.
 
 ### Server Config Generation
-- `ServerProcessService` generates three config files on every server start:
-  - `generateServerConfig()` — writes `server.cfg` to `getProfilesPath()/server.cfg`. Maps DB fields: `name` → `hostname`, `password`, `admin_password` → `passwordAdmin`, `max_players` → `maxPlayers`, `description` → `motd[]`. Includes server options from `additional_server_options`.
-  - `generateBasicConfig()` — writes `server_basic.cfg` (basic Arma 3 server settings).
-  - `generateProfileConfig()` — writes `{profileName}.Arma3Profile` with difficulty settings from the `DifficultySettings` model.
-- `symlinkMods()` — creates `@{normalized_name}` symlinks in the game install directory for each mod in the active preset.
-- `symlinkMissions()` — symlinks all PBOs from the shared missions pool into the game install's `mpmissions/` directory.
-- `copyBiKeys()` — copies BiKey files (`.bikey`) from mod `keys/` directories into the game install's `keys/` directory.
+- Config generation is delegated to the game's `GameHandler` via `ServerProcessService`:
+  - `Arma3Handler::generateConfigFiles()` — writes `server.cfg`, `server_basic.cfg`, and `.Arma3Profile`
+  - `ReforgerHandler::generateConfigFiles()` — writes a JSON config file
+  - `DayZHandler::generateConfigFiles()` — not yet implemented (throws RuntimeException)
+  - `symlinkMods()`, `symlinkMissions()`, `copyBiKeys()` — delegated to handler (no-op for Reforger)
 - Config is always regenerated on start so changes take effect immediately.
 
 ### Server Log Tailing
@@ -427,10 +435,19 @@ ArmaMan is a web-based Arma 3 dedicated server manager built with Laravel 12, Li
 - Server create/edit is inline on the servers index page (modal for create, expand panel for edit) — no separate pages.
 - `flux:select` with a bound integer property: pre-initialise the property in the open method (e.g. `$this->gameInstalls->first()?->id`) to avoid the flux:select null-on-no-interaction bug.
 
+### Multi-Game Architecture (GameManager Pattern)
+- Game-specific logic is isolated into handler classes implementing `App\Contracts\GameHandler`.
+- `App\GameManager` extends Laravel's `Illuminate\Support\Manager` and resolves the correct handler for a game type.
+- Registered as a singleton in `AppServiceProvider`.
+- `GameManager::for(Server|GameInstall $entity)` resolves the handler from the entity's `game_type`.
+- Three handlers: `Arma3Handler` (full), `ReforgerHandler` (full), `DayZHandler` (scaffold).
+- `ServerProcessService` is a thin orchestrator (~320 lines) that delegates game-specific operations to the handler.
+- The `GameType` enum centralizes all game-specific constants: Steam IDs, ports, branches, binary names, feature flags.
+
 ### File System Layout
 - Game install files: `{GAMES_BASE_PATH}/{game_install_id}/` (default: `storage/arma/games/{id}/`)
 - Server profiles/config: `{SERVERS_BASE_PATH}/{server_id}/` (default: `storage/arma/servers/{id}/`)
-- Workshop mods: `{MODS_BASE_PATH}/steamapps/workshop/content/107410/{workshop_id}/` (default: `storage/arma/mods/...`)
+- Workshop mods: `{MODS_BASE_PATH}/steamapps/workshop/content/{game_id}/{workshop_id}/` (game_id from `GameType::gameId()`; default: `storage/arma/mods/...`)
 - Mod symlinks into game install dirs: `{game_install_path}/@{normalized_mod_name}`
 - Mission PBOs (shared pool): `{MISSIONS_BASE_PATH}/` (default: `storage/arma/missions/`)
 - Mission symlinks into game installs: `{GAMES_BASE_PATH}/{id}/mpmissions/`
@@ -475,32 +492,47 @@ ArmaMan is a web-based Arma 3 dedicated server manager built with Laravel 12, Li
 ## Data Model
 
 ### Core Models
-- `GameInstall` - A downloaded Arma 3 server installation (name, branch, installation_status, progress_pct, disk_size_bytes, installed_at)
-- `Server` - Arma 3 server instance (name, port, query_port, max_players, password, admin_password, description, active_preset_id, game_install_id, status, additional_params, verify_signatures, allowed_file_patching, battle_eye, persistent, von_enabled, additional_server_options)
+- `GameInstall` - A downloaded game server installation (name, branch, installation_status, progress_pct, disk_size_bytes, installed_at, game_type)
+- `Server` - Game server instance (name, port, query_port, max_players, password, admin_password, description, active_preset_id, game_install_id, game_type, status, additional_params, verify_signatures, allowed_file_patching, battle_eye, persistent, von_enabled, additional_server_options)
 - `DifficultySettings` - Per-server Arma 3 difficulty options (server_id, reduced_damage, group_indicators, friendly_tags, enemy_tags, detected_mines, commands, waypoints, tactical_ping, weapon_info, stance_indicator, stamina_bar, weapon_crosshair, vision_aid, third_person_view, camera_shake, score_table, death_messages, von_id, map_content, auto_report, ai_level_preset, skill_ai, precision_ai)
+- `ReforgerSettings` - Per-server Reforger options (server_id, scenario_id, third_person_view_enabled)
+- `DayZSettings` - Per-server DayZ options (server_id, respawn_time, time_acceleration, night_time_acceleration, force_same_build, third_person_view_enabled, crosshair_enabled, persistent)
 - `ServerBackup` - `.vars.Arma3Profile` backup (server_id, name, file_size, is_automatic, data)
-- `WorkshopMod` - A Steam Workshop mod (workshop_id, name, file_size, installation_status, progress_pct, installed_at)
-- `ModPreset` - A named collection of mods (name)
+- `WorkshopMod` - A Steam Workshop mod (workshop_id, name, file_size, installation_status, progress_pct, installed_at, game_type)
+- `ReforgerMod` - A Reforger mod entry (mod_id GUID, name)
+- `ModPreset` - A named collection of mods (name, game_type)
 - `mod_preset_workshop_mod` - Pivot table (mod_preset_id, workshop_mod_id)
+- `mod_preset_reforger_mod` - Pivot table (mod_preset_id, reforger_mod_id)
 - `SteamAccount` - Steam credentials for SteamCMD (username, encrypted password, encrypted auth_token, encrypted steam_api_key, mod_download_batch_size)
 
 ### Enums
+- `GameType` - Arma3, ArmaReforger, DayZ (used by GameInstall, Server, WorkshopMod, ModPreset)
 - `InstallationStatus` - Queued, Installing, Installed, Failed (used by both `GameInstall` and `WorkshopMod`)
 - `ServerStatus` - Stopped, Starting, Booting, Running, Stopping
 
 ## Key Files
 
 ### Models
-- `app/Models/GameInstall.php` — `servers(): HasMany`, `getInstallationPath(): string` returns `{games_base_path}/{id}`
-- `app/Models/Server.php` — `gameInstall(): BelongsTo`, `activePreset(): BelongsTo`, `difficultySettings(): HasOne`, `backups(): HasMany`, `getProfilesPath(): string`, `getBinaryPath(): string`, `getProfileName(): string`
+- `app/Models/GameInstall.php` — `servers(): HasMany`, `getInstallationPath(): string` returns `{games_base_path}/{id}`, casts `game_type` to `GameType` enum
+- `app/Models/Server.php` — `gameInstall(): BelongsTo`, `activePreset(): BelongsTo`, `difficultySettings(): HasOne`, `reforgerSettings(): HasOne`, `dayzSettings(): HasOne`, `backups(): HasMany`, `getProfilesPath(): string`, `getBinaryPath(): string`, `getProfileName(): string`, casts `game_type` to `GameType` enum
 - `app/Models/DifficultySettings.php` — `server(): BelongsTo`, stores per-server Arma 3 difficulty options
+- `app/Models/ReforgerSettings.php` — `server(): BelongsTo`, stores per-server Reforger options (scenario_id, third_person_view_enabled)
+- `app/Models/DayZSettings.php` — `server(): BelongsTo`, stores per-server DayZ options
 - `app/Models/ServerBackup.php` — `server(): BelongsTo`, stores `.vars.Arma3Profile` backup data
-- `app/Models/WorkshopMod.php` — `presets(): BelongsToMany`, `getInstallationPath(): string`, `getNormalizedName(): string`
-- `app/Models/ModPreset.php` — `mods(): BelongsToMany`, `servers(): HasMany`
+- `app/Models/WorkshopMod.php` — `presets(): BelongsToMany`, `getInstallationPath(): string`, `getNormalizedName(): string`, casts `game_type` to `GameType` enum
+- `app/Models/ReforgerMod.php` — `presets(): BelongsToMany`, stores Reforger mod entries (mod_id GUID, name)
+- `app/Models/ModPreset.php` — `mods(): BelongsToMany`, `reforgerMods(): BelongsToMany`, `servers(): HasMany`, casts `game_type` to `GameType` enum
 - `app/Models/SteamAccount.php` — stores encrypted credentials (password, auth_token, steam_api_key), `mod_download_batch_size`, `static current(): ?self`
 
+### Game Handlers
+- `app/Contracts/GameHandler.php` — Interface with 16 methods (buildLaunchCommand, generateConfigFiles, getBinaryPath, getProfileName, getServerLogPath, getBootDetectionString, symlinkMods, symlinkMissions, copyBiKeys, supportsHeadlessClients, buildHeadlessClientCommand, getBackupFilePath, getBackupDownloadFilename, serverValidationRules, settingsValidationRules, gameType)
+- `app/GameManager.php` — Extends `Illuminate\Support\Manager`; `for(Server|GameInstall)` resolves handler from `game_type`
+- `app/GameHandlers/Arma3Handler.php` — Full Arma 3 implementation (~510 lines); generates server.cfg, server_basic.cfg, .Arma3Profile
+- `app/GameHandlers/ReforgerHandler.php` — Full Reforger implementation; generates JSON config
+- `app/GameHandlers/DayZHandler.php` — Scaffold; throws RuntimeException for unimplemented methods
+
 ### Services
-- `app/Services/SteamCmdService.php` — `installServer(dir, branch, ?callable): ProcessResult`, `startDownloadMod(dir, id): InvokedProcess`, `startBatchDownloadMods(dir, ids[]): InvokedProcess`, `validateCredentials(user, pass): bool`
+- `app/Services/SteamCmdService.php` — `installServer(dir, branch, ?callable, ?GameType): ProcessResult`, `startDownloadMod(dir, id, ?GameType): InvokedProcess`, `startBatchDownloadMods(dir, ids[], ?GameType): InvokedProcess`, `validateCredentials(user, pass): bool`
 - `app/Services/SteamWorkshopService.php` — `getModDetails(id): ?array`, `getMultipleModDetails(ids[]): array`, `validateApiKey(key): array`, `getApiKey(): ?string`
 - `app/Services/ServerProcessService.php` — `start(Server)`, `stop(Server)`, `restart(Server)`, `isRunning(Server): bool`, `getStatus(Server): ServerStatus`, `addHeadlessClient(Server): ?int`, `removeHeadlessClient(Server): ?int`, `stopAllHeadlessClients(Server)`, `getRunningHeadlessClientCount(Server): int`, `buildLaunchCommand(Server): string`, `getServerLogPath(Server): string`, `getHeadlessClientLogPath(Server, int): string`
 - `app/Services/ServerBackupService.php` — `getVarsFilePath(Server): string`, `createFromServer(Server, ?name, isAutomatic): ?ServerBackup`, `createFromUpload(Server, data, ?name): ServerBackup`, `restore(ServerBackup)`, `pruneOldBackups(Server)`
@@ -513,7 +545,7 @@ ArmaMan is a web-based Arma 3 dedicated server manager built with Laravel 12, Li
 - `app/Events/ServerStatusChanged.php` — broadcasts on `servers` (global), carries `serverId`, `status`
 
 ### Listeners
-- `app/Listeners/DetectServerBooted.php` — listens to `ServerLogOutput`; transitions server from `Booting` to `Running` when log contains "Connected to Steam servers"
+- `app/Listeners/DetectServerBooted.php` — listens to `ServerLogOutput`; transitions server from `Booting` to `Running` when log contains the game handler's boot detection string (Arma 3: "Connected to Steam servers"; other games: null, skipping auto-detection)
 
 ### Console Commands
 - `app/Console/Commands/TailServerLog.php` — `server:tail-log {server}`, tails server.log, broadcasts via `ServerLogOutput`, handles file rotation
@@ -543,7 +575,7 @@ ArmaMan is a web-based Arma 3 dedicated server manager built with Laravel 12, Li
 - `resources/js/app.js` — Laravel Echo configured for Reverb (pusher-js transport). Uses `window.location` for wsHost/wsPort/forceTLS at runtime (no baked VITE vars needed for host/port/scheme). `VITE_REVERB_APP_KEY` is hardcoded at build time (`armaman-key`).
 
 ### Config
-- `config/arma.php` — `steamcmd_path`, `steam_api_key`, `games_base_path`, `servers_base_path`, `mods_base_path`, `missions_base_path`, `server_app_id` (233780), `game_id` (107410), `max_backups_per_server`
+- `config/arma.php` — `steamcmd_path`, `steam_api_key`, `games_base_path`, `servers_base_path`, `mods_base_path`, `missions_base_path`, `max_backups_per_server`
 - `config/broadcasting.php` — Reverb connection configured (defaults to `reverb` driver with hardcoded credentials)
 - `config/reverb.php` — published Reverb config (server defaults to 127.0.0.1:6001)
 - `config/livewire.php` — `emoji => false`, `temporary_file_upload.rules` set to 512MB max
@@ -573,26 +605,31 @@ ArmaMan is a web-based Arma 3 dedicated server manager built with Laravel 12, Li
 - `tests/Feature/Events/BroadcastEventsTest.php` — broadcast event channel and property tests
 - `tests/Feature/Listeners/DetectServerBootedTest.php` — tests Booting → Running transition
 - `tests/Feature/Services/PresetImportServiceTest.php`
+- `tests/Feature/GameHandlers/ReforgerHandlerTest.php` — Reforger handler tests (config generation, launch command, feature flags)
+- `tests/Feature/GameHandlers/DayZHandlerTest.php` — DayZ handler tests (scaffold behavior, RuntimeException checks)
+- `tests/Feature/Servers/MultiGameServerTest.php` — cross-game validation (HC rejection, backup null for non-Arma3, composite unique constraints, GameManager resolution)
 - `tests/Concerns/MocksSteamCmdProcess.php` — trait providing `makeInvokedProcess(bool): InvokedProcess`
 - `tests/Concerns/MocksServerProcessService.php` — trait providing `mockServerProcessService(ServerStatus): void`
+- `tests/Concerns/CreatesGameScenarios.php` — trait providing `createArma3Server()`, `createReforgerServer()`, `createDayZServer()`
+- `tests/Concerns/MocksGameManager.php` — trait for mocking `GameManager` in tests
 
 ## SteamCMD Commands Reference
 
-### Install/Update Arma 3 Server
+### Install/Update Game Server
 ```
-steamcmd +force_install_dir {install_path} +login {username} {password} +app_update 233780 validate +quit
+steamcmd +force_install_dir {install_path} +login {username} {password} +app_update {server_app_id} validate +quit
 # For non-public branch:
-steamcmd +force_install_dir {install_path} +login {username} {password} +app_update 233780 -beta {branch} validate +quit
+steamcmd +force_install_dir {install_path} +login {username} {password} +app_update {server_app_id} -beta {branch} validate +quit
 ```
 
 ### Download Workshop Mod (single)
 ```
-steamcmd +force_install_dir {mods_base_path} +login {username} {password} +workshop_download_item 107410 {workshop_id} validate +quit
+steamcmd +force_install_dir {mods_base_path} +login {username} {password} +workshop_download_item {game_id} {workshop_id} validate +quit
 ```
 
 ### Download Workshop Mods (batch)
 ```
-steamcmd +force_install_dir {mods_base_path} +login {username} {password} +workshop_download_item 107410 {id1} +workshop_download_item 107410 {id2} validate +quit
+steamcmd +force_install_dir {mods_base_path} +login {username} {password} +workshop_download_item {game_id} {id1} +workshop_download_item {game_id} {id2} validate +quit
 ```
 
 ## Testing Notes
@@ -604,6 +641,9 @@ steamcmd +force_install_dir {mods_base_path} +login {username} {password} +works
 - `setUp()` in `ServerManagementTest` always creates a `GameInstall` — tests that need `createGameInstallId` to be null must explicitly `->set('createGameInstallId', null)` after `openCreateModal`.
 - Use `MocksSteamCmdProcess` trait for creating mock `InvokedProcess` instances.
 - Use `MocksServerProcessService` trait for mocking `ServerProcessService` in Livewire component tests.
+- Use `CreatesGameScenarios` trait for creating game-specific test servers with proper relationships.
+- Use `MocksGameManager` trait for mocking `GameManager` when testing components that need handler behavior.
 - `SteamWorkshopService` no longer has `getDownloadProgress()` or `getDownloadedSize()` — do not mock them.
 - Broadcast events use `ShouldBroadcastNow` — when testing dispatches from jobs, use `Event::fake([SpecificEvent::class])` to avoid breaking other event-driven behavior (especially `DetectServerBooted` listener).
 - `Process::fake()` does not intercept `rm -rf` calls in Livewire component tests reliably — use real filesystem + `assertDirectoryDoesNotExist` instead.
+- `SteamCmdService` methods now accept optional `?GameType $gameType` parameter — mocks must match this signature.

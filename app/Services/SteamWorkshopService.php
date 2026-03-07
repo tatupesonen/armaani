@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\GameType;
 use App\Models\SteamAccount;
 use Illuminate\Support\Facades\Http;
 
@@ -10,7 +11,7 @@ class SteamWorkshopService
     /**
      * Fetch mod metadata from the Steam Web API.
      *
-     * @return array{name: string|null, file_size: int|null, time_updated: int|null}|null
+     * @return array{name: string|null, file_size: int|null, time_updated: int|null, game_type: GameType|null}|null
      */
     public function getModDetails(int $workshopId): ?array
     {
@@ -21,7 +22,7 @@ class SteamWorkshopService
      * Fetch metadata for multiple mods in a single Steam API call.
      *
      * @param  list<int>  $workshopIds
-     * @return array<int, array{name: string|null, file_size: int|null, time_updated: int|null}>
+     * @return array<int, array{name: string|null, file_size: int|null, time_updated: int|null, game_type: GameType|null}>
      */
     public function getMultipleModDetails(array $workshopIds): array
     {
@@ -59,6 +60,9 @@ class SteamWorkshopService
                     'name' => $detail['title'] ?? null,
                     'file_size' => isset($detail['file_size']) ? (int) $detail['file_size'] : null,
                     'time_updated' => isset($detail['time_updated']) ? (int) $detail['time_updated'] : null,
+                    'game_type' => isset($detail['consumer_appid'])
+                        ? GameType::fromConsumerAppId((int) $detail['consumer_appid'])
+                        : null,
                 ];
             }
         }

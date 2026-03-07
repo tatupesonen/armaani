@@ -11,7 +11,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::livewire('servers', 'pages::servers.index')->name('servers.index');
     Route::get('servers/backups/{serverBackup}/download', function (App\Models\ServerBackup $serverBackup) {
-        $filename = 'arma3_'.$serverBackup->server_id.'.vars.Arma3Profile';
+        $handler = app(App\GameManager::class)->for($serverBackup->server);
+        $filename = $handler->getBackupDownloadFilename($serverBackup->server);
 
         return response($serverBackup->data, 200, [
             'Content-Type' => 'application/octet-stream',
