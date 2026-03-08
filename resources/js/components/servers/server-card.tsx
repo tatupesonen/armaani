@@ -37,22 +37,27 @@ const statusGradients = [
     {
         status: 'starting',
         color: 'from-amber-400/20 to-zinc-300/5 dark:from-amber-500/15 dark:to-zinc-600/5',
+        shimmer: 'motion-safe:animate-shimmer',
     },
     {
         status: 'booting',
         color: 'from-blue-400/20 to-zinc-300/5 dark:from-blue-500/15 dark:to-zinc-600/5',
+        shimmer: 'motion-safe:animate-shimmer',
     },
     {
         status: 'downloading_mods',
         color: 'from-purple-400/20 to-zinc-300/5 dark:from-purple-500/15 dark:to-zinc-600/5',
+        shimmer: 'motion-safe:animate-shimmer',
     },
     {
         status: 'running',
         color: 'from-emerald-400/20 to-zinc-300/5 dark:from-emerald-500/15 dark:to-zinc-600/5',
+        shimmer: null,
     },
     {
         status: 'stopping',
         color: 'from-red-400/20 to-zinc-300/5 dark:from-red-500/15 dark:to-zinc-600/5',
+        shimmer: 'motion-safe:animate-shimmer-fast',
     },
 ] as const;
 
@@ -97,11 +102,17 @@ export default function ServerCard({
         <div className="overflow-hidden rounded-lg border">
             {/* Header */}
             <div className="relative flex items-center justify-between p-4">
-                {statusGradients.map(({ status, color }) => (
+                {statusGradients.map(({ status, color, shimmer }) => (
                     <div
                         key={status}
-                        className={`absolute inset-0 bg-gradient-to-r transition-opacity duration-700 ${color} ${server.status === status ? 'opacity-100' : 'opacity-0'}`}
-                    />
+                        className={`absolute inset-0 overflow-hidden bg-gradient-to-r [mask-image:linear-gradient(to_right,black,black_20%,transparent_45%)] transition-opacity duration-700 ${color} ${server.status === status ? 'opacity-100' : 'opacity-0'}`}
+                    >
+                        {shimmer && (
+                            <div
+                                className={`absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/12 to-transparent dark:via-white/6 ${shimmer}`}
+                            />
+                        )}
+                    </div>
                 ))}
 
                 <div className="relative min-w-0 flex-1">
@@ -184,14 +195,26 @@ export default function ServerCard({
 
                     {(server.status === 'booting' ||
                         server.status === 'downloading_mods') && (
-                        <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => router.post(stop.url(server.id))}
-                        >
-                            <Pause className="mr-2 size-4" />
-                            Stop
-                        </Button>
+                        <>
+                            <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => router.post(stop.url(server.id))}
+                            >
+                                <Pause className="mr-2 size-4" />
+                                Stop
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                    router.post(restart.url(server.id))
+                                }
+                            >
+                                <RefreshCw className="mr-2 size-4" />
+                                Restart
+                            </Button>
+                        </>
                     )}
 
                     <Button

@@ -16,20 +16,14 @@ class StartServerJob implements ShouldQueue
 
     public int $tries = 1;
 
-    public function __construct(public Server $server, public bool $restart = false) {}
+    public function __construct(public Server $server) {}
 
     public function handle(ServerProcessService $service): void
     {
         $context = "[Server:{$this->server->id} '{$this->server->name}']";
-        $hcCount = 0;
 
-        if ($this->restart) {
-            $hcCount = $service->getRunningHeadlessClientCount($this->server);
-            Log::info("{$context} Restarting server (stop phase, {$hcCount} HC(s) to restore)");
-            $service->stopAllHeadlessClients($this->server);
-            $service->stop($this->server);
-            sleep(2);
-        }
+        $this->server->update(['status' => ServerStatus::Starting]);
+        ServerStatusChanged::dispatch($this->server->id, ServerStatus::Starting->value, $this->server->name);
 
         Log::info("{$context} Starting server via queued job");
         $service->start($this->server);
@@ -38,13 +32,6 @@ class StartServerJob implements ShouldQueue
             $this->server->update(['status' => ServerStatus::Booting]);
             ServerStatusChanged::dispatch($this->server->id, ServerStatus::Booting->value, $this->server->name);
             Log::info("{$context} Server process started, booting (waiting for Steam connection)");
-
-            if ($this->restart && $hcCount > 0) {
-                Log::info("{$context} Restoring {$hcCount} headless client(s)");
-                for ($i = 0; $i < $hcCount; $i++) {
-                    $service->addHeadlessClient($this->server);
-                }
-            }
         } else {
             $this->server->update(['status' => ServerStatus::Stopped]);
             ServerStatusChanged::dispatch($this->server->id, ServerStatus::Stopped->value, $this->server->name);

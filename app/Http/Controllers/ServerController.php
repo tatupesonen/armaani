@@ -20,6 +20,7 @@ use App\Services\ServerProcessService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -215,10 +216,13 @@ class ServerController extends Controller
 
     public function restart(Server $server): RedirectResponse
     {
-        $server->update(['status' => ServerStatus::Starting]);
-        $this->broadcastStatusChange($server, ServerStatus::Starting);
+        $server->update(['status' => ServerStatus::Stopping]);
+        $this->broadcastStatusChange($server, ServerStatus::Stopping);
 
-        StartServerJob::dispatch($server, restart: true);
+        Bus::chain([
+            new StopServerJob($server),
+            new StartServerJob($server),
+        ])->dispatch();
 
         Log::info('User '.auth()->id().' ('.auth()->user()->name.") restarted server: {$server->name}");
 

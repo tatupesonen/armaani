@@ -244,7 +244,6 @@ export default function ServerEditPanel({
                 preserveScroll: true,
                 onSuccess: () => {
                     setErrors({});
-                    onCancel();
                 },
                 onError: (errs) => setErrors(errs),
                 onFinish: () => setProcessing(false),

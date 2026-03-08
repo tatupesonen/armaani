@@ -13,6 +13,7 @@ use App\Models\Server;
 use App\Models\User;
 use App\Services\ServerProcessService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -565,7 +566,7 @@ class ServerManagementTest extends TestCase
 
     public function test_user_can_restart_server(): void
     {
-        Queue::fake();
+        Bus::fake();
 
         $server = Server::factory()->create(['status' => ServerStatus::Running]);
 
@@ -575,10 +576,13 @@ class ServerManagementTest extends TestCase
 
         $this->assertDatabaseHas('servers', [
             'id' => $server->id,
-            'status' => ServerStatus::Starting->value,
+            'status' => ServerStatus::Stopping->value,
         ]);
 
-        Queue::assertPushed(StartServerJob::class);
+        Bus::assertChained([
+            StopServerJob::class,
+            StartServerJob::class,
+        ]);
     }
 
     // ---------------------------------------------------------------
