@@ -1,0 +1,92 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Enums\GameType;
+use App\Enums\InstallationStatus;
+use App\Jobs\InstallServerJob;
+use App\Models\GameInstall;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
+use Inertia\Inertia;
+use Inertia\Response;
+
+class GameInstallController extends Controller
+{
+    public function index(): Response
+    {
+        $installs = GameInstall::query()->orderBy('name')->get()
+            ->each(function (GameInstall $install): void {
+                $install->setAttribute('installation_path', $install->getInstallationPath());
+            });
+
+        return Inertia::render('game-installs/index', [
+            'installs' => $installs,
+            'gameTypes' => collect(GameType::cases())->map(fn (GameType $gt) => [
+                'value' => $gt->value,
+                'label' => $gt->label(),
+                'branches' => $gt->branches(),
+                'defaultName' => $gt->label().' Server',
+            ]),
+        ]);
+    }
+
+    public function store(Request $request): RedirectResponse
+    {
+        $gameType = GameType::from($request->input('game_type', 'arma3'));
+
+        $validated = $request->validate([
+            'game_type' => ['required', Rule::enum(GameType::class)],
+            'name' => ['required', 'string', 'max:255'],
+            'branch' => ['required', 'string', Rule::in($gameType->branches())],
+        ]);
+
+        $install = GameInstall::query()->create($validated);
+
+        Log::info('User '.auth()->id().' ('.auth()->user()->name.") created game install: {$install->name}");
+
+        InstallServerJob::dispatch($install);
+
+        return back()->with('success', "Game install '{$install->name}' queued for installation.");
+    }
+
+    public function reinstall(GameInstall $gameInstall): RedirectResponse
+    {
+        $gameInstall->update([
+            'installation_status' => InstallationStatus::Queued,
+            'progress_pct' => 0,
+        ]);
+
+        Log::info('User '.auth()->id().' ('.auth()->user()->name.") reinstalled game: {$gameInstall->name}");
+
+        InstallServerJob::dispatch($gameInstall);
+
+        return back()->with('success', "Reinstall queued for '{$gameInstall->name}'.");
+    }
+
+    public function destroy(GameInstall $gameInstall): RedirectResponse
+    {
+        if (in_array($gameInstall->installation_status, [InstallationStatus::Queued, InstallationStatus::Installing])) {
+            return back()->with('error', 'Cannot delete a game install that is currently installing.');
+        }
+
+        if ($gameInstall->servers()->exists()) {
+            return back()->with('error', 'Cannot delete a game install that is assigned to servers.');
+        }
+
+        $path = $gameInstall->getInstallationPath();
+
+        Log::info('User '.auth()->id().' ('.auth()->user()->name.") deleted game install: {$gameInstall->name}");
+
+        $gameInstall->delete();
+
+        if (is_dir($path)) {
+            File::deleteDirectory($path);
+        }
+
+        return back()->with('success', 'Game install deleted.');
+    }
+}
