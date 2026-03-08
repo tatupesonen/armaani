@@ -4,6 +4,12 @@ A web-based game server manager for Arma 3, Arma Reforger, and DayZ. Install, co
 
 Built with Laravel 12, Inertia v2, React 19, and Tailwind CSS v4.
 
+## Screenshots
+
+![Dashboard](docs/dashboard.png)
+
+![Servers](docs/servers.png)
+
 ## Features
 
 - Install and update game servers via SteamCMD
