@@ -460,6 +460,29 @@ class ServerManagementTest extends TestCase
         $this->assertEquals(120, $server->reforgerSettings->max_fps);
     }
 
+    public function test_update_reforger_server_saves_cross_platform(): void
+    {
+        $server = Server::factory()->forReforger()->create();
+        $server->reforgerSettings()->create([]);
+
+        $this->actingAs($this->user)
+            ->put(route('servers.update', $server), [
+                'name' => $server->name,
+                'port' => $server->port,
+                'query_port' => $server->query_port,
+                'max_players' => $server->max_players,
+                'game_install_id' => $server->game_install_id,
+                'scenario_id' => '{ECC61978EDCC2B5A}Missions/23_Campaign.conf',
+                'third_person_view_enabled' => true,
+                'cross_platform' => true,
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $server->refresh();
+        $this->assertTrue($server->reforgerSettings->cross_platform);
+    }
+
     public function test_update_reforger_server_validates_scenario_id_format(): void
     {
         $server = Server::factory()->forReforger()->create();

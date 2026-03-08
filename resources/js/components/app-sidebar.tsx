@@ -11,8 +11,8 @@ import {
 } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
-import { NavMain  } from '@/components/nav-main';
-import type {NavGroup} from '@/components/nav-main';
+import { NavMain } from '@/components/nav-main';
+import type { NavGroup } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
 import {
     Sidebar,
@@ -48,9 +48,7 @@ const navGroups: NavGroup[] = [
     },
     {
         label: 'Configuration',
-        items: [
-            { title: 'Steam Settings', href: steamSettings(), icon: Settings },
-        ],
+        items: [{ title: 'Settings', href: steamSettings(), icon: Settings }],
     },
 ];
 

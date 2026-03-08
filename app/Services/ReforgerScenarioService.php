@@ -2,41 +2,59 @@
 
 namespace App\Services;
 
+use App\Models\ReforgerScenario;
 use App\Models\Server;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class ReforgerScenarioService
 {
-    private const CACHE_KEY = 'reforger_scenarios';
-
-    private const CACHE_TTL_SECONDS = 300;
-
     private const PROCESS_TIMEOUT_SECONDS = 30;
 
     private const DELIMITER = '--------------------------------------------------';
 
     /**
-     * Get available Reforger scenarios from the server binary.
-     * Results are cached for 5 minutes per server.
+     * Get stored scenarios for a server from the database.
+     * If none exist yet, runs discovery automatically.
      *
      * @return array<int, array{value: string, name: string, isOfficial: bool}>
      */
     public function getScenarios(Server $server): array
     {
-        $cacheKey = self::CACHE_KEY.'_'.$server->id;
+        $scenarios = $server->reforgerScenarios;
 
-        return Cache::remember($cacheKey, self::CACHE_TTL_SECONDS, function () use ($server): array {
-            return $this->discoverScenarios($server);
-        });
+        if ($scenarios->isEmpty()) {
+            return $this->refreshScenarios($server);
+        }
+
+        return $scenarios->map(fn (ReforgerScenario $s) => [
+            'value' => $s->value,
+            'name' => $s->name,
+            'isOfficial' => $s->is_official,
+        ])->all();
     }
 
     /**
-     * Clear the cached scenarios for a given server.
+     * Run scenario discovery and upsert results into the database.
+     *
+     * @return array<int, array{value: string, name: string, isOfficial: bool}>
      */
-    public function clearCache(Server $server): void
+    public function refreshScenarios(Server $server): array
     {
-        Cache::forget(self::CACHE_KEY.'_'.$server->id);
+        $discovered = $this->discoverScenarios($server);
+
+        if (! empty($discovered)) {
+            $server->reforgerScenarios()->delete();
+
+            foreach ($discovered as $scenario) {
+                $server->reforgerScenarios()->create([
+                    'value' => $scenario['value'],
+                    'name' => $scenario['name'],
+                    'is_official' => $scenario['isOfficial'],
+                ]);
+            }
+        }
+
+        return $discovered;
     }
 
     /**

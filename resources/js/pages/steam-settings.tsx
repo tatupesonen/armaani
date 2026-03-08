@@ -2,6 +2,7 @@ import { Head, router, useForm } from '@inertiajs/react';
 import {
     AlertTriangle,
     KeyRound,
+    MessageSquare,
     Settings,
     Shield,
     ShieldCheck,
@@ -10,7 +11,9 @@ import { useState } from 'react';
 import {
     saveCredentials,
     saveApiKey,
+    saveDiscordWebhook,
     saveSettings,
+    testDiscordWebhook,
     verifyLogin,
     verifyApiKey,
 } from '@/actions/App/Http/Controllers/SteamSettingsController';
@@ -38,21 +41,29 @@ type AccountInfo = {
     mod_download_batch_size: number;
 } | null;
 
+type AppSettingsInfo = {
+    has_discord_webhook: boolean;
+};
+
 type Props = {
     account: AccountInfo;
+    appSettings: AppSettingsInfo;
 };
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Steam Settings', href: steamSettings() },
+    { title: 'Settings', href: steamSettings() },
 ];
 
-export default function SteamSettings({ account }: Props) {
+export default function SteamSettings({ account, appSettings }: Props) {
     const [loginVerified, setLoginVerified] = useState<boolean | null>(null);
     const [loginError, setLoginError] = useState<string | null>(null);
     const [loginVerifying, setLoginVerifying] = useState(false);
     const [apiKeyVerified, setApiKeyVerified] = useState<boolean | null>(null);
     const [apiKeyError, setApiKeyError] = useState<string | null>(null);
     const [apiKeyVerifying, setApiKeyVerifying] = useState(false);
+    const [webhookTested, setWebhookTested] = useState<boolean | null>(null);
+    const [webhookError, setWebhookError] = useState<string | null>(null);
+    const [webhookTesting, setWebhookTesting] = useState(false);
 
     const credentialsForm = useForm({
         username: account?.username ?? '',
@@ -66,6 +77,10 @@ export default function SteamSettings({ account }: Props) {
 
     const settingsForm = useForm({
         mod_download_batch_size: account?.mod_download_batch_size ?? 5,
+    });
+
+    const discordForm = useForm({
+        discord_webhook_url: '',
     });
 
     function submitCredentials(e: React.FormEvent) {
@@ -141,17 +156,54 @@ export default function SteamSettings({ account }: Props) {
         settingsForm.post(saveSettings.url(), { preserveScroll: true });
     }
 
+    function submitDiscordWebhook(e: React.FormEvent) {
+        e.preventDefault();
+        discordForm.post(saveDiscordWebhook.url(), { preserveScroll: true });
+    }
+
+    function submitTestWebhook() {
+        setWebhookTested(null);
+        setWebhookError(null);
+        setWebhookTesting(true);
+        router.post(
+            testDiscordWebhook.url(),
+            {},
+            {
+                preserveScroll: true,
+                onSuccess: (page) => {
+                    const flash = (page.props as Record<string, unknown>)
+                        .flash as Record<string, string> | undefined;
+                    if (flash?.success) {
+                        setWebhookTested(true);
+                        setWebhookError(null);
+                    } else {
+                        setWebhookTested(false);
+                        setWebhookError(flash?.error ?? 'Test failed');
+                    }
+                },
+                onError: () => {
+                    setWebhookTested(false);
+                    setWebhookError('Request failed');
+                },
+                onFinish: () => setWebhookTesting(false),
+            },
+        );
+    }
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Steam Settings" />
+            <Head title="Settings" />
 
             <div className="flex flex-col gap-6 p-4">
                 <Heading
-                    title="Steam Settings"
-                    description="Configure SteamCMD credentials and download preferences."
+                    title="Settings"
+                    description="Configure application settings, SteamCMD credentials, and integrations."
                 />
 
                 <div className="max-w-2xl space-y-6">
+                    {/* Steam Section */}
+                    <h2 className="text-lg font-semibold">Steam</h2>
+
                     {/* SteamCMD Credentials */}
                     <Card>
                         <CardHeader>
@@ -420,6 +472,103 @@ export default function SteamSettings({ account }: Props) {
                                     )}
                                     Save Settings
                                 </Button>
+                            </form>
+                        </CardContent>
+                    </Card>
+
+                    {/* Discord Section */}
+                    <h2 className="mt-4 text-lg font-semibold">Discord</h2>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <MessageSquare className="size-5" />
+                                Discord Webhook
+                            </CardTitle>
+                            <CardDescription>
+                                Used to send notifications such as server crash
+                                alerts. Create a webhook in your Discord server
+                                under Channel Settings &gt; Integrations.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <form
+                                onSubmit={submitDiscordWebhook}
+                                className="space-y-4"
+                            >
+                                <div className="space-y-2">
+                                    <Label>Webhook URL</Label>
+                                    <Input
+                                        value={
+                                            discordForm.data.discord_webhook_url
+                                        }
+                                        onChange={(e) =>
+                                            discordForm.setData(
+                                                'discord_webhook_url',
+                                                e.target.value,
+                                            )
+                                        }
+                                        placeholder={
+                                            appSettings?.has_discord_webhook
+                                                ? '********'
+                                                : 'https://discord.com/api/webhooks/...'
+                                        }
+                                    />
+                                    {discordForm.errors.discord_webhook_url && (
+                                        <p className="text-sm text-destructive">
+                                            {
+                                                discordForm.errors
+                                                    .discord_webhook_url
+                                            }
+                                        </p>
+                                    )}
+                                    <p className="text-xs text-muted-foreground">
+                                        Paste a new URL and save to update the
+                                        webhook.
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <Button
+                                        type="submit"
+                                        disabled={discordForm.processing}
+                                    >
+                                        {discordForm.processing && (
+                                            <Spinner className="mr-2" />
+                                        )}
+                                        Save Webhook
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant={
+                                            webhookTested === true
+                                                ? 'default'
+                                                : webhookTested === false
+                                                  ? 'destructive'
+                                                  : 'outline'
+                                        }
+                                        onClick={submitTestWebhook}
+                                        disabled={
+                                            !appSettings?.has_discord_webhook ||
+                                            webhookTesting
+                                        }
+                                        className={
+                                            webhookTested === true
+                                                ? 'bg-green-600 text-white hover:bg-green-700'
+                                                : ''
+                                        }
+                                    >
+                                        {webhookTesting && (
+                                            <Spinner className="mr-2" />
+                                        )}
+                                        <ShieldCheck className="mr-2 size-4" />
+                                        Test Webhook
+                                    </Button>
+                                    {webhookError && (
+                                        <code className="rounded bg-zinc-100 px-2 py-1 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                                            {webhookError}
+                                        </code>
+                                    )}
+                                </div>
                             </form>
                         </CardContent>
                     </Card>

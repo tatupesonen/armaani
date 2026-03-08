@@ -40,6 +40,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('servers/{server}/log', [ServerController::class, 'serverLog'])->name('servers.log');
     Route::get('servers/{server}/status', [ServerController::class, 'status'])->name('servers.status');
     Route::get('servers/{server}/reforger-scenarios', [ServerController::class, 'reforgerScenarios'])->name('servers.reforger-scenarios');
+    Route::post('servers/{server}/reforger-scenarios/reload', [ServerController::class, 'reloadReforgerScenarios'])->name('servers.reforger-scenarios.reload');
 
     // Server Backups
     Route::post('servers/{server}/backups', [ServerBackupController::class, 'store'])->name('servers.backups.store');
@@ -84,6 +85,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('steam-settings/settings', [SteamSettingsController::class, 'saveSettings'])->name('steam-settings.settings');
     Route::post('steam-settings/verify-login', [SteamSettingsController::class, 'verifyLogin'])->name('steam-settings.verify-login');
     Route::post('steam-settings/verify-api-key', [SteamSettingsController::class, 'verifyApiKey'])->name('steam-settings.verify-api-key');
+    Route::post('steam-settings/discord-webhook', [SteamSettingsController::class, 'saveDiscordWebhook'])->name('steam-settings.discord-webhook');
+    Route::post('steam-settings/test-discord-webhook', [SteamSettingsController::class, 'testDiscordWebhook'])->name('steam-settings.test-discord-webhook');
 });
 
 require __DIR__.'/settings.php';

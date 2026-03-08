@@ -57,6 +57,7 @@ class ReforgerHandler implements GameHandler
         }
 
         $thirdPersonEnabled = (bool) ($settings?->third_person_view_enabled ?? true);
+        $crossPlatform = (bool) ($settings?->cross_platform ?? false);
 
         $config = [
             'bindAddress' => '',
@@ -70,7 +71,7 @@ class ReforgerHandler implements GameHandler
                 'scenarioId' => $settings?->scenario_id ?? '',
                 'maxPlayers' => (int) $server->max_players,
                 'visible' => true,
-                'supportedPlatforms' => ['PLATFORM_PC'],
+                'crossPlatform' => $crossPlatform,
                 'gameProperties' => [
                     'serverMaxViewDistance' => 2500,
                     'serverMinGrassDistance' => 50,
@@ -174,6 +175,7 @@ class ReforgerHandler implements GameHandler
             'third_person_view_enabled' => ['boolean'],
             'backend_log_enabled' => ['boolean'],
             'max_fps' => ['integer', 'min:10', 'max:240'],
+            'cross_platform' => ['boolean'],
         ];
     }
 }

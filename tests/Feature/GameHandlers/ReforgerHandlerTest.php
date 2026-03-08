@@ -189,7 +189,7 @@ class ReforgerHandlerTest extends TestCase
         $this->assertEquals(64, $config['game']['maxPlayers']);
         $this->assertEquals('{ECC61978EDCC2B5A}Missions/23_Campaign.conf', $config['game']['scenarioId']);
         $this->assertTrue($config['game']['visible']);
-        $this->assertEquals(['PLATFORM_PC'], $config['game']['supportedPlatforms']);
+        $this->assertFalse($config['game']['crossPlatform']);
         $this->assertFalse($config['game']['gameProperties']['disableThirdPerson']);
         $this->assertTrue($config['game']['gameProperties']['battlEye']);
         $this->assertTrue($config['game']['gameProperties']['fastValidation']);
@@ -198,6 +198,36 @@ class ReforgerHandlerTest extends TestCase
         $this->assertEquals(1000, $config['game']['gameProperties']['networkViewDistance']);
         $this->assertTrue($config['game']['gameProperties']['VONDisableUI']);
         $this->assertTrue($config['game']['gameProperties']['VONDisableDirectSpeechUI']);
+    }
+
+    public function test_generate_config_files_sets_cross_platform_true_when_enabled(): void
+    {
+        $server = $this->createReforgerServer();
+        $server->reforgerSettings()->update(['cross_platform' => true]);
+        $server->refresh();
+
+        $profilesPath = $server->getProfilesPath();
+        @mkdir($profilesPath, 0755, true);
+
+        $this->handler->generateConfigFiles($server);
+
+        $configPath = $profilesPath.'/REFORGER_'.$server->id.'.json';
+        $config = json_decode(file_get_contents($configPath), true);
+        $this->assertTrue($config['game']['crossPlatform']);
+    }
+
+    public function test_generate_config_files_sets_cross_platform_false_by_default(): void
+    {
+        $server = $this->createReforgerServer();
+
+        $profilesPath = $server->getProfilesPath();
+        @mkdir($profilesPath, 0755, true);
+
+        $this->handler->generateConfigFiles($server);
+
+        $configPath = $profilesPath.'/REFORGER_'.$server->id.'.json';
+        $config = json_decode(file_get_contents($configPath), true);
+        $this->assertFalse($config['game']['crossPlatform']);
     }
 
     public function test_generate_config_files_disables_third_person_when_setting_is_false(): void

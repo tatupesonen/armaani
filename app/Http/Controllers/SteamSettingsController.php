@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AppSetting;
 use App\Models\SteamAccount;
+use App\Services\DiscordWebhookService;
 use App\Services\SteamCmdService;
 use App\Services\SteamWorkshopService;
 use Illuminate\Http\RedirectResponse;
@@ -16,6 +18,7 @@ class SteamSettingsController extends Controller
     public function index(): Response
     {
         $account = SteamAccount::current();
+        $appSettings = AppSetting::query()->first();
 
         return Inertia::render('steam-settings', [
             'account' => $account ? [
@@ -24,6 +27,9 @@ class SteamSettingsController extends Controller
                 'has_api_key' => ! empty($account->steam_api_key),
                 'mod_download_batch_size' => $account->mod_download_batch_size,
             ] : null,
+            'appSettings' => [
+                'has_discord_webhook' => $appSettings !== null && ! empty($appSettings->discord_webhook_url),
+            ],
         ]);
     }
 
@@ -43,7 +49,7 @@ class SteamSettingsController extends Controller
                 'password' => $validated['password'],
             ];
 
-            if (! empty($validated['auth_token']) && $validated['auth_token'] !== '********') {
+            if (! empty($validated['auth_token'])) {
                 $data['auth_token'] = $validated['auth_token'];
             }
 
@@ -68,10 +74,8 @@ class SteamSettingsController extends Controller
             return back()->with('error', 'Save Steam credentials first.');
         }
 
-        if (! empty($validated['steam_api_key']) && $validated['steam_api_key'] !== '********') {
+        if (! empty($validated['steam_api_key'])) {
             $account->update(['steam_api_key' => $validated['steam_api_key']]);
-        } elseif (empty($validated['steam_api_key'])) {
-            $account->update(['steam_api_key' => null]);
         }
 
         Log::info('User '.auth()->id().' ('.auth()->user()->name.') updated Steam API key');
@@ -135,5 +139,34 @@ class SteamSettingsController extends Controller
         } catch (\Exception $e) {
             return back()->with('error', 'Verification error: '.$e->getMessage());
         }
+    }
+
+    public function saveDiscordWebhook(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'discord_webhook_url' => ['nullable', 'string', 'max:500', 'url:https'],
+        ]);
+
+        if (! empty($validated['discord_webhook_url'])) {
+            $appSettings = AppSetting::current();
+            $appSettings->update(['discord_webhook_url' => $validated['discord_webhook_url']]);
+        }
+
+        return back()->with('success', 'Discord webhook saved.');
+    }
+
+    public function testDiscordWebhook(DiscordWebhookService $discord): RedirectResponse
+    {
+        if (! $discord->isConfigured()) {
+            return back()->with('error', 'Save a Discord webhook URL first.');
+        }
+
+        $result = $discord->sendTestMessage();
+
+        if ($result['success']) {
+            return back()->with('success', 'Test message sent successfully.');
+        }
+
+        return back()->with('error', 'Webhook test failed: '.($result['error'] ?? 'Unknown error'));
     }
 }

@@ -88,6 +88,11 @@ class Server extends Model
         return $this->hasOne(DayZSettings::class);
     }
 
+    public function reforgerScenarios(): HasMany
+    {
+        return $this->hasMany(ReforgerScenario::class);
+    }
+
     public function backups(): HasMany
     {
         return $this->hasMany(ServerBackup::class)->latest();

@@ -1,8 +1,11 @@
 import { router } from '@inertiajs/react';
 import axios from 'axios';
-import { Check, ChevronDown, Loader2, X } from 'lucide-react';
+import { Check, ChevronDown, Loader2, RefreshCw, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { reforgerScenarios } from '@/actions/App/Http/Controllers/ServerController';
+import {
+    reforgerScenarios,
+    reloadReforgerScenarios,
+} from '@/actions/App/Http/Controllers/ServerController';
 import BackupSection from '@/components/servers/backup-section';
 import DifficultySettingsSection from '@/components/servers/difficulty-settings-section';
 import NetworkSettingsSection from '@/components/servers/network-settings-section';
@@ -82,6 +85,7 @@ type EditData = {
     third_person_view_enabled: boolean;
     backend_log_enabled: boolean;
     max_fps: number;
+    cross_platform: boolean;
     // network
     max_msg_send: number;
     max_size_guaranteed: number;
@@ -123,6 +127,7 @@ function buildEditData(server: Server): EditData {
         third_person_view_enabled: rfg?.third_person_view_enabled ?? true,
         backend_log_enabled: rfg?.backend_log_enabled ?? true,
         max_fps: rfg?.max_fps ?? 60,
+        cross_platform: rfg?.cross_platform ?? false,
         // difficulty defaults
         reduced_damage: diff?.reduced_damage ?? false,
         group_indicators: diff?.group_indicators ?? 2,
@@ -196,6 +201,21 @@ export default function ServerEditPanel({
             .catch(() => setScenariosLoaded(true))
             .finally(() => setScenariosLoading(false));
     }, [scenariosLoaded, scenariosLoading, server.id]);
+
+    const reloadScenarios = useCallback(() => {
+        if (scenariosLoading || !server.id) {
+            return;
+        }
+        setScenariosLoading(true);
+        axios
+            .post(reloadReforgerScenarios.url(server.id))
+            .then((res) => {
+                setScenarios(res.data.scenarios ?? []);
+                setScenariosLoaded(true);
+            })
+            .catch(() => {})
+            .finally(() => setScenariosLoading(false));
+    }, [scenariosLoading, server.id]);
 
     // Close dropdown on outside click
     useEffect(() => {
@@ -453,7 +473,21 @@ export default function ServerEditPanel({
                         <p className="text-sm font-medium">Reforger Settings</p>
                         <div className="space-y-4">
                             <div className="space-y-2" ref={scenarioRef}>
-                                <Label>Scenario ID</Label>
+                                <div className="flex items-center gap-2">
+                                    <Label>Scenario ID</Label>
+                                    <button
+                                        type="button"
+                                        onClick={reloadScenarios}
+                                        disabled={scenariosLoading}
+                                        className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
+                                        title="Reload scenarios from server"
+                                    >
+                                        <RefreshCw
+                                            className={`size-3 ${scenariosLoading ? 'animate-spin' : ''}`}
+                                        />
+                                        Reload
+                                    </button>
+                                </div>
                                 <div className="relative">
                                     <Input
                                         value={data.scenario_id}
@@ -555,6 +589,15 @@ export default function ServerEditPanel({
                                         }
                                     />
                                     <Label>Backend Logging</Label>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Switch
+                                        checked={data.cross_platform}
+                                        onCheckedChange={(v) =>
+                                            set('cross_platform', v)
+                                        }
+                                    />
+                                    <Label>Cross-Platform</Label>
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-4 md:grid-cols-3">

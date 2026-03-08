@@ -172,6 +172,7 @@ export type ReforgerSettings = {
     third_person_view_enabled: boolean;
     backend_log_enabled: boolean;
     max_fps: number;
+    cross_platform: boolean;
 };
 
 export type DayZSettings = {

@@ -2,8 +2,10 @@
 
 namespace Tests\Feature\SteamSettings;
 
+use App\Models\AppSetting;
 use App\Models\SteamAccount;
 use App\Models\User;
+use App\Services\DiscordWebhookService;
 use App\Services\SteamCmdService;
 use App\Services\SteamWorkshopService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -49,6 +51,7 @@ class SteamSettingsTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->component('steam-settings')
                 ->where('account', null)
+                ->where('appSettings.has_discord_webhook', false)
             );
     }
 
@@ -173,7 +176,7 @@ class SteamSettingsTest extends TestCase
         $this->assertEquals('encpass', $account->password);
     }
 
-    public function test_auth_token_is_not_overwritten_when_placeholder_sent(): void
+    public function test_empty_auth_token_does_not_overwrite_existing(): void
     {
         SteamAccount::factory()->withAuthToken()->create(['username' => 'tokenuser']);
 
@@ -183,7 +186,7 @@ class SteamSettingsTest extends TestCase
             ->post(route('steam-settings.credentials'), [
                 'username' => 'tokenuser',
                 'password' => 'newpass',
-                'auth_token' => '********',
+                'auth_token' => '',
             ]);
 
         $this->assertEquals($originalToken, SteamAccount::latest()->first()->auth_token);
@@ -218,7 +221,7 @@ class SteamSettingsTest extends TestCase
             ->assertSessionHas('error');
     }
 
-    public function test_api_key_is_not_overwritten_when_placeholder_sent(): void
+    public function test_empty_api_key_does_not_overwrite_existing(): void
     {
         SteamAccount::factory()->withApiKey()->create();
 
@@ -226,22 +229,10 @@ class SteamSettingsTest extends TestCase
 
         $this->actingAs($this->user)
             ->post(route('steam-settings.api-key'), [
-                'steam_api_key' => '********',
-            ]);
-
-        $this->assertEquals($originalKey, SteamAccount::latest()->first()->steam_api_key);
-    }
-
-    public function test_clearing_api_key_sets_it_to_null(): void
-    {
-        SteamAccount::factory()->withApiKey()->create();
-
-        $this->actingAs($this->user)
-            ->post(route('steam-settings.api-key'), [
                 'steam_api_key' => '',
             ]);
 
-        $this->assertNull(SteamAccount::latest()->first()->steam_api_key);
+        $this->assertEquals($originalKey, SteamAccount::latest()->first()->steam_api_key);
     }
 
     // ---------------------------------------------------------------
@@ -428,5 +419,124 @@ class SteamSettingsTest extends TestCase
             ->post(route('steam-settings.verify-api-key'))
             ->assertRedirect()
             ->assertSessionHas('error');
+    }
+
+    // ---------------------------------------------------------------
+    // Discord Webhook
+    // ---------------------------------------------------------------
+
+    public function test_user_can_save_discord_webhook(): void
+    {
+        $this->actingAs($this->user)
+            ->post(route('steam-settings.discord-webhook'), [
+                'discord_webhook_url' => 'https://discord.com/api/webhooks/123/abc',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $settings = AppSetting::query()->first();
+        $this->assertNotNull($settings);
+        $this->assertEquals('https://discord.com/api/webhooks/123/abc', $settings->discord_webhook_url);
+    }
+
+    public function test_discord_webhook_ignores_empty_value(): void
+    {
+        AppSetting::factory()->withDiscordWebhook()->create();
+        $original = AppSetting::query()->first()->discord_webhook_url;
+
+        $this->actingAs($this->user)
+            ->post(route('steam-settings.discord-webhook'), [
+                'discord_webhook_url' => '',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertEquals($original, AppSetting::query()->first()->discord_webhook_url);
+    }
+
+    public function test_discord_webhook_validates_url_format(): void
+    {
+        $this->actingAs($this->user)
+            ->post(route('steam-settings.discord-webhook'), [
+                'discord_webhook_url' => 'not-a-url',
+            ])
+            ->assertSessionHasErrors(['discord_webhook_url']);
+    }
+
+    public function test_discord_webhook_rejects_non_https_url(): void
+    {
+        $this->actingAs($this->user)
+            ->post(route('steam-settings.discord-webhook'), [
+                'discord_webhook_url' => 'http://discord.com/api/webhooks/123/abc',
+            ])
+            ->assertSessionHasErrors(['discord_webhook_url']);
+    }
+
+    public function test_settings_page_shows_discord_webhook_status(): void
+    {
+        AppSetting::factory()->withDiscordWebhook()->create();
+
+        $this->actingAs($this->user)
+            ->get(route('steam-settings'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('steam-settings')
+                ->where('appSettings.has_discord_webhook', true)
+            );
+    }
+
+    public function test_discord_webhook_requires_authentication(): void
+    {
+        $this->post(route('steam-settings.discord-webhook'), [
+            'discord_webhook_url' => 'https://discord.com/api/webhooks/123/abc',
+        ])->assertRedirect(route('login'));
+    }
+
+    // ---------------------------------------------------------------
+    // Test Discord Webhook
+    // ---------------------------------------------------------------
+
+    public function test_test_discord_webhook_sends_test_message(): void
+    {
+        AppSetting::factory()->withDiscordWebhook()->create();
+
+        $mock = Mockery::mock(DiscordWebhookService::class);
+        $mock->shouldReceive('isConfigured')->once()->andReturn(true);
+        $mock->shouldReceive('sendTestMessage')->once()->andReturn(['success' => true, 'error' => null]);
+        $this->app->instance(DiscordWebhookService::class, $mock);
+
+        $this->actingAs($this->user)
+            ->post(route('steam-settings.test-discord-webhook'))
+            ->assertRedirect()
+            ->assertSessionHas('success', 'Test message sent successfully.');
+    }
+
+    public function test_test_discord_webhook_returns_error_on_failure(): void
+    {
+        AppSetting::factory()->withDiscordWebhook()->create();
+
+        $mock = Mockery::mock(DiscordWebhookService::class);
+        $mock->shouldReceive('isConfigured')->once()->andReturn(true);
+        $mock->shouldReceive('sendTestMessage')->once()->andReturn(['success' => false, 'error' => 'Discord returned HTTP 401']);
+        $this->app->instance(DiscordWebhookService::class, $mock);
+
+        $this->actingAs($this->user)
+            ->post(route('steam-settings.test-discord-webhook'))
+            ->assertRedirect()
+            ->assertSessionHas('error', 'Webhook test failed: Discord returned HTTP 401');
+    }
+
+    public function test_test_discord_webhook_requires_configured_webhook(): void
+    {
+        $this->actingAs($this->user)
+            ->post(route('steam-settings.test-discord-webhook'))
+            ->assertRedirect()
+            ->assertSessionHas('error', 'Save a Discord webhook URL first.');
+    }
+
+    public function test_test_discord_webhook_requires_authentication(): void
+    {
+        $this->post(route('steam-settings.test-discord-webhook'))
+            ->assertRedirect(route('login'));
     }
 }

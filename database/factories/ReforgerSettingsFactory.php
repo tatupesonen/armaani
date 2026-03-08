@@ -19,6 +19,7 @@ class ReforgerSettingsFactory extends Factory
             'server_id' => Server::factory()->forReforger(),
             'scenario_id' => '{ECC61978EDCC2B5A}Missions/23_Campaign.conf',
             'third_person_view_enabled' => true,
+            'cross_platform' => false,
         ];
     }
 }

@@ -293,4 +293,15 @@ class ServerController extends Controller
             'scenarios' => $scenarioService->getScenarios($server),
         ]);
     }
+
+    public function reloadReforgerScenarios(Server $server, ReforgerScenarioService $scenarioService): JsonResponse
+    {
+        if ($server->game_type !== GameType::ArmaReforger) {
+            return response()->json(['scenarios' => []], 422);
+        }
+
+        return response()->json([
+            'scenarios' => $scenarioService->refreshScenarios($server),
+        ]);
+    }
 }
