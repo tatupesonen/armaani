@@ -43,6 +43,16 @@ class DayZHandler implements GameHandler
         return null;
     }
 
+    public function getModDownloadStartedString(): ?string
+    {
+        return null;
+    }
+
+    public function getModDownloadFinishedString(): ?string
+    {
+        return null;
+    }
+
     public function symlinkMods(Server $server): void
     {
         throw new \RuntimeException('DayZ server support is not yet implemented.');

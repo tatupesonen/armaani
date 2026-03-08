@@ -4,6 +4,7 @@ export type ServerStatus =
     | 'stopped'
     | 'starting'
     | 'booting'
+    | 'downloading_mods'
     | 'running'
     | 'stopping';
 

@@ -389,15 +389,19 @@ export default function ServerEditPanel({
                         <div className="space-y-2">
                             <Label>Mod Preset</Label>
                             <Select
-                                value={data.active_preset_id}
+                                value={data.active_preset_id || 'none'}
                                 onValueChange={(v) =>
-                                    set('active_preset_id', v)
+                                    set(
+                                        'active_preset_id',
+                                        v === 'none' ? '' : v,
+                                    )
                                 }
                             >
                                 <SelectTrigger>
                                     <SelectValue placeholder="None" />
                                 </SelectTrigger>
                                 <SelectContent>
+                                    <SelectItem value="none">None</SelectItem>
                                     {filteredPresets.map((p) => (
                                         <SelectItem
                                             key={p.id}

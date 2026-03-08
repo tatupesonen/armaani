@@ -86,6 +86,8 @@ const statusGradients: Record<string, string> = {
         'from-amber-400/20 to-zinc-300/5 dark:from-amber-500/15 dark:to-zinc-600/5',
     booting:
         'from-blue-400/20 to-zinc-300/5 dark:from-blue-500/15 dark:to-zinc-600/5',
+    downloading_mods:
+        'from-purple-400/20 to-zinc-300/5 dark:from-purple-500/15 dark:to-zinc-600/5',
     running:
         'from-emerald-400/20 to-zinc-300/5 dark:from-emerald-500/15 dark:to-zinc-600/5',
     stopping:
@@ -95,12 +97,14 @@ const statusGradients: Record<string, string> = {
 const statusSpinnerColors: Record<string, string> = {
     starting: 'text-amber-500',
     booting: 'text-blue-500',
+    downloading_mods: 'text-purple-500',
     stopping: 'text-red-500',
 };
 
 const statusTextColors: Record<string, string> = {
     starting: 'text-amber-800 dark:text-amber-200',
     booting: 'text-blue-800 dark:text-blue-200',
+    downloading_mods: 'text-purple-800 dark:text-purple-200',
     running: 'text-emerald-800 dark:text-emerald-200',
     stopping: 'text-red-800 dark:text-red-200',
 };
@@ -108,12 +112,14 @@ const statusTextColors: Record<string, string> = {
 const statusSubTextColors: Record<string, string> = {
     starting: 'text-amber-600 dark:text-amber-400',
     booting: 'text-blue-600 dark:text-blue-400',
+    downloading_mods: 'text-purple-600 dark:text-purple-400',
     running: 'text-emerald-600 dark:text-emerald-400',
     stopping: 'text-red-600 dark:text-red-400',
 };
 
 function statusLabel(status: string): string {
     if (status === 'running') return 'Running';
+    if (status === 'downloading_mods') return 'Downloading Mods...';
     return status.charAt(0).toUpperCase() + status.slice(1) + '...';
 }
 

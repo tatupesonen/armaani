@@ -43,6 +43,7 @@ export function serverStatusVariant(
         running: 'success',
         starting: 'warning',
         booting: 'info',
+        downloading_mods: 'warning',
         stopping: 'danger',
         stopped: 'secondary',
     };

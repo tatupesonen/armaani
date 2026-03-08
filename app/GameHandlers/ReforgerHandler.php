@@ -33,8 +33,6 @@ class ReforgerHandler implements GameHandler
             $params[] = '-backendlog';
         }
 
-        $params[] = '-logAppend';
-
         if ($server->additional_params) {
             $params[] = $server->additional_params;
         }
@@ -116,7 +114,17 @@ class ReforgerHandler implements GameHandler
 
     public function getBootDetectionString(): ?string
     {
-        return "Game successfully created";
+        return 'Game::LoadEntities took:';
+    }
+
+    public function getModDownloadStartedString(): ?string
+    {
+        return 'Addon Download started';
+    }
+
+    public function getModDownloadFinishedString(): ?string
+    {
+        return 'Required addons are ready to use.';
     }
 
     public function symlinkMods(Server $server): void

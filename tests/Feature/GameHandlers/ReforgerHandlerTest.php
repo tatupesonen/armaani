@@ -73,9 +73,19 @@ class ReforgerHandlerTest extends TestCase
         $this->assertEquals($expected, $this->handler->getServerLogPath($server));
     }
 
-    public function test_boot_detection_string_is_null(): void
+    public function test_boot_detection_string(): void
     {
-        $this->assertNull($this->handler->getBootDetectionString());
+        $this->assertSame('Game::LoadEntities took:', $this->handler->getBootDetectionString());
+    }
+
+    public function test_mod_download_started_string(): void
+    {
+        $this->assertSame('Addon Download started', $this->handler->getModDownloadStartedString());
+    }
+
+    public function test_mod_download_finished_string(): void
+    {
+        $this->assertSame('Required addons are ready to use.', $this->handler->getModDownloadFinishedString());
     }
 
     public function test_does_not_support_headless_clients(): void
@@ -116,7 +126,6 @@ class ReforgerHandlerTest extends TestCase
         $this->assertStringContainsString('-profile '.$server->getProfilesPath(), $command);
         $this->assertStringContainsString('-maxFPS 60', $command);  // default
         $this->assertStringContainsString('-backendlog', $command); // default enabled
-        $this->assertStringContainsString('-logAppend', $command);
     }
 
     public function test_build_launch_command_uses_custom_max_fps(): void
@@ -139,7 +148,6 @@ class ReforgerHandlerTest extends TestCase
         $command = $this->handler->buildLaunchCommand($server);
 
         $this->assertStringNotContainsString('-backendlog', $command);
-        $this->assertStringContainsString('-logAppend', $command);
     }
 
     public function test_build_launch_command_includes_additional_params(): void

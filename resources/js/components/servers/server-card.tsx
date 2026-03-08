@@ -43,6 +43,10 @@ const statusGradients = [
         color: 'from-blue-400/20 to-zinc-300/5 dark:from-blue-500/15 dark:to-zinc-600/5',
     },
     {
+        status: 'downloading_mods',
+        color: 'from-purple-400/20 to-zinc-300/5 dark:from-purple-500/15 dark:to-zinc-600/5',
+    },
+    {
         status: 'running',
         color: 'from-emerald-400/20 to-zinc-300/5 dark:from-emerald-500/15 dark:to-zinc-600/5',
     },
@@ -59,15 +63,18 @@ export default function ServerCard({
     onDelete,
 }: ServerCardProps) {
     const [showLogs, setShowLogs] = useState(
-        ['booting', 'running'].includes(server.status),
+        ['booting', 'downloading_mods', 'running'].includes(server.status),
     );
     const [showCommand, setShowCommand] = useState(false);
     const [commandText, setCommandText] = useState<string | null>(null);
     const [editing, setEditing] = useState(false);
 
-    const isTransitioning = ['starting', 'stopping', 'booting'].includes(
-        server.status,
-    );
+    const isTransitioning = [
+        'starting',
+        'stopping',
+        'booting',
+        'downloading_mods',
+    ].includes(server.status);
     const supportsHC =
         server.game_type === 'arma3' && server.status === 'running';
 
@@ -140,7 +147,9 @@ export default function ServerCard({
                                 ? 'Starting...'
                                 : server.status === 'booting'
                                   ? 'Booting...'
-                                  : 'Stopping...'}
+                                  : server.status === 'downloading_mods'
+                                    ? 'Downloading Mods...'
+                                    : 'Stopping...'}
                         </Button>
                     ) : server.status === 'running' ? (
                         <>
@@ -173,7 +182,8 @@ export default function ServerCard({
                         </Button>
                     )}
 
-                    {server.status === 'booting' && (
+                    {(server.status === 'booting' ||
+                        server.status === 'downloading_mods') && (
                         <Button
                             size="sm"
                             variant="destructive"

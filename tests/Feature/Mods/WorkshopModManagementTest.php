@@ -519,7 +519,7 @@ class WorkshopModManagementTest extends TestCase
         $mock->shouldReceive('getMultipleModDetails')
             ->once()
             ->andReturn([
-                ['publishedfileid' => 463939057, 'time_updated' => 1700000000],
+                463939057 => ['name' => 'Test Mod', 'file_size' => 1000, 'time_updated' => 1700000000, 'game_type' => null],
             ]);
         $this->app->instance(SteamWorkshopService::class, $mock);
 

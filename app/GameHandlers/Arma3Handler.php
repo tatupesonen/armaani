@@ -68,6 +68,16 @@ class Arma3Handler implements GameHandler
         return 'Connected to Steam servers';
     }
 
+    public function getModDownloadStartedString(): ?string
+    {
+        return null;
+    }
+
+    public function getModDownloadFinishedString(): ?string
+    {
+        return null;
+    }
+
     public function symlinkMods(Server $server): void
     {
         $preset = $server->activePreset;

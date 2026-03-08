@@ -36,6 +36,7 @@ class ServerController extends Controller
             ->orderBy('name')
             ->get()
             ->each(function (Server $server) use ($gameManager): void {
+                $server->makeVisible(['password', 'admin_password']);
                 $server->setAttribute('supports_backups', $gameManager->for($server)->getBackupFilePath($server) !== null);
                 $server->setAttribute('profiles_path', $server->getProfilesPath());
             });

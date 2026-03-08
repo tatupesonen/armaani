@@ -43,6 +43,18 @@ interface GameHandler
      */
     public function getBootDetectionString(): ?string;
 
+    /**
+     * String that appears in server log when the server begins downloading mods.
+     * Return null if this game does not download mods at startup.
+     */
+    public function getModDownloadStartedString(): ?string;
+
+    /**
+     * String that appears in server log when the server finishes downloading mods.
+     * Return null if this game does not download mods at startup.
+     */
+    public function getModDownloadFinishedString(): ?string;
+
     // --- Mods & Assets ---
 
     /**

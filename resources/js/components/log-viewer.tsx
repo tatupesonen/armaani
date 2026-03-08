@@ -24,12 +24,19 @@ export default function LogViewer({
     const [lines, setLines] = useState<string[]>(initialLines);
     const [progress, setProgress] = useState(0);
     const containerRef = useRef<HTMLDivElement>(null);
-    const maxLines = 200;
+    const isNearBottomRef = useRef(true);
+    const maxLines = 5000;
 
     const scrollToBottom = useCallback(() => {
         if (containerRef.current) {
             containerRef.current.scrollTop = containerRef.current.scrollHeight;
         }
+    }, []);
+
+    const handleScroll = useCallback(() => {
+        if (!containerRef.current) return;
+        const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
+        isNearBottomRef.current = scrollHeight - scrollTop - clientHeight < 40;
     }, []);
 
     useEffect(() => {
@@ -58,7 +65,9 @@ export default function LogViewer({
                         : next;
                 });
 
-                requestAnimationFrame(scrollToBottom);
+                if (isNearBottomRef.current) {
+                    requestAnimationFrame(scrollToBottom);
+                }
             },
         );
 
@@ -81,6 +90,7 @@ export default function LogViewer({
 
             <div
                 ref={containerRef}
+                onScroll={handleScroll}
                 className={`rounded bg-zinc-900 p-3 font-mono text-xs text-zinc-100 ${maxHeight} overflow-y-auto`}
             >
                 {lines.length === 0 ? (

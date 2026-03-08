@@ -19,6 +19,11 @@ class ServerBackup extends Model
         'data',
     ];
 
+    /** @var list<string> */
+    protected $hidden = [
+        'data',
+    ];
+
     /**
      * @return array<string, string>
      */

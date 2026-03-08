@@ -198,8 +198,8 @@ class WorkshopModController extends Controller
         $details = $workshop->getMultipleModDetails($workshopIds);
 
         $outdatedCount = 0;
-        foreach ($details as $detail) {
-            $mod = $mods->firstWhere('workshop_id', $detail['publishedfileid']);
+        foreach ($details as $workshopId => $detail) {
+            $mod = $mods->firstWhere('workshop_id', $workshopId);
             if ($mod && isset($detail['time_updated'])) {
                 $steamUpdatedAt = Carbon::createFromTimestamp($detail['time_updated']);
                 $mod->update(['steam_updated_at' => $steamUpdatedAt]);
