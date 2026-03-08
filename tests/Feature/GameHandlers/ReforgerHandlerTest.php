@@ -75,7 +75,7 @@ class ReforgerHandlerTest extends TestCase
 
     public function test_boot_detection_string(): void
     {
-        $this->assertSame('Game::LoadEntities took:', $this->handler->getBootDetectionString());
+        $this->assertSame('Server registered with addr', $this->handler->getBootDetectionString());
     }
 
     public function test_mod_download_started_string(): void

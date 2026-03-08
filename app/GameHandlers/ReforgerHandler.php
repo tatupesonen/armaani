@@ -112,7 +112,7 @@ class ReforgerHandler implements GameHandler
 
     public function getBootDetectionString(): ?string
     {
-        return 'Game::LoadEntities took:';
+        return 'Server registered with addr';
     }
 
     public function getModDownloadStartedString(): ?string
