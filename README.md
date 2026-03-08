@@ -21,9 +21,12 @@ Built with Laravel 12, Inertia v2, React 19, Tailwind CSS v4, and with a bunch o
 - Download and manage Steam Workshop mods
 - Organize mods into presets and assign them to servers
 - Import Arma 3 Launcher preset files
-- Per-game server settings (difficulty, network, etc.)
+- Per-game server settings (difficulty, network, cross-platform, etc.)
 - Dynamic headless client management (Arma 3)
+- Dynamic scenario discovery from installed mods (Arma Reforger)
 - Profile backup and restore
+- Crash detection with automatic server restart
+- Discord webhook notifications for server events
 - Real-time status updates via WebSockets
 
 ## Requirements
