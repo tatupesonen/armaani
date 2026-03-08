@@ -1,0 +1,36 @@
+.git
+.github
+.gitignore
+.gitattributes
+.editorconfig
+
+# Dependencies (installed during build)
+node_modules
+vendor
+
+# Built assets (built during build)
+public/build
+
+# Wayfinder generated files (generated during build)
+resources/js/actions
+resources/js/routes
+
+# Storage (volume-mounted at runtime — framework dirs needed during build)
+storage/arma
+storage/caddy
+storage/logs
+
+# Local environment
+.env
+.env.*.local
+
+# Old project reference
+arma-server-manager
+
+# IDE / OS
+.idea
+.vscode
+*.swp
+*.swo
+.DS_Store
+Thumbs.db

@@ -1,0 +1,22 @@
+{
+	admin off
+	storage file_system /var/www/html/storage/caddy
+}
+
+{$SITE_ADDRESS::80} {
+	root * /var/www/html/public
+
+	encode gzip
+
+	# Reverse proxy Reverb WebSocket (/app) and API (/apps) paths
+	@reverb {
+		path /app /app/* /apps /apps/*
+	}
+	reverse_proxy @reverb 127.0.0.1:{$REVERB_SERVER_PORT:6001}
+
+	# PHP-FPM
+	php_fastcgi unix//run/php/php-fpm.sock
+
+	# Static files
+	file_server
+}
