@@ -135,7 +135,7 @@ class DetectServerEventsTest extends TestCase
         ]);
 
         $listener = new DetectServerEvents;
-        $listener->handle(new ServerLogOutput($server->id, 'Game::LoadEntities took: 5.2s'));
+        $listener->handle(new ServerLogOutput($server->id, 'Server registered with addr 1.2.3.4:2001'));
 
         $this->assertEquals(ServerStatus::Running, $server->fresh()->status);
 
@@ -204,7 +204,7 @@ class DetectServerEventsTest extends TestCase
         Bus::assertDispatched(SendDiscordWebhookJob::class, function (SendDiscordWebhookJob $job) {
             return str_contains($job->content, '**My Server** has crashed')
                 && str_contains($job->content, 'Segmentation fault (core dumped)')
-                && $job->username === 'armaani';
+                && $job->username === 'Armaani';
         });
     }
 
@@ -326,8 +326,8 @@ class DetectServerEventsTest extends TestCase
         $handler = Mockery::mock(GameHandler::class);
         $handler->shouldReceive('getModDownloadStartedString')->andReturnNull();
         $handler->shouldReceive('getModDownloadFinishedString')->andReturnNull();
-        $handler->shouldReceive('getBootDetectionString')->andReturnNull();
-        $handler->shouldReceive('getCrashDetectionString')->andReturn($crashString);
+        $handler->shouldReceive('getBootDetectionStrings')->andReturn([]);
+        $handler->shouldReceive('getCrashDetectionStrings')->andReturn([$crashString]);
 
         $manager = Mockery::mock(GameManager::class);
         $manager->shouldReceive('for')->andReturn($handler);

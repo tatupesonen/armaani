@@ -52,8 +52,8 @@ class DiscordWebhookService
     public function sendTestMessage(): array
     {
         return $this->send(
-            'This is a test notification from **armaani** server manager. Your webhook is working correctly!',
-            'armaani',
+            'This is a test notification from **Armaani** server manager. Your webhook is working correctly!',
+            'Armaani',
         );
     }
 

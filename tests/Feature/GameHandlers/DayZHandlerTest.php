@@ -52,7 +52,7 @@ class DayZHandlerTest extends TestCase
 
     public function test_boot_detection_string_is_null(): void
     {
-        $this->assertNull($this->handler->getBootDetectionString());
+        $this->assertSame([], $this->handler->getBootDetectionStrings());
     }
 
     public function test_does_not_support_headless_clients(): void

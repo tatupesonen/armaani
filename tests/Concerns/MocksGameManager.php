@@ -16,8 +16,8 @@ trait MocksGameManager
         $handler->shouldReceive('getBackupFilePath')->andReturn(
             $gameType === GameType::Arma3 ? '/fake/backup/path' : null
         );
-        $handler->shouldReceive('getBootDetectionString')->andReturn(
-            $gameType === GameType::Arma3 ? 'Connected to Steam servers' : null
+        $handler->shouldReceive('getBootDetectionStrings')->andReturn(
+            $gameType === GameType::Arma3 ? ['Connected to Steam servers'] : []
         );
         $handler->shouldReceive('getServerLogPath')->andReturn('/tmp/fake.log');
         $handler->shouldReceive('getBinaryPath')->andReturn('/tmp/fake_binary');

@@ -69,8 +69,8 @@ class DetectServerEvents
         }
 
         // Check for boot detection (Booting/DownloadingMods → Running)
-        $bootString = $handler->getBootDetectionString();
-        if ($bootString !== null && str_contains($event->line, $bootString)) {
+        $bootStrings = $handler->getBootDetectionStrings();
+        if ($bootStrings !== [] && $this->lineContainsAny($event->line, $bootStrings)) {
             $updated = Server::query()
                 ->where('id', $event->serverId)
                 ->whereIn('status', [ServerStatus::Booting, ServerStatus::DownloadingMods])
@@ -86,8 +86,8 @@ class DetectServerEvents
         }
 
         // Check for crash detection (Running/Booting/DownloadingMods → Crashed)
-        $crashString = $handler->getCrashDetectionString();
-        if ($crashString !== null && str_contains($event->line, $crashString)) {
+        $crashStrings = $handler->getCrashDetectionStrings();
+        if ($crashStrings !== [] && $this->lineContainsAny($event->line, $crashStrings)) {
             $updated = Server::query()
                 ->where('id', $event->serverId)
                 ->whereIn('status', [ServerStatus::Running, ServerStatus::Booting, ServerStatus::DownloadingMods])
@@ -101,7 +101,7 @@ class DetectServerEvents
 
                 SendDiscordWebhookJob::dispatch(
                     "**{$serverName}** has crashed.\n> {$event->line}",
-                    'armaani',
+                    'Armaani',
                 );
 
                 if ($server->auto_restart) {
@@ -113,5 +113,21 @@ class DetectServerEvents
                 }
             }
         }
+    }
+
+    /**
+     * Check if the line contains any of the given strings.
+     *
+     * @param  array<int, string>  $needles
+     */
+    private function lineContainsAny(string $line, array $needles): bool
+    {
+        foreach ($needles as $needle) {
+            if (str_contains($line, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

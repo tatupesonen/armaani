@@ -110,9 +110,9 @@ class ReforgerHandler implements GameHandler
         return $server->getProfilesPath().'/server.log';
     }
 
-    public function getBootDetectionString(): ?string
+    public function getBootDetectionStrings(): array
     {
-        return 'Server registered with addr';
+        return ['Server registered with addr'];
     }
 
     public function getModDownloadStartedString(): ?string
@@ -125,9 +125,9 @@ class ReforgerHandler implements GameHandler
         return 'Required addons are ready to use.';
     }
 
-    public function getCrashDetectionString(): ?string
+    public function getCrashDetectionStrings(): array
     {
-        return null;
+        return [];
     }
 
     public function symlinkMods(Server $server): void

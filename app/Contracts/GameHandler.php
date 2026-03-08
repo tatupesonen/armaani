@@ -40,10 +40,12 @@ interface GameHandler
     public function getServerLogPath(Server $server): string;
 
     /**
-     * String that appears in server log when the server is fully booted.
-     * Return null to skip auto-detection (server stays in Booting until manually changed or timed out).
+     * Strings that appear in server log when the server is fully booted.
+     * Return an empty array to skip auto-detection (server stays in Booting until manually changed or timed out).
+     *
+     * @return array<int, string>
      */
-    public function getBootDetectionString(): ?string;
+    public function getBootDetectionStrings(): array;
 
     /**
      * String that appears in server log when the server begins downloading mods.
@@ -58,10 +60,12 @@ interface GameHandler
     public function getModDownloadFinishedString(): ?string;
 
     /**
-     * String that appears in server log when the server has crashed.
-     * Return null to skip auto-detection of crashes.
+     * Strings that appear in server log when the server has crashed.
+     * Return an empty array to skip auto-detection of crashes.
+     *
+     * @return array<int, string>
      */
-    public function getCrashDetectionString(): ?string;
+    public function getCrashDetectionStrings(): array;
 
     // --- Mods & Assets ---
 

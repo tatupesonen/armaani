@@ -38,9 +38,9 @@ class DayZHandler implements GameHandler
         return $server->getProfilesPath().'/server.log';
     }
 
-    public function getBootDetectionString(): ?string
+    public function getBootDetectionStrings(): array
     {
-        return null;
+        return [];
     }
 
     public function getModDownloadStartedString(): ?string
@@ -53,9 +53,9 @@ class DayZHandler implements GameHandler
         return null;
     }
 
-    public function getCrashDetectionString(): ?string
+    public function getCrashDetectionStrings(): array
     {
-        return null;
+        return [];
     }
 
     public function symlinkMods(Server $server): void

@@ -65,9 +65,9 @@ class Arma3Handler implements GameHandler
         return $server->getProfilesPath().'/server.log';
     }
 
-    public function getBootDetectionString(): ?string
+    public function getBootDetectionStrings(): array
     {
-        return 'Connected to Steam servers';
+        return ['Connected to Steam servers'];
     }
 
     public function getModDownloadStartedString(): ?string
@@ -80,9 +80,9 @@ class Arma3Handler implements GameHandler
         return null;
     }
 
-    public function getCrashDetectionString(): ?string
+    public function getCrashDetectionStrings(): array
     {
-        return null;
+        return [];
     }
 
     public function symlinkMods(Server $server): void
