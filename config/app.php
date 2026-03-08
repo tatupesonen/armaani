@@ -15,6 +15,8 @@ return [
 
     'name' => env('APP_NAME', 'Laravel'),
 
+    'version' => json_decode((string) file_get_contents(base_path('composer.json')), true)['version'] ?? 'unknown',
+
     /*
     |--------------------------------------------------------------------------
     | Application Environment

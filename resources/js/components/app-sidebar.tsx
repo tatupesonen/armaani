@@ -1,4 +1,4 @@
-import { Link } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import {
     FolderGit2,
     HardDrive,
@@ -61,6 +61,8 @@ const footerNavItems = [
 ];
 
 export function AppSidebar() {
+    const { appVersion } = usePage().props;
+
     return (
         <Sidebar collapsible="icon" variant="inset">
             <SidebarHeader>
@@ -82,6 +84,9 @@ export function AppSidebar() {
             <SidebarFooter>
                 <NavFooter items={footerNavItems} className="mt-auto" />
                 <NavUser />
+                <p className="px-2 text-center text-xs text-neutral-400 group-data-[collapsible=icon]:hidden dark:text-neutral-500">
+                    v{appVersion}
+                </p>
             </SidebarFooter>
         </Sidebar>
     );

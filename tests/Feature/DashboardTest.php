@@ -160,6 +160,16 @@ class DashboardTest extends TestCase
             );
     }
 
+    public function test_app_version_is_shared_with_all_pages(): void
+    {
+        $this->actingAs($this->user)
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('appVersion', config('app.version'))
+            );
+    }
+
     public function test_dashboard_returns_system_resource_info(): void
     {
         $this->actingAs($this->user)
