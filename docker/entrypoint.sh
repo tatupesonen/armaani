@@ -23,10 +23,27 @@ fi
 ln -sf "$STORAGE_PATH/.env" /var/www/html/.env
 
 # -------------------------------------------------------
+# Derive APP_URL from SITE_ADDRESS
+# -------------------------------------------------------
+if [ -n "$SITE_ADDRESS" ] && [ "$SITE_ADDRESS" != ":80" ]; then
+    # Domain provided — Caddy will serve HTTPS via Let's Encrypt
+    APP_URL="https://${SITE_ADDRESS}"
+    sed -i "s|^APP_URL=.*|APP_URL=${APP_URL}|" "$STORAGE_PATH/.env"
+fi
+
+# -------------------------------------------------------
 # Auto-generate APP_KEY if not set
 # -------------------------------------------------------
 if ! grep -q "^APP_KEY=base64:" "$STORAGE_PATH/.env"; then
     php /var/www/html/artisan key:generate --force
+fi
+
+# -------------------------------------------------------
+# Auto-generate REVERB_APP_SECRET if not set
+# -------------------------------------------------------
+if ! grep -q "^REVERB_APP_SECRET=.\+" "$STORAGE_PATH/.env"; then
+    REVERB_SECRET=$(php -r "echo bin2hex(random_bytes(32));")
+    sed -i "s/^REVERB_APP_SECRET=.*/REVERB_APP_SECRET=${REVERB_SECRET}/" "$STORAGE_PATH/.env"
 fi
 
 # -------------------------------------------------------

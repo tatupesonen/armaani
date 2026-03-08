@@ -1,9 +1,18 @@
 {
 	admin off
 	storage file_system /var/www/html/storage/caddy
+	log {
+		output stdout
+		level INFO
+	}
 }
 
 {$SITE_ADDRESS::80} {
+	log {
+		output stdout
+		format console
+	}
+
 	root * /var/www/html/public
 
 	encode gzip

@@ -6,6 +6,11 @@
 /public/storage
 /storage/*.key
 /storage/database.sqlite
+/storage/database.sqlite-shm
+/storage/database.sqlite-wal
+/database/database.sqlite
+/database/database.sqlite-shm
+/database/database.sqlite-wal
 /storage/pail
 /storage/arma/servers
 /storage/arma/mods

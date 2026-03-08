@@ -6,7 +6,5 @@ services:
     volumes:
       - ./storage:/var/www/html/storage
     environment:
-      # Set to a domain (e.g. "armaani.example.com") to enable automatic HTTPS via Let's Encrypt.
-      # Default ":80" serves HTTP only.
-      - SITE_ADDRESS=:80
+      - SITE_ADDRESS=${SITE_ADDRESS:-:80}
     restart: unless-stopped
