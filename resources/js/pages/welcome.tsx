@@ -1,3 +1,4 @@
+import AppLogoColor from '@/components/app-logo-color';
 import AppLogoIcon from '@/components/app-logo-icon';
 import { Head, Link, usePage } from '@inertiajs/react';
 import { dashboard, login } from '@/routes';
@@ -6,15 +7,25 @@ import {
     DownloadIcon,
     LayersIcon,
     PlayIcon,
-    SquareIcon,
-    RotateCcwIcon,
+    Box,
+    Check,
     ShieldIcon,
     UsersIcon,
     FolderIcon,
     MonitorIcon,
     ArrowRightIcon,
+    ExternalLink,
+    Github,
+    Sparkle,
 } from 'lucide-react';
-import type { ComponentType, SVGAttributes } from 'react';
+import {
+    type ComponentType,
+    type SVGAttributes,
+    useEffect,
+    useState,
+} from 'react';
+
+const GITHUB_URL = 'https://github.com/tatu/Armaani';
 
 export default function Welcome({
     canRegister = true,
@@ -22,25 +33,30 @@ export default function Welcome({
     canRegister?: boolean;
 }) {
     const { auth } = usePage().props;
+    const [scrolled, setScrolled] = useState(false);
+
+    useEffect(() => {
+        const handleScroll = () => setScrolled(window.scrollY > 50);
+        window.addEventListener('scroll', handleScroll, { passive: true });
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, []);
 
     return (
         <>
-            <Head title="Armaani - Game Server Manager">
-                <link rel="preconnect" href="https://fonts.bunny.net" />
-                <link
-                    href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600,700"
-                    rel="stylesheet"
-                />
-            </Head>
+            <Head title="Armaani - Game Server Manager" />
 
             <div className="min-h-screen bg-background text-foreground">
                 {/* Header */}
-                <header className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-md">
+                <header
+                    className={`sticky top-0 z-50 transition-colors duration-300 ${
+                        scrolled
+                            ? 'border-b border-border/50 bg-background/80 text-foreground backdrop-blur-md'
+                            : 'border-b border-transparent bg-transparent text-white'
+                    }`}
+                >
                     <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
                         <div className="flex items-center gap-3">
-                            <div className="flex size-9 items-center justify-center rounded-lg bg-foreground">
-                                <AppLogoIcon className="size-5 fill-current text-background" />
-                            </div>
+                            <AppLogoColor className="size-8 drop-shadow-[0_0_12px_rgba(239,68,68,0.15)]" />
                             <span className="text-lg font-semibold tracking-tight">
                                 Armaani
                             </span>
@@ -49,7 +65,11 @@ export default function Welcome({
                             {auth.user ? (
                                 <Link
                                     href={dashboard()}
-                                    className="inline-flex items-center gap-2 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-colors hover:bg-foreground/90"
+                                    className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                                        scrolled
+                                            ? 'bg-foreground text-background hover:bg-foreground/90'
+                                            : 'bg-white text-[#0c0c0f] hover:bg-white/90'
+                                    }`}
                                 >
                                     Dashboard
                                     <ArrowRightIcon className="size-4" />
@@ -58,19 +78,27 @@ export default function Welcome({
                                 <>
                                     <Link
                                         href={login()}
-                                        className="rounded-lg px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+                                        className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                                            scrolled
+                                                ? 'hover:bg-accent'
+                                                : 'hover:bg-white/10'
+                                        }`}
                                     >
                                         Log in
                                     </Link>
-                                    {canRegister && (
-                                        <Link
-                                            href="/register"
-                                            className="inline-flex items-center gap-2 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-colors hover:bg-foreground/90"
-                                        >
-                                            Get started
-                                            <ArrowRightIcon className="size-4" />
-                                        </Link>
-                                    )}
+                                    <a
+                                        href={GITHUB_URL}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                                            scrolled
+                                                ? 'bg-foreground text-background hover:bg-foreground/90'
+                                                : 'bg-white text-[#0c0c0f] hover:bg-white/90'
+                                        }`}
+                                    >
+                                        <Github className="size-4" />
+                                        GitHub
+                                    </a>
                                 </>
                             )}
                         </nav>
@@ -78,44 +106,57 @@ export default function Welcome({
                 </header>
 
                 {/* Hero */}
-                <section className="relative overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-b from-accent/50 to-transparent dark:from-accent/20" />
+                <section className="relative -mt-16 overflow-hidden bg-[#0c0c0f] pt-16 text-white">
+                    {/* Radial gradient backdrop */}
+                    <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_50%,rgba(39,39,42,0.5)_0%,transparent_70%),radial-gradient(ellipse_40%_40%_at_75%_25%,rgba(239,68,68,0.06)_0%,transparent_60%),radial-gradient(ellipse_40%_40%_at_25%_75%,rgba(239,68,68,0.04)_0%,transparent_60%)]" />
+                    {/* Subtle grid */}
+                    <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:60px_60px]" />
+                    {/* Red accent line */}
+                    <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-red-500 to-transparent opacity-60" />
+
                     <div className="relative mx-auto max-w-6xl px-6 py-24 text-center lg:py-36">
-                        <div className="mx-auto mb-8 flex size-20 items-center justify-center rounded-2xl bg-foreground shadow-lg">
-                            <AppLogoIcon className="size-12 fill-current text-background" />
+                        <div className="mx-auto mb-8 flex size-20 items-center justify-center">
+                            <AppLogoColor className="size-20 drop-shadow-[0_0_40px_rgba(239,68,68,0.15)]" />
                         </div>
                         <h1 className="mx-auto max-w-3xl text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl">
-                            Manage your game servers with confidence
+                            Manage your Arma servers and actually enjoy it
                         </h1>
-                        <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground">
+                        <p className="mx-auto mt-6 max-w-2xl text-lg text-[#a1a1aa]">
                             Install, configure, and control dedicated servers
                             for Arma 3, Arma Reforger, and DayZ from a single
                             web-based dashboard. Workshop mods, mod presets,
                             missions, and real-time logs included.
                         </p>
+
+                        {/* Free badge */}
+                        <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-sm text-[#a1a1aa]">
+                            <Sparkle className="size-4 text-red-400" />
+                            Free &amp; open source
+                        </div>
+
                         <div className="mt-10 flex items-center justify-center gap-4">
                             {auth.user ? (
                                 <Link
                                     href={dashboard()}
-                                    className="inline-flex items-center gap-2 rounded-lg bg-foreground px-6 py-3 text-sm font-medium text-background shadow-sm transition-colors hover:bg-foreground/90"
+                                    className="inline-flex items-center gap-2 rounded-lg bg-white px-6 py-3 text-sm font-medium text-[#0c0c0f] shadow-sm transition-colors hover:bg-white/90"
                                 >
                                     Go to Dashboard
                                     <ArrowRightIcon className="size-4" />
                                 </Link>
                             ) : (
                                 <>
-                                    <Link
-                                        href={
-                                            canRegister ? '/register' : login()
-                                        }
-                                        className="inline-flex items-center gap-2 rounded-lg bg-foreground px-6 py-3 text-sm font-medium text-background shadow-sm transition-colors hover:bg-foreground/90"
+                                    <a
+                                        href={GITHUB_URL}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-2 rounded-lg bg-white px-6 py-3 text-sm font-medium text-[#0c0c0f] shadow-sm transition-colors hover:bg-white/90"
                                     >
                                         Get started
-                                        <ArrowRightIcon className="size-4" />
-                                    </Link>
+                                        <ExternalLink className="size-4" />
+                                    </a>
                                     <Link
                                         href={login()}
-                                        className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-6 py-3 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-accent"
+                                        className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-6 py-3 text-sm font-medium text-white shadow-sm transition-colors hover:bg-white/10"
                                     >
                                         Log in
                                     </Link>
@@ -235,7 +276,7 @@ export default function Welcome({
                                 description="Live server output, install progress, and mod download logs streamed directly to your browser."
                             />
                             <FeatureCard
-                                icon={SquareIcon}
+                                icon={Box}
                                 title="Docker Ready"
                                 description="Ships as a single Docker container with SteamCMD, PHP, Nginx, and queue workers all included."
                             />
@@ -279,50 +320,27 @@ export default function Welcome({
                     </div>
                 </section>
 
-                {/* CTA */}
-                <section className="border-t border-border/50">
-                    <div className="mx-auto max-w-6xl px-6 py-20 text-center lg:py-28">
-                        <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
-                            Ready to manage your servers?
-                        </h2>
-                        <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
-                            Set up Armaani and have your first game server
-                            running in minutes.
-                        </p>
-                        <div className="mt-8 flex items-center justify-center gap-4">
-                            {auth.user ? (
-                                <Link
-                                    href={dashboard()}
-                                    className="inline-flex items-center gap-2 rounded-lg bg-foreground px-6 py-3 text-sm font-medium text-background shadow-sm transition-colors hover:bg-foreground/90"
-                                >
-                                    Go to Dashboard
-                                    <ArrowRightIcon className="size-4" />
-                                </Link>
-                            ) : (
-                                <Link
-                                    href={canRegister ? '/register' : login()}
-                                    className="inline-flex items-center gap-2 rounded-lg bg-foreground px-6 py-3 text-sm font-medium text-background shadow-sm transition-colors hover:bg-foreground/90"
-                                >
-                                    Get started
-                                    <ArrowRightIcon className="size-4" />
-                                </Link>
-                            )}
-                        </div>
-                    </div>
-                </section>
-
                 {/* Footer */}
                 <footer className="border-t border-border/50">
                     <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
                         <div className="flex items-center gap-2">
-                            <div className="flex size-6 items-center justify-center rounded-md bg-foreground">
-                                <AppLogoIcon className="size-3.5 fill-current text-background" />
-                            </div>
+                            <AppLogoColor className="size-6" />
                             <span className="text-sm font-medium">Armaani</span>
                         </div>
-                        <p className="text-sm text-muted-foreground">
-                            Game Server Manager
-                        </p>
+                        <div className="flex items-center gap-4">
+                            <a
+                                href={GITHUB_URL}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                            >
+                                <Github className="size-4" />
+                                GitHub
+                            </a>
+                            <span className="text-sm text-muted-foreground">
+                                Game Server Manager
+                            </span>
+                        </div>
                     </div>
                 </footer>
             </div>
@@ -358,7 +376,7 @@ function GameCard({
                         key={feature}
                         className="flex items-center gap-2 text-sm"
                     >
-                        <RotateCcwIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                        <Check className="size-3.5 shrink-0 text-emerald-500" />
                         <span>{feature}</span>
                     </li>
                 ))}

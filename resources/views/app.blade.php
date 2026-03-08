@@ -32,12 +32,14 @@
 
         <title inertia>{{ config('app.name', 'Armaani') }}</title>
 
+        <meta property="og:title" content="{{ config('app.name', 'Armaani') }}">
+        <meta property="og:description" content="Install, configure, and manage dedicated servers for Arma 3, Arma Reforger, and DayZ from a single web-based dashboard.">
+        <meta property="og:image" content="{{ url('/og-image.png') }}">
+        <meta property="og:type" content="website">
+
         <link rel="icon" href="/favicon.ico" sizes="any">
         <link rel="icon" href="/favicon.svg" type="image/svg+xml">
         <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-
-        <link rel="preconnect" href="https://fonts.bunny.net">
-        <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
 
         @viteReactRefresh
         @vite(['resources/js/app.tsx', "resources/js/pages/{$page['component']}.tsx"])
