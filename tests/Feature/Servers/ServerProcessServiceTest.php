@@ -705,6 +705,37 @@ class ServerProcessServiceTest extends TestCase
         $this->assertFileExists($keysPath.'/keymod.bikey');
     }
 
+    public function test_copy_bikeys_replaces_broken_symlinks(): void
+    {
+        $server = $this->makeServer();
+        $gameInstallPath = $server->gameInstall->getInstallationPath();
+        $keysPath = $gameInstallPath.'/keys';
+        @mkdir($keysPath, 0755, true);
+
+        // Create a broken symlink at the destination (simulates stale host-path symlink)
+        $brokenTarget = sys_get_temp_dir().'/nonexistent_'.uniqid().'/fake.bikey';
+        symlink($brokenTarget, $keysPath.'/testmod.bikey');
+        $this->assertTrue(is_link($keysPath.'/testmod.bikey'));
+        $this->assertFalse(file_exists($keysPath.'/testmod.bikey'));
+
+        $mod = WorkshopMod::factory()->installed()->create(['name' => 'TestMod']);
+        $modPath = $mod->getInstallationPath();
+        @mkdir($modPath.'/keys', 0755, true);
+        file_put_contents($modPath.'/keys/testmod.bikey', 'valid bikey content');
+
+        $preset = ModPreset::factory()->create();
+        $preset->mods()->attach([$mod->id]);
+
+        $server->update(['active_preset_id' => $preset->id]);
+        $server->refresh();
+
+        $this->handler->copyBiKeys($server);
+
+        $this->assertFileExists($keysPath.'/testmod.bikey');
+        $this->assertTrue(is_link($keysPath.'/testmod.bikey'));
+        $this->assertEquals('valid bikey content', file_get_contents($keysPath.'/testmod.bikey'));
+    }
+
     public function test_copy_bikeys_skips_when_no_preset(): void
     {
         $server = $this->makeServer();

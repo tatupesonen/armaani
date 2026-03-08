@@ -172,6 +172,10 @@ class Arma3Handler implements GameHandler
             foreach (glob($modKeysPath.'/*.bikey') ?: [] as $bikeyFile) {
                 $destPath = $keysPath.'/'.basename($bikeyFile);
 
+                if (is_link($destPath) && ! file_exists($destPath)) {
+                    unlink($destPath);
+                }
+
                 if (! file_exists($destPath)) {
                     symlink($bikeyFile, $destPath);
                     Log::info("[Server:{$server->id}] Symlinked BiKey ".basename($bikeyFile)." from mod '{$mod->name}'");
