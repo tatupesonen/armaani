@@ -47,5 +47,4 @@ php artisan test
 ```
 
 ## License
-
-MIT
+AGPLv3

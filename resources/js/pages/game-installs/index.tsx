@@ -281,7 +281,7 @@ export default function GameInstallsIndex({ installs, gameTypes }: Props) {
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                         <AlertDialogAction
                             onClick={handleDelete}
-                            className="bg-destructive text-white hover:bg-destructive/90"
+                            variant="destructive"
                         >
                             Delete
                         </AlertDialogAction>

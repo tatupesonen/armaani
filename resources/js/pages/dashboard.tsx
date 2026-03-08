@@ -135,7 +135,7 @@ export default function Dashboard({
     memoryUsage,
     cpuInfo,
 }: DashboardProps) {
-    usePoll(30000);
+    usePoll(5000);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
