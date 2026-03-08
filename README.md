@@ -2,7 +2,7 @@
 
 armaani *(Finnish for _"my dear"_)* is a web-based game server manager for Arma 3, Arma Reforger, and (soon) DayZ. Install, configure, and manage dedicated server instances from a single UI.
 
-Built with Laravel 12, Inertia v2, React 19, and Tailwind CSS v4.
+Built with Laravel 12, Inertia v2, React 19, Tailwind CSS v4, and with a bunch of help from Claude.
 
 ## Screenshots
 
