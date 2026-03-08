@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/tatupesonen/Armaani/compare/v0.2.0...v0.3.0) (2026-03-08)
+
+
+### Features
+
+* test release pipeline ([f10e575](https://github.com/tatupesonen/Armaani/commit/f10e5753aa625fc0998f23c62dcd2e58f32e2f4b))
+
 ## [0.2.0](https://github.com/tatupesonen/Armaani/compare/v0.1.0...v0.2.0) (2026-03-08)
 
 
