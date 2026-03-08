@@ -4,13 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Enums\GameType;
 use App\Enums\InstallationStatus;
+use App\Http\Requests\GameInstall\StoreGameInstallRequest;
 use App\Jobs\InstallServerJob;
 use App\Models\GameInstall;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -34,15 +33,9 @@ class GameInstallController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(StoreGameInstallRequest $request): RedirectResponse
     {
-        $gameType = GameType::from($request->input('game_type', 'arma3'));
-
-        $validated = $request->validate([
-            'game_type' => ['required', Rule::enum(GameType::class)],
-            'name' => ['required', 'string', 'max:255'],
-            'branch' => ['required', 'string', Rule::in($gameType->branches())],
-        ]);
+        $validated = $request->validated();
 
         $install = GameInstall::query()->create($validated);
 

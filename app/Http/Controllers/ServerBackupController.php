@@ -3,22 +3,19 @@
 namespace App\Http\Controllers;
 
 use App\Enums\ServerStatus;
+use App\Http\Requests\ServerBackup\StoreServerBackupRequest;
+use App\Http\Requests\ServerBackup\UploadServerBackupRequest;
 use App\Models\Server;
 use App\Models\ServerBackup;
 use App\Services\ServerBackupService;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ServerBackupController extends Controller
 {
-    public function store(Request $request, Server $server, ServerBackupService $backupService): RedirectResponse
+    public function store(StoreServerBackupRequest $request, Server $server, ServerBackupService $backupService): RedirectResponse
     {
-        $request->validate([
-            'backup_name' => ['nullable', 'string', 'max:255'],
-        ]);
-
         $backup = $backupService->createFromServer($server, $request->input('backup_name'));
 
         if ($backup === null) {
@@ -30,13 +27,8 @@ class ServerBackupController extends Controller
         return back()->with('success', 'Backup created.');
     }
 
-    public function upload(Request $request, Server $server, ServerBackupService $backupService): RedirectResponse
+    public function upload(UploadServerBackupRequest $request, Server $server, ServerBackupService $backupService): RedirectResponse
     {
-        $request->validate([
-            'backup_file' => ['required', 'file', 'max:10240'],
-            'backup_name' => ['nullable', 'string', 'max:255'],
-        ]);
-
         $data = file_get_contents($request->file('backup_file')->getRealPath());
 
         $backupService->createFromUpload(

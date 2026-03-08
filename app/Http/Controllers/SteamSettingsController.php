@@ -2,13 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\SteamSettings\SaveApiKeyRequest;
+use App\Http\Requests\SteamSettings\SaveCredentialsRequest;
+use App\Http\Requests\SteamSettings\SaveDiscordWebhookRequest;
+use App\Http\Requests\SteamSettings\SaveSettingsRequest;
 use App\Models\AppSetting;
 use App\Models\SteamAccount;
 use App\Services\DiscordWebhookService;
 use App\Services\SteamCmdService;
 use App\Services\SteamWorkshopService;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -33,13 +36,9 @@ class SteamSettingsController extends Controller
         ]);
     }
 
-    public function saveCredentials(Request $request): RedirectResponse
+    public function saveCredentials(SaveCredentialsRequest $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'username' => ['required', 'string', 'max:255'],
-            'password' => ['required', 'string', 'max:255'],
-            'auth_token' => ['nullable', 'string', 'max:255'],
-        ]);
+        $validated = $request->validated();
 
         $account = SteamAccount::current();
 
@@ -63,11 +62,9 @@ class SteamSettingsController extends Controller
         return back()->with('success', 'Steam credentials saved.');
     }
 
-    public function saveApiKey(Request $request): RedirectResponse
+    public function saveApiKey(SaveApiKeyRequest $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'steam_api_key' => ['nullable', 'string', 'max:255'],
-        ]);
+        $validated = $request->validated();
 
         $account = SteamAccount::current();
         if (! $account) {
@@ -83,11 +80,9 @@ class SteamSettingsController extends Controller
         return back()->with('success', 'Steam API key saved.');
     }
 
-    public function saveSettings(Request $request): RedirectResponse
+    public function saveSettings(SaveSettingsRequest $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'mod_download_batch_size' => ['required', 'integer', 'min:1', 'max:50'],
-        ]);
+        $validated = $request->validated();
 
         $account = SteamAccount::current();
         if (! $account) {
@@ -141,11 +136,9 @@ class SteamSettingsController extends Controller
         }
     }
 
-    public function saveDiscordWebhook(Request $request): RedirectResponse
+    public function saveDiscordWebhook(SaveDiscordWebhookRequest $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'discord_webhook_url' => ['nullable', 'string', 'max:500', 'url:https'],
-        ]);
+        $validated = $request->validated();
 
         if (! empty($validated['discord_webhook_url'])) {
             $appSettings = AppSetting::current();

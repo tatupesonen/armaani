@@ -2,19 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\ReforgerMod\StoreReforgerModRequest;
 use App\Models\ReforgerMod;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 class ReforgerModController extends Controller
 {
-    public function store(Request $request): RedirectResponse
+    public function store(StoreReforgerModRequest $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'mod_id' => ['required', 'string', 'unique:reforger_mods,mod_id'],
-            'name' => ['required', 'string', 'max:255'],
-        ]);
+        $validated = $request->validated();
 
         $mod = ReforgerMod::query()->create($validated);
 

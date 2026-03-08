@@ -504,6 +504,33 @@ The toast system (`resources/js/components/toast-manager.tsx`) handles:
 - `resources/js/components/log-viewer.tsx` — reusable real-time log viewer (Echo + auto-scroll)
 - `resources/js/components/toast-manager.tsx` — toast notification system
 
+### Form Requests
+
+All controllers use dedicated Form Request classes for validation (no inline `$request->validate()` calls). Organized into subdirectories matching their controller domain:
+
+- `app/Http/Requests/Server/StoreServerRequest.php` — validates game_type, name, port (unique), query_port (unique), max_players, passwords, game_install_id, boolean flags
+- `app/Http/Requests/Server/UpdateServerRequest.php` — same as store with unique-ignore-self rules; dynamically merges game-handler rules via `GameManager::for($server)->serverValidationRules()` and `settingsValidationRules()`
+- `app/Http/Requests/ModPreset/StoreModPresetRequest.php` — validates game_type, name (composite unique on game_type), mod_ids, reforger_mod_ids
+- `app/Http/Requests/ModPreset/UpdateModPresetRequest.php` — name unique-ignore-self scoped by game_type, mod_ids, reforger_mod_ids
+- `app/Http/Requests/ModPreset/ImportModPresetRequest.php` — validates import_file (file, max:2048), import_name
+- `app/Http/Requests/SteamSettings/SaveCredentialsRequest.php` — username, password, auth_token
+- `app/Http/Requests/SteamSettings/SaveApiKeyRequest.php` — steam_api_key
+- `app/Http/Requests/SteamSettings/SaveSettingsRequest.php` — mod_download_batch_size
+- `app/Http/Requests/SteamSettings/SaveDiscordWebhookRequest.php` — discord_webhook_url (url:https)
+- `app/Http/Requests/WorkshopMod/StoreWorkshopModRequest.php` — workshop_id, game_type
+- `app/Http/Requests/WorkshopMod/UpdateSelectedModsRequest.php` — mod_ids array with exists check
+- `app/Http/Requests/ServerBackup/StoreServerBackupRequest.php` — backup_name (nullable)
+- `app/Http/Requests/ServerBackup/UploadServerBackupRequest.php` — backup_file (file, max:10240), backup_name
+- `app/Http/Requests/GameInstall/StoreGameInstallRequest.php` — game_type, name, branch (validated against game type branches)
+- `app/Http/Requests/ReforgerMod/StoreReforgerModRequest.php` — mod_id (unique), name
+- `app/Http/Requests/Mission/StoreMissionRequest.php` — missions array of files (max:524288)
+- `app/Http/Requests/Settings/PasswordUpdateRequest.php` — current_password, password (uses PasswordValidationRules trait)
+- `app/Http/Requests/Settings/ProfileUpdateRequest.php` — delegates to ProfileValidationRules trait
+- `app/Http/Requests/Settings/ProfileDeleteRequest.php` — password confirmation
+- `app/Http/Requests/Settings/TwoFactorAuthenticationRequest.php` — authorization only
+
+Form Request conventions: array-based validation rules, no `authorize()` method (defaults to true), use `$this->route('paramName')` to access route-model-bound parameters (camelCase parameter names matching the route definition).
+
 ### Config
 
 - `config/arma.php` — steamcmd_path, steam_api_key, games/servers/mods/missions base paths, max_backups_per_server
@@ -534,7 +561,7 @@ The toast system (`resources/js/components/toast-manager.tsx`) handles:
 - `SteamWorkshopService::validateApiKey()` returns `array{valid: bool, error: string|null}`.
 - Streamed downloads use `$response->streamedContent()` not `$response->getContent()`.
 
-### Test Files (369 tests total across 32 files)
+### Test Files (386 tests total across 32 files)
 
 - `tests/Feature/DashboardTest.php` — 10 tests
 - `tests/Feature/ExampleTest.php` — 1 test

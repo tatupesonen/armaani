@@ -6,6 +6,8 @@ use App\Enums\GameType;
 use App\Enums\ServerStatus;
 use App\Events\ServerStatusChanged;
 use App\GameManager;
+use App\Http\Requests\Server\StoreServerRequest;
+use App\Http\Requests\Server\UpdateServerRequest;
 use App\Jobs\StartServerJob;
 use App\Jobs\StopServerJob;
 use App\Models\DayZSettings;
@@ -19,10 +21,8 @@ use App\Services\ReforgerScenarioService;
 use App\Services\ServerProcessService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -61,29 +61,10 @@ class ServerController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(StoreServerRequest $request): RedirectResponse
     {
-        $gameType = GameType::from($request->input('game_type', 'arma3'));
-
-        $validated = $request->validate([
-            'game_type' => ['required', Rule::enum(GameType::class)],
-            'name' => ['required', 'string', 'max:255'],
-            'port' => ['required', 'integer', 'min:1', 'max:65535', Rule::unique('servers', 'port')],
-            'query_port' => ['required', 'integer', 'min:1', 'max:65535', Rule::unique('servers', 'query_port')],
-            'max_players' => ['required', 'integer', 'min:1', 'max:256'],
-            'password' => ['nullable', 'string', 'max:255'],
-            'admin_password' => ['nullable', 'string', 'max:255'],
-            'description' => ['nullable', 'string', 'max:1000'],
-            'active_preset_id' => ['nullable', 'exists:mod_presets,id'],
-            'game_install_id' => ['required', 'exists:game_installs,id'],
-            'additional_params' => ['nullable', 'string', 'max:1000'],
-            'verify_signatures' => ['boolean'],
-            'allowed_file_patching' => ['boolean'],
-            'battle_eye' => ['boolean'],
-            'persistent' => ['boolean'],
-            'von_enabled' => ['boolean'],
-            'additional_server_options' => ['nullable', 'string', 'max:5000'],
-        ]);
+        $validated = $request->validated();
+        $gameType = GameType::from($validated['game_type']);
 
         $server = Server::query()->create($validated);
 
@@ -105,32 +86,10 @@ class ServerController extends Controller
         return back()->with('success', "Server '{$server->name}' created.");
     }
 
-    public function update(Request $request, Server $server): RedirectResponse
+    public function update(UpdateServerRequest $request, Server $server): RedirectResponse
     {
         $gameType = $server->game_type;
-        $handler = app(GameManager::class)->for($server);
-
-        $rules = [
-            'name' => ['required', 'string', 'max:255'],
-            'port' => ['required', 'integer', 'min:1', 'max:65535', Rule::unique('servers', 'port')->ignore($server->id)],
-            'query_port' => ['required', 'integer', 'min:1', 'max:65535', Rule::unique('servers', 'query_port')->ignore($server->id)],
-            'max_players' => ['required', 'integer', 'min:1', 'max:256'],
-            'password' => ['nullable', 'string', 'max:255'],
-            'admin_password' => ['nullable', 'string', 'max:255'],
-            'description' => ['nullable', 'string', 'max:1000'],
-            'active_preset_id' => ['nullable', 'exists:mod_presets,id'],
-            'game_install_id' => ['required', 'exists:game_installs,id'],
-            'additional_params' => ['nullable', 'string', 'max:1000'],
-            ...$handler->serverValidationRules(),
-        ];
-
-        if (in_array($gameType, [GameType::Arma3, GameType::ArmaReforger, GameType::DayZ])) {
-            $rules = array_merge($rules, [
-                ...$handler->settingsValidationRules(),
-            ]);
-        }
-
-        $validated = $request->validate($rules);
+        $validated = $request->validated();
 
         $serverFields = collect($validated)->only($server->getFillable())->toArray();
         $server->update($serverFields);

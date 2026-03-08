@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Mission\StoreMissionRequest;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -18,13 +18,8 @@ class MissionController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(StoreMissionRequest $request): RedirectResponse
     {
-        $request->validate([
-            'missions' => ['required', 'array'],
-            'missions.*' => ['required', 'file', 'max:524288'],
-        ]);
-
         $path = config('arma.missions_base_path');
         if (! is_dir($path)) {
             mkdir($path, 0755, true);

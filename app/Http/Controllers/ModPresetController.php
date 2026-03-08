@@ -3,14 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Enums\GameType;
+use App\Http\Requests\ModPreset\ImportModPresetRequest;
+use App\Http\Requests\ModPreset\StoreModPresetRequest;
+use App\Http\Requests\ModPreset\UpdateModPresetRequest;
 use App\Models\ModPreset;
 use App\Models\ReforgerMod;
 use App\Models\WorkshopMod;
 use App\Services\PresetImportService;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -39,18 +40,10 @@ class ModPresetController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(StoreModPresetRequest $request): RedirectResponse
     {
-        $gameType = GameType::from($request->input('game_type', 'arma3'));
-
-        $validated = $request->validate([
-            'game_type' => ['required', Rule::enum(GameType::class)],
-            'name' => ['required', 'string', 'max:255', Rule::unique('mod_presets')->where('game_type', $gameType->value)],
-            'mod_ids' => ['nullable', 'array'],
-            'mod_ids.*' => ['integer', 'exists:workshop_mods,id'],
-            'reforger_mod_ids' => ['nullable', 'array'],
-            'reforger_mod_ids.*' => ['integer', 'exists:reforger_mods,id'],
-        ]);
+        $validated = $request->validated();
+        $gameType = GameType::from($validated['game_type']);
 
         $preset = ModPreset::query()->create([
             'game_type' => $validated['game_type'],
@@ -82,17 +75,10 @@ class ModPresetController extends Controller
         ]);
     }
 
-    public function update(Request $request, ModPreset $modPreset): RedirectResponse
+    public function update(UpdateModPresetRequest $request, ModPreset $modPreset): RedirectResponse
     {
+        $validated = $request->validated();
         $gameType = $modPreset->game_type;
-
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255', Rule::unique('mod_presets')->where('game_type', $gameType->value)->ignore($modPreset->id)],
-            'mod_ids' => ['nullable', 'array'],
-            'mod_ids.*' => ['integer', 'exists:workshop_mods,id'],
-            'reforger_mod_ids' => ['nullable', 'array'],
-            'reforger_mod_ids.*' => ['integer', 'exists:reforger_mods,id'],
-        ]);
 
         $modPreset->update(['name' => $validated['name']]);
 
@@ -116,13 +102,8 @@ class ModPresetController extends Controller
         return back()->with('success', 'Preset deleted.');
     }
 
-    public function import(Request $request, PresetImportService $importService): RedirectResponse
+    public function import(ImportModPresetRequest $request, PresetImportService $importService): RedirectResponse
     {
-        $request->validate([
-            'import_file' => ['required', 'file', 'max:2048'],
-            'import_name' => ['nullable', 'string', 'max:255'],
-        ]);
-
         $html = file_get_contents($request->file('import_file')->getRealPath());
 
         try {

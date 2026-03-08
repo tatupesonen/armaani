@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Enums\GameType;
 use App\Enums\InstallationStatus;
+use App\Http\Requests\WorkshopMod\StoreWorkshopModRequest;
+use App\Http\Requests\WorkshopMod\UpdateSelectedModsRequest;
 use App\Jobs\BatchDownloadModsJob;
 use App\Jobs\DownloadModJob;
 use App\Models\ReforgerMod;
@@ -58,12 +60,9 @@ class WorkshopModController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(StoreWorkshopModRequest $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'workshop_id' => ['required', 'numeric', 'min:1'],
-            'game_type' => ['nullable', 'string'],
-        ]);
+        $validated = $request->validated();
 
         $gameType = GameType::from($validated['game_type'] ?? 'arma3');
 
@@ -148,12 +147,9 @@ class WorkshopModController extends Controller
         return back()->with('success', 'Mod deleted.');
     }
 
-    public function updateSelected(Request $request): RedirectResponse
+    public function updateSelected(UpdateSelectedModsRequest $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'mod_ids' => ['required', 'array', 'min:1'],
-            'mod_ids.*' => ['integer', 'exists:workshop_mods,id'],
-        ]);
+        $validated = $request->validated();
 
         $mods = WorkshopMod::query()
             ->whereIn('id', $validated['mod_ids'])
