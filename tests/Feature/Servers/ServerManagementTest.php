@@ -724,7 +724,7 @@ class ServerManagementTest extends TestCase
         $handler = Mockery::mock(GameHandler::class);
         $handler->shouldReceive('buildLaunchCommand')
             ->with(Mockery::on(fn ($s) => $s->id === $server->id))
-            ->andReturn('/path/to/arma3server -port=2302');
+            ->andReturn(['/path/to/arma3server', '-port=2302']);
 
         $gameManager = Mockery::mock(GameManager::class);
         $gameManager->shouldReceive('for')->andReturn($handler);

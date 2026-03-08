@@ -83,7 +83,7 @@ class ReforgerScenarioService
         $profilePath = $server->getProfilesPath();
 
         $process = proc_open(
-            $binaryPath.' -listScenarios -logStats 1 -profile '.$profilePath,
+            [$binaryPath, '-listScenarios', '-logStats', '1', '-profile', $profilePath],
             $descriptors,
             $pipes,
             $gameInstall->getInstallationPath(),

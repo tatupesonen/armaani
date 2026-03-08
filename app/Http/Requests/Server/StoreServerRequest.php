@@ -19,8 +19,8 @@ class StoreServerRequest extends FormRequest
         return [
             'game_type' => ['required', Rule::enum(GameType::class)],
             'name' => ['required', 'string', 'max:255'],
-            'port' => ['required', 'integer', 'min:1', 'max:65535', Rule::unique('servers', 'port')],
-            'query_port' => ['required', 'integer', 'min:1', 'max:65535', Rule::unique('servers', 'query_port')],
+            'port' => ['required', 'integer', 'min:1', 'max:65535', 'different:query_port', Rule::unique('servers', 'port'), Rule::unique('servers', 'query_port')],
+            'query_port' => ['required', 'integer', 'min:1', 'max:65535', Rule::unique('servers', 'query_port'), Rule::unique('servers', 'port')],
             'max_players' => ['required', 'integer', 'min:1', 'max:256'],
             'password' => ['nullable', 'string', 'max:255'],
             'admin_password' => ['nullable', 'string', 'max:255'],

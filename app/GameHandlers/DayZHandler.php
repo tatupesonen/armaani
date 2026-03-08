@@ -13,7 +13,7 @@ class DayZHandler implements GameHandler
         return GameType::DayZ;
     }
 
-    public function buildLaunchCommand(Server $server): string
+    public function buildLaunchCommand(Server $server): array
     {
         throw new \RuntimeException('DayZ server support is not yet implemented.');
     }
@@ -73,7 +73,7 @@ class DayZHandler implements GameHandler
         return false;
     }
 
-    public function buildHeadlessClientCommand(Server $server, int $index): ?string
+    public function buildHeadlessClientCommand(Server $server, int $index): ?array
     {
         return null;
     }

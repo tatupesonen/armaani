@@ -21,9 +21,9 @@ class StoreModPresetRequest extends FormRequest
         return [
             'game_type' => ['required', Rule::enum(GameType::class)],
             'name' => ['required', 'string', 'max:255', Rule::unique('mod_presets')->where('game_type', $gameType->value)],
-            'mod_ids' => ['nullable', 'array'],
+            'mod_ids' => ['nullable', 'array', 'max:500'],
             'mod_ids.*' => ['integer', 'exists:workshop_mods,id'],
-            'reforger_mod_ids' => ['nullable', 'array'],
+            'reforger_mod_ids' => ['nullable', 'array', 'max:500'],
             'reforger_mod_ids.*' => ['integer', 'exists:reforger_mods,id'],
         ];
     }

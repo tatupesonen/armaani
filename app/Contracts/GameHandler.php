@@ -12,9 +12,11 @@ interface GameHandler
     // --- Server Process ---
 
     /**
-     * Build the full shell command to start the game server.
+     * Build the command arguments to start the game server.
+     *
+     * @return array<int, string> The binary path as the first element, followed by arguments.
      */
-    public function buildLaunchCommand(Server $server): string;
+    public function buildLaunchCommand(Server $server): array;
 
     /**
      * Generate all config files needed by this game (server.cfg, JSON config, profiles, etc.)
@@ -83,10 +85,12 @@ interface GameHandler
     public function supportsHeadlessClients(): bool;
 
     /**
-     * Build the launch command for a headless client instance.
+     * Build the launch command arguments for a headless client instance.
      * Return null if headless clients are not supported.
+     *
+     * @return array<int, string>|null The binary path as the first element, followed by arguments.
      */
-    public function buildHeadlessClientCommand(Server $server, int $index): ?string;
+    public function buildHeadlessClientCommand(Server $server, int $index): ?array;
 
     // --- Backups ---
 

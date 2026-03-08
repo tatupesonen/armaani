@@ -27,10 +27,19 @@ class MissionController extends Controller
 
         $count = 0;
         foreach ($request->file('missions') as $file) {
-            if (! str_ends_with(strtolower($file->getClientOriginalName()), '.pbo')) {
+            $originalName = basename($file->getClientOriginalName());
+
+            if (! str_ends_with(strtolower($originalName), '.pbo')) {
                 continue;
             }
-            $file->move($path, $file->getClientOriginalName());
+
+            $safeName = preg_replace('/[^\w.\- ]/', '', $originalName);
+
+            if ($safeName === '' || ! str_ends_with(strtolower($safeName), '.pbo')) {
+                continue;
+            }
+
+            $file->move($path, $safeName);
             $count++;
         }
 
@@ -41,23 +50,45 @@ class MissionController extends Controller
 
     public function download(string $filename): BinaryFileResponse
     {
-        $path = config('arma.missions_base_path').'/'.$filename;
+        $path = $this->resolveSecureMissionPath($filename);
 
-        abort_unless(file_exists($path), 404);
+        abort_unless($path !== null, 404);
 
         return response()->download($path);
     }
 
     public function destroy(string $filename): RedirectResponse
     {
-        $path = config('arma.missions_base_path').'/'.$filename;
+        $path = $this->resolveSecureMissionPath($filename);
 
-        if (file_exists($path)) {
+        if ($path !== null) {
             unlink($path);
-            Log::info('User '.auth()->id().' ('.auth()->user()->name.") deleted mission: {$filename}");
+            Log::info('User '.auth()->id().' ('.auth()->user()->name.') deleted mission: '.basename($path));
         }
 
         return back()->with('success', 'Mission file deleted.');
+    }
+
+    /**
+     * Resolve a mission filename to a secure, validated absolute path.
+     * Returns null if the file does not exist or falls outside the missions directory.
+     */
+    private function resolveSecureMissionPath(string $filename): ?string
+    {
+        $filename = basename($filename);
+        $path = config('arma.missions_base_path').'/'.$filename;
+        $realPath = realpath($path);
+        $basePath = realpath(config('arma.missions_base_path'));
+
+        if ($realPath === false || $basePath === false) {
+            return null;
+        }
+
+        if (! str_starts_with($realPath, $basePath.DIRECTORY_SEPARATOR)) {
+            return null;
+        }
+
+        return $realPath;
     }
 
     /**

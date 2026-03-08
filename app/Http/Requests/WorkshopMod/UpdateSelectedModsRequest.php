@@ -15,7 +15,7 @@ class UpdateSelectedModsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'mod_ids' => ['required', 'array', 'min:1'],
+            'mod_ids' => ['required', 'array', 'min:1', 'max:500'],
             'mod_ids.*' => ['integer', 'exists:workshop_mods,id'],
         ];
     }

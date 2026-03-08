@@ -120,12 +120,15 @@ class ReforgerHandlerTest extends TestCase
 
         $command = $this->handler->buildLaunchCommand($server);
 
+        $this->assertIsArray($command);
         $expectedBinary = $server->gameInstall->getInstallationPath().'/ArmaReforgerServer';
-        $this->assertStringStartsWith($expectedBinary, $command);
-        $this->assertStringContainsString('-config '.$server->getProfilesPath().'/REFORGER_'.$server->id.'.json', $command);
-        $this->assertStringContainsString('-profile '.$server->getProfilesPath(), $command);
-        $this->assertStringContainsString('-maxFPS 60', $command);  // default
-        $this->assertStringContainsString('-backendlog', $command); // default enabled
+        $this->assertSame($expectedBinary, $command[0]);
+        $this->assertContains('-config', $command);
+        $this->assertContains($server->getProfilesPath().'/REFORGER_'.$server->id.'.json', $command);
+        $this->assertContains('-profile', $command);
+        $this->assertContains($server->getProfilesPath(), $command);
+        $this->assertContains('60', $command);       // default maxFPS
+        $this->assertContains('-backendlog', $command); // default enabled
     }
 
     public function test_build_launch_command_uses_custom_max_fps(): void
@@ -136,7 +139,7 @@ class ReforgerHandlerTest extends TestCase
 
         $command = $this->handler->buildLaunchCommand($server);
 
-        $this->assertStringContainsString('-maxFPS 120', $command);
+        $this->assertContains('120', $command);
     }
 
     public function test_build_launch_command_omits_backendlog_when_disabled(): void
@@ -147,7 +150,7 @@ class ReforgerHandlerTest extends TestCase
 
         $command = $this->handler->buildLaunchCommand($server);
 
-        $this->assertStringNotContainsString('-backendlog', $command);
+        $this->assertNotContains('-backendlog', $command);
     }
 
     public function test_build_launch_command_includes_additional_params(): void
@@ -156,7 +159,8 @@ class ReforgerHandlerTest extends TestCase
 
         $command = $this->handler->buildLaunchCommand($server);
 
-        $this->assertStringContainsString('-logStats 10000', $command);
+        $this->assertContains('-logStats', $command);
+        $this->assertContains('10000', $command);
     }
 
     public function test_generate_config_files_writes_json_config(): void

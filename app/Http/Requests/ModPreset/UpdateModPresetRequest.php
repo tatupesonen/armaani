@@ -20,9 +20,9 @@ class UpdateModPresetRequest extends FormRequest
 
         return [
             'name' => ['required', 'string', 'max:255', Rule::unique('mod_presets')->where('game_type', $gameType->value)->ignore($modPreset->id)],
-            'mod_ids' => ['nullable', 'array'],
+            'mod_ids' => ['nullable', 'array', 'max:500'],
             'mod_ids.*' => ['integer', 'exists:workshop_mods,id'],
-            'reforger_mod_ids' => ['nullable', 'array'],
+            'reforger_mod_ids' => ['nullable', 'array', 'max:500'],
             'reforger_mod_ids.*' => ['integer', 'exists:reforger_mods,id'],
         ];
     }

@@ -13,7 +13,7 @@ class ReforgerHandler implements GameHandler
         return GameType::ArmaReforger;
     }
 
-    public function buildLaunchCommand(Server $server): string
+    public function buildLaunchCommand(Server $server): array
     {
         $binary = $this->getBinaryPath($server);
         $configPath = $server->getProfilesPath().'/REFORGER_'.$server->id.'.json';
@@ -24,9 +24,10 @@ class ReforgerHandler implements GameHandler
         $backendLogEnabled = $settings?->backend_log_enabled ?? true;
 
         $params = [
-            '-config '.$configPath,
-            '-profile '.$profilesPath,
-            '-maxFPS '.$maxFps,
+            $binary,
+            '-config', $configPath,
+            '-profile', $profilesPath,
+            '-maxFPS', (string) $maxFps,
         ];
 
         if ($backendLogEnabled) {
@@ -34,10 +35,11 @@ class ReforgerHandler implements GameHandler
         }
 
         if ($server->additional_params) {
-            $params[] = $server->additional_params;
+            $additionalArgs = preg_split('/\s+/', trim($server->additional_params), -1, PREG_SPLIT_NO_EMPTY);
+            array_push($params, ...$additionalArgs);
         }
 
-        return $binary.' '.implode(' ', $params);
+        return $params;
     }
 
     public function generateConfigFiles(Server $server): void
@@ -148,7 +150,7 @@ class ReforgerHandler implements GameHandler
         return false;
     }
 
-    public function buildHeadlessClientCommand(Server $server, int $index): ?string
+    public function buildHeadlessClientCommand(Server $server, int $index): ?array
     {
         return null;
     }

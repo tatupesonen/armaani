@@ -22,13 +22,13 @@ trait MocksGameManager
         $handler->shouldReceive('getServerLogPath')->andReturn('/tmp/fake.log');
         $handler->shouldReceive('getBinaryPath')->andReturn('/tmp/fake_binary');
         $handler->shouldReceive('getProfileName')->andReturn('arma3_1');
-        $handler->shouldReceive('buildLaunchCommand')->andReturn('/tmp/fake_binary -port=2302');
+        $handler->shouldReceive('buildLaunchCommand')->andReturn(['/tmp/fake_binary', '-port=2302']);
         $handler->shouldReceive('generateConfigFiles')->andReturnNull();
         $handler->shouldReceive('symlinkMods')->andReturnNull();
         $handler->shouldReceive('symlinkMissions')->andReturnNull();
         $handler->shouldReceive('copyBiKeys')->andReturnNull();
         $handler->shouldReceive('buildHeadlessClientCommand')->andReturn(
-            $gameType === GameType::Arma3 ? '/tmp/fake_binary -client' : null
+            $gameType === GameType::Arma3 ? ['/tmp/fake_binary', '-client'] : null
         );
         $handler->shouldReceive('getBackupDownloadFilename')->andReturn('backup_file');
         $handler->shouldReceive('serverValidationRules')->andReturn([]);

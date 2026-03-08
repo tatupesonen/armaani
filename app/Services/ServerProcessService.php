@@ -50,7 +50,7 @@ class ServerProcessService
         $binaryDir = $server->gameInstall->getInstallationPath();
 
         Log::info("{$context} Starting server from {$binaryDir}");
-        Log::info("{$context} Launch command: {$command}");
+        Log::info("{$context} Launch command: ".implode(' ', $command));
         Log::info("{$context} Log file: {$logFile}");
 
         // Truncate/create log file before the server process.
@@ -58,8 +58,8 @@ class ServerProcessService
         $this->startLogTail($server);
 
         // Start the server as a detached child process using proc_open.
-        // The 'exec' prefix replaces the shell with the server binary so
-        // the PID we capture IS the server process — signals target it directly.
+        // Array-form proc_open bypasses the shell entirely, so the PID we
+        // capture IS the server process — signals target it directly.
         $this->spawnProcess($command, $binaryDir, $logFile, $pidFile, $context);
     }
 
@@ -290,7 +290,7 @@ class ServerProcessService
             return;
         }
 
-        Log::info("{$context} Starting headless client: {$command}");
+        Log::info("{$context} Starting headless client: ".implode(' ', $command));
 
         file_put_contents($logFile, '');
 
@@ -299,11 +299,12 @@ class ServerProcessService
 
     /**
      * Spawn a detached process via proc_open, capture its PID, and write a PID file.
-     * The 'exec' prefix replaces the shell so the PID targets the actual binary.
+     * Array-form proc_open bypasses the shell so the PID targets the actual binary.
      *
+     * @param  array<int, string>  $command  The binary path followed by arguments.
      * @return int|null The PID of the spawned process, or null on failure.
      */
-    protected function spawnProcess(string $command, string $workingDir, string $logFile, string $pidFile, string $context): ?int
+    protected function spawnProcess(array $command, string $workingDir, string $logFile, string $pidFile, string $context): ?int
     {
         $descriptors = [
             0 => ['file', '/dev/null', 'r'],
@@ -311,7 +312,7 @@ class ServerProcessService
             2 => ['file', $logFile, 'a'],
         ];
 
-        $process = proc_open('exec '.$command, $descriptors, $pipes, $workingDir);
+        $process = proc_open($command, $descriptors, $pipes, $workingDir);
 
         if (is_resource($process)) {
             $status = proc_get_status($process);

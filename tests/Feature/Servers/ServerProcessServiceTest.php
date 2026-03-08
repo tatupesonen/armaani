@@ -520,12 +520,13 @@ class ServerProcessServiceTest extends TestCase
 
         $command = $this->handler->buildLaunchCommand($server);
 
+        $this->assertIsArray($command);
         $expectedBinary = $server->gameInstall->getInstallationPath().'/arma3server_x64';
-        $this->assertStringStartsWith($expectedBinary, $command);
-        $this->assertStringContainsString('-port='.$server->port, $command);
-        $this->assertStringContainsString('-profiles='.$server->getProfilesPath(), $command);
-        $this->assertStringContainsString('-config='.$server->getProfilesPath().'/server.cfg', $command);
-        $this->assertStringContainsString('-cfg='.$server->getProfilesPath().'/server_basic.cfg', $command);
+        $this->assertSame($expectedBinary, $command[0]);
+        $this->assertContains('-port='.$server->port, $command);
+        $this->assertContains('-profiles='.$server->getProfilesPath(), $command);
+        $this->assertContains('-config='.$server->getProfilesPath().'/server.cfg', $command);
+        $this->assertContains('-cfg='.$server->getProfilesPath().'/server_basic.cfg', $command);
     }
 
     // ---------------------------------------------------------------

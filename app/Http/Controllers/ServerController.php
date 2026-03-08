@@ -216,7 +216,7 @@ class ServerController extends Controller
         $handler = app(GameManager::class)->for($server);
 
         return response()->json([
-            'command' => $handler->buildLaunchCommand($server),
+            'command' => implode(' ', $handler->buildLaunchCommand($server)),
         ]);
     }
 

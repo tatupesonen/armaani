@@ -16,29 +16,31 @@ class Arma3Handler implements GameHandler
         return GameType::Arma3;
     }
 
-    public function buildLaunchCommand(Server $server): string
+    public function buildLaunchCommand(Server $server): array
     {
         $binary = $this->getBinaryPath($server);
-        $params = [];
-
-        $params[] = '-port='.$server->port;
-        $params[] = '-name='.$this->getProfileName($server);
-        $params[] = '-profiles='.$server->getProfilesPath();
-        $params[] = '-config='.$server->getProfilesPath().'/server.cfg';
-        $params[] = '-cfg='.$server->getProfilesPath().'/server_basic.cfg';
-        $params[] = '-nosplash';
-        $params[] = '-skipIntro';
-        $params[] = '-world=empty';
+        $params = [
+            $binary,
+            '-port='.$server->port,
+            '-name='.$this->getProfileName($server),
+            '-profiles='.$server->getProfilesPath(),
+            '-config='.$server->getProfilesPath().'/server.cfg',
+            '-cfg='.$server->getProfilesPath().'/server_basic.cfg',
+            '-nosplash',
+            '-skipIntro',
+            '-world=empty',
+        ];
 
         foreach ($this->getModNames($server) as $modName) {
             $params[] = '-mod='.$modName;
         }
 
         if ($server->additional_params) {
-            $params[] = $server->additional_params;
+            $additionalArgs = preg_split('/\s+/', trim($server->additional_params), -1, PREG_SPLIT_NO_EMPTY);
+            array_push($params, ...$additionalArgs);
         }
 
-        return $binary.' '.implode(' ', $params);
+        return $params;
     }
 
     public function generateConfigFiles(Server $server): void
@@ -178,11 +180,12 @@ class Arma3Handler implements GameHandler
         return true;
     }
 
-    public function buildHeadlessClientCommand(Server $server, int $index): ?string
+    public function buildHeadlessClientCommand(Server $server, int $index): ?array
     {
         $binary = $this->getBinaryPath($server);
 
         $params = [
+            $binary,
             '-client',
             '-connect=127.0.0.1',
             '-port='.$server->port,
@@ -200,7 +203,7 @@ class Arma3Handler implements GameHandler
             $params[] = '-mod='.$modName;
         }
 
-        return $binary.' '.implode(' ', $params);
+        return $params;
     }
 
     public function getBackupFilePath(Server $server): ?string
