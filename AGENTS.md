@@ -303,14 +303,12 @@ Wayfinder generates TypeScript functions for Laravel routes. Import from `@/acti
 
 armaani is a web-based game server manager built with Laravel 12, Inertia v2, React 19, and Tailwind CSS v4. It supports Arma 3, Arma Reforger, and DayZ (scaffolded). It allows users to install, configure, and manage multiple server instances (including starting/stopping/restarting processes), download Steam Workshop mods via SteamCMD, organize mods into presets, import Arma 3 Launcher HTML preset files, and assign presets to server instances. Game-specific logic is handled by the GameHandler pattern (Manager pattern). The application supports dynamic headless client management (Arma 3), server difficulty settings, and profile backup/restore. It ships as a single Docker container with SteamCMD bundled inside.
 
-This project is a port of `~/armaani` (Laravel + Livewire) to Inertia v2 + React 19. All backend logic is identical. The frontend is completely rewritten in React.
-
 ## Architecture
 
-- **Backend**: Laravel 12 with Inertia v2 controllers (not Livewire SFCs)
+- **Backend**: Laravel 12 with Inertia v2 controllers
 - **Frontend**: React 19 pages in `resources/js/pages/`, components in `resources/js/components/`
 - **Routing**: Wayfinder generates TypeScript route functions from Laravel routes. Import from `@/actions/` (controllers) or `@/routes/` (named routes).
-- **Broadcast channels**: All 4 events use `PrivateChannel` (not public `Channel` like the original). Channel authorization in `routes/channels.php`.
+- **Broadcast channels**: All 4 events use `PrivateChannel`. Channel authorization in `routes/channels.php`.
 - **WebSocket**: Laravel Reverb + Echo with `echo.private()` subscriptions in React components.
 - **Toast system**: Context-based `ToastProvider` + `useToast()` hook. Flash messages from Inertia are auto-displayed. Server status toasts with animated cross-fade between states.
 
@@ -517,8 +515,7 @@ The toast system (`resources/js/components/toast-manager.tsx`) handles:
 ### Test Conventions
 
 - PHPUnit, `RefreshDatabase` trait, `test_snake_case` method naming, `route()` helper for URLs.
-- Livewire→Inertia conversion: `Livewire::test()` becomes HTTP endpoint tests using `$this->get()`, `$this->post()`, `$this->put()`, `$this->delete()` with `assertInertia()`, `assertSessionHas()`, `assertSessionHasErrors()`.
-- Backend-only tests (jobs, events, listeners, game handlers, services) are near-verbatim copies since backend is identical.
+- HTTP endpoint tests use `$this->get()`, `$this->post()`, `$this->put()`, `$this->delete()` with `assertInertia()`, `assertSessionHas()`, `assertSessionHasErrors()`.
 
 ### Test Traits
 
@@ -537,28 +534,40 @@ The toast system (`resources/js/components/toast-manager.tsx`) handles:
 - `SteamWorkshopService::validateApiKey()` returns `array{valid: bool, error: string|null}`.
 - Streamed downloads use `$response->streamedContent()` not `$response->getContent()`.
 
-### Test Files (302 tests total)
+### Test Files (369 tests total across 32 files)
 
 - `tests/Feature/DashboardTest.php` — 10 tests
-- `tests/Feature/Events/BroadcastEventsTest.php` — 8 tests
-- `tests/Feature/Listeners/DetectServerBootedTest.php` — 4 tests
-- `tests/Feature/Jobs/InstallServerJobTest.php` — 3 tests
-- `tests/Feature/Jobs/StartServerJobTest.php` — 6 tests
-- `tests/Feature/Jobs/StopServerJobTest.php` — 3 tests
-- `tests/Feature/Jobs/DownloadModJobTest.php` — 9 tests
+- `tests/Feature/ExampleTest.php` — 1 test
+- `tests/Feature/ReforgerScenarioServiceTest.php` — 11 tests
+- `tests/Feature/Auth/AuthenticationTest.php` — 6 tests
+- `tests/Feature/Auth/EmailVerificationTest.php` — 6 tests
+- `tests/Feature/Auth/PasswordConfirmationTest.php` — 2 tests
+- `tests/Feature/Auth/PasswordResetTest.php` — 5 tests
+- `tests/Feature/Auth/TwoFactorChallengeTest.php` — 2 tests
+- `tests/Feature/Auth/VerificationNotificationTest.php` — 2 tests
+- `tests/Feature/Events/BroadcastEventsTest.php` — 9 tests
+- `tests/Feature/GameHandlers/DayZHandlerTest.php` — 14 tests
+- `tests/Feature/GameHandlers/ReforgerHandlerTest.php` — 23 tests
+- `tests/Feature/GameInstalls/GameInstallManagementTest.php` — 8 tests
 - `tests/Feature/Jobs/BatchDownloadModsJobTest.php` — 8 tests
-- `tests/Feature/GameHandlers/ReforgerHandlerTest.php` — 16 tests
-- `tests/Feature/GameHandlers/DayZHandlerTest.php` — 12 tests
-- `tests/Feature/GameInstalls/GameInstallManagementTest.php` — 7 tests
-- `tests/Feature/Servers/ServerManagementTest.php` — 31 tests
-- `tests/Feature/Servers/ServerProcessServiceTest.php` — 33 tests
-- `tests/Feature/Servers/MultiGameServerTest.php` — 14 tests
-- `tests/Feature/Servers/ServerBackupManagementTest.php` — 14 tests
-- `tests/Feature/Servers/ServerBackupServiceTest.php` — 14 tests
+- `tests/Feature/Jobs/DownloadModJobTest.php` — 9 tests
+- `tests/Feature/Jobs/InstallServerJobTest.php` — 3 tests
+- `tests/Feature/Jobs/StartServerJobTest.php` — 3 tests
+- `tests/Feature/Jobs/StopServerJobTest.php` — 3 tests
+- `tests/Feature/Listeners/DetectServerBootedTest.php` — 9 tests
+- `tests/Feature/Missions/MissionManagementTest.php` — 14 tests
 - `tests/Feature/Mods/WorkshopModManagementTest.php` — 37 tests
 - `tests/Feature/Presets/ModPresetManagementTest.php` — 32 tests
-- `tests/Feature/Missions/MissionManagementTest.php` — 14 tests
+- `tests/Feature/Servers/MultiGameServerTest.php` — 14 tests
+- `tests/Feature/Servers/ServerBackupManagementTest.php` — 14 tests
+- `tests/Feature/Servers/ServerBackupServiceTest.php` — 15 tests
+- `tests/Feature/Servers/ServerManagementTest.php` — 36 tests
+- `tests/Feature/Servers/ServerProcessServiceTest.php` — 33 tests
+- `tests/Feature/Settings/PasswordUpdateTest.php` — 3 tests
+- `tests/Feature/Settings/ProfileUpdateTest.php` — 5 tests
+- `tests/Feature/Settings/TwoFactorAuthenticationTest.php` — 4 tests
 - `tests/Feature/SteamSettings/SteamSettingsTest.php` — 27 tests
+- `tests/Unit/ExampleTest.php` — 1 test
 
 ## File System Layout
 
@@ -571,7 +580,7 @@ The toast system (`resources/js/components/toast-manager.tsx`) handles:
 
 ## Docker Deployment
 
-- Single container based on `cm2network/steamcmd` with PHP 8.5 FPM/CLI, Nginx, SteamCMD, Supervisor, SQLite.
+- Single container based on `cm2network/steamcmd` with PHP 8.4 FPM/CLI, Nginx, SteamCMD, Supervisor, SQLite.
 - `network_mode: host` for dynamic game server ports.
 - Single volume: `./storage:/var/www/html/storage`
 - Supervisord manages: Nginx, PHP-FPM, queue worker, Reverb (127.0.0.1:6001).
