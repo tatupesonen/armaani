@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.1](https://github.com/tatupesonen/Armaani/compare/v0.3.0...v0.3.1) (2026-03-08)
+
+
+### Bug Fixes
+
+* recreate .env and APP_KEY in Docker test stage ([3b673c0](https://github.com/tatupesonen/Armaani/commit/3b673c071d8b3c3b7c5817ac4b902b2a5b4cbf78))
+* use standard steamcmd base image and chown /home/steam for root ([5098529](https://github.com/tatupesonen/Armaani/commit/509852970519249d67044909d81e7abac5342317))
+
 ## [0.3.0](https://github.com/tatupesonen/Armaani/compare/v0.2.0...v0.3.0) (2026-03-08)
 
 
