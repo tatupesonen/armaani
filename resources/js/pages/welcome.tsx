@@ -31,7 +31,7 @@ import {
     useState,
 } from 'react';
 
-const GITHUB_URL = 'https://github.com/tatu/Armaani';
+const GITHUB_URL = 'https://github.com/tatupesonen/Armaani';
 
 export default function Welcome({
     canRegister = true,
@@ -513,28 +513,11 @@ const demoSequence: { status: DemoStatus; duration: number }[] = [
     { status: 'running', duration: 0 },
 ];
 
-const fakeLogs: Partial<Record<DemoStatus, string[]>> = {
-    downloading_mods: [
-        '> Downloading @CBA_A3 (450814997)...',
-        '> Downloading @ace (463939057)...',
-        '> Downloading @TFAR (894678801)...',
-        '> All mods downloaded successfully',
-    ],
-    booting: [
-        '> Game Port: 2001, Steam Query Port: 17777',
-        '> Backend initialized, loading world...',
-        '> World loaded, setting up game mode...',
-    ],
-    running: ['> Server is ready — waiting for players'],
-};
-
 function ServerDemo() {
     const [status, setStatus] = useState<DemoStatus>('stopped');
-    const [logLines, setLogLines] = useState<string[]>([]);
     const [started, setStarted] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
     const timeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
-    const logEndRef = useRef<HTMLDivElement>(null);
 
     // Start animation when the component scrolls into view
     useEffect(() => {
@@ -568,16 +551,6 @@ function ServerDemo() {
             const step = demoSequence[stepIndex];
             setStatus(step.status);
 
-            const lines = fakeLogs[step.status];
-            if (lines) {
-                lines.forEach((line, i) => {
-                    setTimeout(
-                        () => setLogLines((prev) => [...prev, line]),
-                        (i + 1) * (step.duration / (lines.length + 1)),
-                    );
-                });
-            }
-
             stepIndex++;
 
             // Stop after reaching the last step (running)
@@ -594,13 +567,6 @@ function ServerDemo() {
             }
         };
     }, [started]);
-
-    useEffect(() => {
-        logEndRef.current?.scrollIntoView({
-            behavior: 'smooth',
-            block: 'nearest',
-        });
-    }, [logLines]);
 
     const isTransitioning =
         status === 'starting' ||
@@ -673,16 +639,6 @@ function ServerDemo() {
                             </span>
                         </>
                     )}
-                </div>
-            </div>
-
-            {/* Fake log output */}
-            <div className="h-36 border-t bg-zinc-950 p-4 font-mono text-xs leading-relaxed text-zinc-400">
-                <div className="h-full overflow-y-auto">
-                    {logLines.map((line, i) => (
-                        <div key={i}>{line}</div>
-                    ))}
-                    <div ref={logEndRef} />
                 </div>
             </div>
         </div>
