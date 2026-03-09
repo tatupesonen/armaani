@@ -32,10 +32,19 @@
 
         <title inertia>{{ config('app.name', 'Armaani') }}</title>
 
+        <meta name="description" content="Install, configure, and manage dedicated servers for Arma 3, Arma Reforger, and DayZ from a single web-based dashboard.">
+        <link rel="canonical" href="{{ url()->current() }}">
+
         <meta property="og:title" content="{{ config('app.name', 'Armaani') }}">
         <meta property="og:description" content="Install, configure, and manage dedicated servers for Arma 3, Arma Reforger, and DayZ from a single web-based dashboard.">
         <meta property="og:image" content="{{ url('/og-image.png') }}">
+        <meta property="og:url" content="{{ url()->current() }}">
         <meta property="og:type" content="website">
+
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:title" content="{{ config('app.name', 'Armaani') }}">
+        <meta name="twitter:description" content="Install, configure, and manage dedicated servers for Arma 3, Arma Reforger, and DayZ from a single web-based dashboard.">
+        <meta name="twitter:image" content="{{ url('/og-image.png') }}">
 
         <link rel="icon" href="/favicon.ico" sizes="any">
         <link rel="icon" href="/favicon.svg" type="image/svg+xml">

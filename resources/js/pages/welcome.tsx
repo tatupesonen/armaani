@@ -1,5 +1,6 @@
 import AppLogoColor from '@/components/app-logo-color';
 import AppLogoIcon from '@/components/app-logo-icon';
+import { Badge } from '@/components/ui/badge';
 import { Head, Link, usePage } from '@inertiajs/react';
 import { dashboard, login } from '@/routes';
 import {
@@ -17,11 +18,16 @@ import {
     ExternalLink,
     Github,
     Sparkle,
+    Loader2,
+    Pause,
+    RefreshCw,
+    Play,
 } from 'lucide-react';
 import {
     type ComponentType,
     type SVGAttributes,
     useEffect,
+    useRef,
     useState,
 } from 'react';
 
@@ -162,6 +168,25 @@ export default function Welcome({
                                     </Link>
                                 </>
                             )}
+                        </div>
+                    </div>
+                </section>
+
+                {/* Live Demo */}
+                <section className="border-t border-border/50 bg-accent/20 dark:bg-accent/5">
+                    <div className="mx-auto max-w-6xl px-6 py-20 lg:py-28">
+                        <div className="text-center">
+                            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
+                                Real-time server lifecycle
+                            </h2>
+                            <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
+                                Watch a server go from stopped to running.
+                                Status changes stream live to every connected
+                                client via WebSockets.
+                            </p>
+                        </div>
+                        <div className="mx-auto mt-14 max-w-3xl">
+                            <ServerDemo />
                         </div>
                     </div>
                 </section>
@@ -326,6 +351,9 @@ export default function Welcome({
                         <div className="flex items-center gap-2">
                             <AppLogoColor className="size-6" />
                             <span className="text-sm font-medium">Armaani</span>
+                            <span className="ml-2 text-sm leading-none text-muted-foreground">
+                                Made with love in 🇫🇮
+                            </span>
                         </div>
                         <div className="flex items-center gap-4">
                             <a
@@ -425,6 +453,238 @@ function StepCard({
             <p className="text-sm leading-relaxed text-muted-foreground">
                 {description}
             </p>
+        </div>
+    );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Server lifecycle demo                                                     */
+/* -------------------------------------------------------------------------- */
+
+const statusGradients = [
+    {
+        status: 'starting',
+        color: 'from-amber-400/20 to-zinc-300/5 dark:from-amber-500/15 dark:to-zinc-600/5',
+        shimmer: 'motion-safe:animate-shimmer',
+    },
+    {
+        status: 'booting',
+        color: 'from-blue-400/20 to-zinc-300/5 dark:from-blue-500/15 dark:to-zinc-600/5',
+        shimmer: 'motion-safe:animate-shimmer',
+    },
+    {
+        status: 'downloading_mods',
+        color: 'from-purple-400/20 to-zinc-300/5 dark:from-purple-500/15 dark:to-zinc-600/5',
+        shimmer: 'motion-safe:animate-shimmer',
+    },
+    {
+        status: 'running',
+        color: 'from-emerald-400/20 to-zinc-300/5 dark:from-emerald-500/15 dark:to-zinc-600/5',
+        shimmer: null,
+    },
+] as const;
+
+type DemoStatus = (typeof statusGradients)[number]['status'] | 'stopped';
+
+const statusLabels: Record<DemoStatus, string> = {
+    stopped: 'Stopped',
+    starting: 'Starting...',
+    booting: 'Booting...',
+    downloading_mods: 'Downloading Mods...',
+    running: 'Running',
+};
+
+const statusBadgeVariant: Record<
+    DemoStatus,
+    'success' | 'warning' | 'info' | 'secondary'
+> = {
+    stopped: 'secondary',
+    starting: 'warning',
+    booting: 'info',
+    downloading_mods: 'warning',
+    running: 'success',
+};
+
+const demoSequence: { status: DemoStatus; duration: number }[] = [
+    { status: 'stopped', duration: 2000 },
+    { status: 'starting', duration: 2000 },
+    { status: 'downloading_mods', duration: 3000 },
+    { status: 'booting', duration: 2500 },
+    { status: 'running', duration: 0 },
+];
+
+const fakeLogs: Partial<Record<DemoStatus, string[]>> = {
+    downloading_mods: [
+        '> Downloading @CBA_A3 (450814997)...',
+        '> Downloading @ace (463939057)...',
+        '> Downloading @TFAR (894678801)...',
+        '> All mods downloaded successfully',
+    ],
+    booting: [
+        '> Game Port: 2001, Steam Query Port: 17777',
+        '> Backend initialized, loading world...',
+        '> World loaded, setting up game mode...',
+    ],
+    running: ['> Server is ready — waiting for players'],
+};
+
+function ServerDemo() {
+    const [status, setStatus] = useState<DemoStatus>('stopped');
+    const [logLines, setLogLines] = useState<string[]>([]);
+    const [started, setStarted] = useState(false);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const timeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
+    const logEndRef = useRef<HTMLDivElement>(null);
+
+    // Start animation when the component scrolls into view
+    useEffect(() => {
+        if (!containerRef.current) {
+            return;
+        }
+
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                if (entry.isIntersecting && !started) {
+                    setStarted(true);
+                }
+            },
+            { threshold: 0.3 },
+        );
+
+        observer.observe(containerRef.current);
+
+        return () => observer.disconnect();
+    }, [started]);
+
+    // Run the sequence once when started
+    useEffect(() => {
+        if (!started) {
+            return;
+        }
+
+        let stepIndex = 0;
+
+        function advance() {
+            const step = demoSequence[stepIndex];
+            setStatus(step.status);
+
+            const lines = fakeLogs[step.status];
+            if (lines) {
+                lines.forEach((line, i) => {
+                    setTimeout(
+                        () => setLogLines((prev) => [...prev, line]),
+                        (i + 1) * (step.duration / (lines.length + 1)),
+                    );
+                });
+            }
+
+            stepIndex++;
+
+            // Stop after reaching the last step (running)
+            if (stepIndex < demoSequence.length) {
+                timeoutRef.current = setTimeout(advance, step.duration);
+            }
+        }
+
+        advance();
+
+        return () => {
+            if (timeoutRef.current) {
+                clearTimeout(timeoutRef.current);
+            }
+        };
+    }, [started]);
+
+    useEffect(() => {
+        logEndRef.current?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'nearest',
+        });
+    }, [logLines]);
+
+    const isTransitioning =
+        status === 'starting' ||
+        status === 'booting' ||
+        status === 'downloading_mods';
+
+    return (
+        <div
+            ref={containerRef}
+            className="overflow-hidden rounded-lg border bg-card shadow-lg"
+        >
+            {/* Card header — mirrors real server card */}
+            <div className="relative flex items-center justify-between p-4">
+                {statusGradients.map(({ status: s, color, shimmer }) => (
+                    <div
+                        key={s}
+                        className={`absolute inset-0 overflow-hidden bg-gradient-to-r [mask-image:linear-gradient(to_right,black,black_20%,transparent_45%)] transition-opacity duration-700 ${color} ${status === s ? 'opacity-100' : 'opacity-0'}`}
+                    >
+                        {shimmer && (
+                            <div
+                                className={`absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/12 to-transparent dark:via-white/6 ${shimmer}`}
+                            />
+                        )}
+                    </div>
+                ))}
+
+                <div className="relative min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                        <h3 className="text-lg font-semibold">Kolguyev</h3>
+                        <Badge variant="outline">Arma Reforger</Badge>
+                        <Badge variant={statusBadgeVariant[status]}>
+                            {statusLabels[status]}
+                        </Badge>
+                    </div>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                        Port: 2001 &middot; Players: 128 &middot; Install:
+                        Reforger Server{' '}
+                        <span className="font-mono text-xs">(public)</span>
+                    </p>
+                </div>
+
+                <div className="relative flex items-center gap-2">
+                    {status === 'stopped' && (
+                        <span className="inline-flex h-8 items-center gap-2 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground">
+                            <Play className="size-3.5" />
+                            Start
+                        </span>
+                    )}
+                    {isTransitioning && (
+                        <>
+                            <span className="inline-flex h-8 items-center gap-2 rounded-md bg-muted px-3 text-xs font-medium text-muted-foreground">
+                                <Loader2 className="size-3.5 animate-spin" />
+                                {statusLabels[status]}
+                            </span>
+                            <span className="inline-flex h-8 items-center gap-2 rounded-md bg-destructive px-3 text-xs font-medium text-white">
+                                <Pause className="size-3.5" />
+                                Stop
+                            </span>
+                        </>
+                    )}
+                    {status === 'running' && (
+                        <>
+                            <span className="inline-flex h-8 items-center gap-2 rounded-md bg-destructive px-3 text-xs font-medium text-white">
+                                <Pause className="size-3.5" />
+                                Stop
+                            </span>
+                            <span className="inline-flex h-8 items-center gap-2 rounded-md border border-border bg-background px-3 text-xs font-medium">
+                                <RefreshCw className="size-3.5" />
+                                Restart
+                            </span>
+                        </>
+                    )}
+                </div>
+            </div>
+
+            {/* Fake log output */}
+            <div className="h-36 border-t bg-zinc-950 p-4 font-mono text-xs leading-relaxed text-zinc-400">
+                <div className="h-full overflow-y-auto">
+                    {logLines.map((line, i) => (
+                        <div key={i}>{line}</div>
+                    ))}
+                    <div ref={logEndRef} />
+                </div>
+            </div>
         </div>
     );
 }
