@@ -38,7 +38,7 @@ class GameManager extends Manager
             throw new \InvalidArgumentException("No handler registered for [{$driver}].");
         }
 
-        return new $map[$driver];
+        return $this->container->make($map[$driver]);
     }
 
     /**

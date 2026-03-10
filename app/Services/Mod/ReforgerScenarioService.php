@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Mod;
 
 use App\Models\ReforgerScenario;
 use App\Models\Server;

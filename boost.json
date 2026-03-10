@@ -1,6 +1,5 @@
 {
     "agents": [
-        "claude_code",
         "opencode"
     ],
     "guidelines": true,

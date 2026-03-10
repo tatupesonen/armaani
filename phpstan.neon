@@ -23,6 +23,6 @@ parameters:
 
         # Process polling loop — correct flow analysis but intentional pattern
         - identifier: booleanAnd.leftAlwaysTrue
-          path: app/Services/ServerProcessService.php
+          path: app/Services/Server/ServerProcessService.php
         - identifier: if.alwaysTrue
-          path: app/Services/ServerProcessService.php
+          path: app/Services/Server/ServerProcessService.php

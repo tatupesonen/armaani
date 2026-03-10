@@ -8,7 +8,7 @@ use App\GameManager;
 use App\Jobs\InstallServerJob;
 use App\Models\GameInstall;
 use App\Models\SteamAccount;
-use App\Services\SteamCmdService;
+use App\Services\Steam\SteamCmdService;
 use Illuminate\Contracts\Process\ProcessResult;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;

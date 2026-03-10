@@ -13,11 +13,16 @@ use App\Enums\GameType;
 use App\Models\DifficultySettings;
 use App\Models\NetworkSettings;
 use App\Models\Server;
+use App\Services\Renderer\TwigConfigRenderer;
 use Illuminate\Support\Facades\Log;
 
 #[HandlesGame(GameType::Arma3)]
 final class Arma3Handler implements DetectsServerState, GameHandler, ManagesModAssets, SupportsBackups, SupportsHeadlessClients, SupportsMissions
 {
+    public function __construct(
+        protected TwigConfigRenderer $configRenderer,
+    ) {}
+
     public function gameType(): GameType
     {
         return GameType::Arma3;
@@ -385,58 +390,27 @@ final class Arma3Handler implements DetectsServerState, GameHandler, ManagesModA
      */
     protected function generateServerConfig(Server $server): void
     {
-        $lines = [];
+        $renderer = $this->configRenderer;
 
-        $lines[] = '// GLOBAL SETTINGS';
-        $lines[] = 'hostname = "'.addslashes($server->name).'";';
-        $lines[] = 'password = "'.addslashes((string) $server->password).'";';
-        $lines[] = 'passwordAdmin = "'.addslashes((string) $server->admin_password).'";';
-        $lines[] = '';
-        $lines[] = '// JOINING RULES';
-        $lines[] = 'maxPlayers = '.(int) $server->max_players.';';
-        $lines[] = 'kickDuplicate = 1;';
-        $lines[] = 'verifySignatures = '.($server->verify_signatures ? '2' : '0').';';
-        $lines[] = 'allowedFilePatching = '.($server->allowed_file_patching ? '2' : '0').';';
-        $lines[] = '';
-        $lines[] = '// INGAME SETTINGS';
-        $lines[] = 'disableVoN = '.($server->von_enabled ? '0' : '1').';';
-        $lines[] = 'vonCodec = 1;';
-        $lines[] = 'vonCodecQuality = 30;';
-        $lines[] = 'persistent = '.($server->persistent ? '1' : '0').';';
-        $lines[] = 'timeStampFormat = "short";';
-        $lines[] = 'BattlEye = '.($server->battle_eye ? '1' : '0').';';
-        $lines[] = '';
-        $lines[] = '// SIGNATURE VERIFICATION';
-        $lines[] = 'onUnsignedData = "kick (_this select 0)";';
-        $lines[] = 'onHackedData = "kick (_this select 0)";';
-        $lines[] = 'onDifferentData = "";';
-        $lines[] = '';
-        $lines[] = '// HEADLESS CLIENT';
-        $lines[] = 'headlessClients[] = {"127.0.0.1"};';
-        $lines[] = 'localClient[] = {"127.0.0.1"};';
-
-        if ($server->description) {
-            $lines[] = '';
-            $lines[] = '// MOTD';
-            $motdLines = explode("\n", $server->description);
-            $lines[] = 'motd[] = {';
-            $motdEntries = array_map(
-                fn (string $line) => '    "'.addslashes(trim($line)).'"',
-                $motdLines
-            );
-            $lines[] = implode(",\n", $motdEntries);
-            $lines[] = '};';
-        }
-
-        if ($server->additional_server_options) {
-            $lines[] = '';
-            $lines[] = '// ADDITIONAL OPTIONS';
-            $lines[] = $server->additional_server_options;
-        }
+        $content = $renderer->render('arma3/server.cfg.twig', [
+            'hostname' => addslashes($server->name),
+            'password' => addslashes((string) $server->password),
+            'admin_password' => addslashes((string) $server->admin_password),
+            'max_players' => (int) $server->max_players,
+            'verify_signatures' => $server->verify_signatures ? 2 : 0,
+            'allowed_file_patching' => $server->allowed_file_patching ? 2 : 0,
+            'disable_von' => $server->von_enabled ? 0 : 1,
+            'persistent' => $server->persistent ? 1 : 0,
+            'battle_eye' => $server->battle_eye ? 1 : 0,
+            'motd_lines' => $server->description
+                ? array_map(fn (string $line) => addslashes(trim($line)), explode("\n", $server->description))
+                : null,
+            'additional_server_options' => $server->additional_server_options ?: null,
+        ]);
 
         file_put_contents(
             $server->getProfilesPath().'/server.cfg',
-            implode("\n", $lines)."\n"
+            $content
         );
     }
 
@@ -445,39 +419,26 @@ final class Arma3Handler implements DetectsServerState, GameHandler, ManagesModA
      */
     protected function generateBasicConfig(Server $server): void
     {
+        $renderer = $this->configRenderer;
         $settings = $server->networkSettings ?? $this->getDefaultNetworkSettings();
 
-        $lines = [];
-
-        $lines[] = '// BASIC NETWORK CONFIGURATION';
-        $lines[] = 'MaxMsgSend = '.$settings->max_msg_send.';';
-        $lines[] = 'MaxSizeGuaranteed = '.$settings->max_size_guaranteed.';';
-        $lines[] = 'MaxSizeNonguaranteed = '.$settings->max_size_nonguaranteed.';';
-        $lines[] = 'MinBandwidth = '.$settings->min_bandwidth.';';
-        $lines[] = 'MaxBandwidth = '.$settings->max_bandwidth.';';
-        $lines[] = 'MinErrorToSend = '.$this->formatDecimal($settings->min_error_to_send).';';
-        $lines[] = 'MinErrorToSendNear = '.$this->formatDecimal($settings->min_error_to_send_near).';';
-        $lines[] = 'MaxCustomFileSize = '.$settings->max_custom_file_size.';';
-        $lines[] = '';
-        $lines[] = 'class sockets {';
-        $lines[] = '    maxPacketSize = '.$settings->max_packet_size.';';
-        $lines[] = '};';
-
-        if ((int) $settings->view_distance > 0) {
-            $lines[] = '';
-            $lines[] = '// SERVER VIEW DISTANCE';
-            $lines[] = 'viewDistance = '.$settings->view_distance.';';
-        }
-
-        if ((float) $settings->terrain_grid > 0) {
-            $lines[] = '';
-            $lines[] = '// TERRAIN GRID';
-            $lines[] = 'terrainGrid = '.$this->formatDecimal($settings->terrain_grid).';';
-        }
+        $content = $renderer->render('arma3/server_basic.cfg.twig', [
+            'max_msg_send' => $settings->max_msg_send,
+            'max_size_guaranteed' => $settings->max_size_guaranteed,
+            'max_size_nonguaranteed' => $settings->max_size_nonguaranteed,
+            'min_bandwidth' => $settings->min_bandwidth,
+            'max_bandwidth' => $settings->max_bandwidth,
+            'min_error_to_send' => $settings->min_error_to_send,
+            'min_error_to_send_near' => $settings->min_error_to_send_near,
+            'max_custom_file_size' => $settings->max_custom_file_size,
+            'max_packet_size' => $settings->max_packet_size,
+            'view_distance' => (int) $settings->view_distance,
+            'terrain_grid' => (float) $settings->terrain_grid,
+        ]);
 
         file_put_contents(
             $server->getProfilesPath().'/server_basic.cfg',
-            implode("\n", $lines)."\n"
+            $content
         );
     }
 
@@ -486,6 +447,7 @@ final class Arma3Handler implements DetectsServerState, GameHandler, ManagesModA
      */
     protected function generateProfileConfig(Server $server): void
     {
+        $renderer = $this->configRenderer;
         $settings = $server->difficultySettings ?? $this->getDefaultDifficultySettings();
         $profileName = $this->getProfileName($server);
         $profileDir = $server->getProfilesPath().'/home/'.$profileName;
@@ -494,73 +456,35 @@ final class Arma3Handler implements DetectsServerState, GameHandler, ManagesModA
             mkdir($profileDir, 0755, true);
         }
 
-        $lines = [];
-        $lines[] = 'version=1;';
-        $lines[] = 'blood=1;';
-        $lines[] = 'singleVoice=0;';
-        $lines[] = 'gamma=1;';
-        $lines[] = 'brightness=1;';
-        $lines[] = 'volumeCD=5;';
-        $lines[] = 'volumeFX=5;';
-        $lines[] = 'volumeSpeech=5;';
-        $lines[] = 'volumeVoN=5;';
-        $lines[] = 'soundEnableEAX=1;';
-        $lines[] = 'soundEnableHW=0;';
-        $lines[] = 'volumeMapDucking=1;';
-        $lines[] = 'volumeUI=1;';
-        $lines[] = 'class DifficultyPresets';
-        $lines[] = '{';
-        $lines[] = '    class CustomDifficulty';
-        $lines[] = '    {';
-        $lines[] = '        class Options';
-        $lines[] = '        {';
-        $lines[] = '            /* Simulation */';
-        $lines[] = '            reducedDamage = '.($settings->reduced_damage ? '1' : '0').';';
-        $lines[] = '';
-        $lines[] = '            /* Situational awareness */';
-        $lines[] = '            groupIndicators = '.$settings->group_indicators.';';
-        $lines[] = '            friendlyTags = '.$settings->friendly_tags.';';
-        $lines[] = '            enemyTags = '.$settings->enemy_tags.';';
-        $lines[] = '            detectedMines = '.$settings->detected_mines.';';
-        $lines[] = '            commands = '.$settings->commands.';';
-        $lines[] = '            waypoints = '.$settings->waypoints.';';
-        $lines[] = '            tacticalPing = '.$settings->tactical_ping.';';
-        $lines[] = '';
-        $lines[] = '            /* Personal awareness */';
-        $lines[] = '            weaponInfo = '.$settings->weapon_info.';';
-        $lines[] = '            stanceIndicator = '.$settings->stance_indicator.';';
-        $lines[] = '            staminaBar = '.($settings->stamina_bar ? '1' : '0').';';
-        $lines[] = '            weaponCrosshair = '.($settings->weapon_crosshair ? '1' : '0').';';
-        $lines[] = '            visionAid = '.($settings->vision_aid ? '1' : '0').';';
-        $lines[] = '';
-        $lines[] = '            /* View */';
-        $lines[] = '            thirdPersonView = '.$settings->third_person_view.';';
-        $lines[] = '            cameraShake = '.($settings->camera_shake ? '1' : '0').';';
-        $lines[] = '';
-        $lines[] = '            /* Multiplayer */';
-        $lines[] = '            scoreTable = '.($settings->score_table ? '1' : '0').';';
-        $lines[] = '            deathMessages = '.($settings->death_messages ? '1' : '0').';';
-        $lines[] = '            vonID = '.($settings->von_id ? '1' : '0').';';
-        $lines[] = '';
-        $lines[] = '            /* Misc */';
-        $lines[] = '            mapContent = '.($settings->map_content ? '1' : '0').';';
-        $lines[] = '            autoReport = '.($settings->auto_report ? '1' : '0').';';
-        $lines[] = '            multipleSaves = 0;';
-        $lines[] = '        };';
-        $lines[] = '';
-        $lines[] = '        aiLevelPreset = '.$settings->ai_level_preset.';';
-        $lines[] = '    };';
-        $lines[] = '';
-        $lines[] = '    class CustomAILevel';
-        $lines[] = '    {';
-        $lines[] = '        skillAI = '.$settings->skill_ai.';';
-        $lines[] = '        precisionAI = '.$settings->precision_ai.';';
-        $lines[] = '    };';
-        $lines[] = '};';
+        $content = $renderer->render('arma3/profile.twig', [
+            'reduced_damage' => $settings->reduced_damage ? 1 : 0,
+            'group_indicators' => $settings->group_indicators,
+            'friendly_tags' => $settings->friendly_tags,
+            'enemy_tags' => $settings->enemy_tags,
+            'detected_mines' => $settings->detected_mines,
+            'commands' => $settings->commands,
+            'waypoints' => $settings->waypoints,
+            'tactical_ping' => $settings->tactical_ping,
+            'weapon_info' => $settings->weapon_info,
+            'stance_indicator' => $settings->stance_indicator,
+            'stamina_bar' => $settings->stamina_bar ? 1 : 0,
+            'weapon_crosshair' => $settings->weapon_crosshair ? 1 : 0,
+            'vision_aid' => $settings->vision_aid ? 1 : 0,
+            'third_person_view' => $settings->third_person_view,
+            'camera_shake' => $settings->camera_shake ? 1 : 0,
+            'score_table' => $settings->score_table ? 1 : 0,
+            'death_messages' => $settings->death_messages ? 1 : 0,
+            'von_id' => $settings->von_id ? 1 : 0,
+            'map_content' => $settings->map_content ? 1 : 0,
+            'auto_report' => $settings->auto_report ? 1 : 0,
+            'ai_level_preset' => $settings->ai_level_preset,
+            'skill_ai' => $settings->skill_ai,
+            'precision_ai' => $settings->precision_ai,
+        ]);
 
         file_put_contents(
             $profileDir.'/'.$profileName.'.Arma3Profile',
-            implode("\n", $lines)."\n"
+            $content
         );
     }
 

@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Steam;
 
 use App\Enums\GameType;
 use App\Models\SteamAccount;

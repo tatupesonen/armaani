@@ -9,7 +9,7 @@ use App\Http\Requests\ServerBackup\StoreServerBackupRequest;
 use App\Http\Requests\ServerBackup\UploadServerBackupRequest;
 use App\Models\Server;
 use App\Models\ServerBackup;
-use App\Services\ServerBackupService;
+use App\Services\Server\ServerBackupService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\StreamedResponse;

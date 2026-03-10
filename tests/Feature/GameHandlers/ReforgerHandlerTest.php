@@ -40,7 +40,7 @@ class ReforgerHandlerTest extends TestCase
             'arma.games_base_path' => $this->testGamesBasePath,
         ]);
 
-        $this->handler = new ReforgerHandler;
+        $this->handler = app(ReforgerHandler::class);
     }
 
     protected function tearDown(): void

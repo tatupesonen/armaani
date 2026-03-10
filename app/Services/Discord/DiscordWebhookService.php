@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Discord;
 
 use App\Models\AppSetting;
 use Illuminate\Support\Facades\Http;

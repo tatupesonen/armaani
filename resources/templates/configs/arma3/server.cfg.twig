@@ -1,0 +1,41 @@
+// GLOBAL SETTINGS
+hostname = "{{ hostname }}";
+password = "{{ password }}";
+passwordAdmin = "{{ admin_password }}";
+
+// JOINING RULES
+maxPlayers = {{ max_players }};
+kickDuplicate = 1;
+verifySignatures = {{ verify_signatures }};
+allowedFilePatching = {{ allowed_file_patching }};
+
+// INGAME SETTINGS
+disableVoN = {{ disable_von }};
+vonCodec = 1;
+vonCodecQuality = 30;
+persistent = {{ persistent }};
+timeStampFormat = "short";
+BattlEye = {{ battle_eye }};
+
+// SIGNATURE VERIFICATION
+onUnsignedData = "kick (_this select 0)";
+onHackedData = "kick (_this select 0)";
+onDifferentData = "";
+
+// HEADLESS CLIENT
+headlessClients[] = {"127.0.0.1"};
+localClient[] = {"127.0.0.1"};
+{% if motd_lines is not null %}
+
+// MOTD
+motd[] = {
+{% for line in motd_lines %}
+    "{{ line }}"{{ not loop.last ? ',' : '' }}
+{% endfor %}
+};
+{% endif %}
+{% if additional_server_options is not null %}
+
+// ADDITIONAL OPTIONS
+{{ additional_server_options }}
+{% endif %}

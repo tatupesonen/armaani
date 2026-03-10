@@ -11,7 +11,7 @@ use App\Models\GameInstall;
 use App\Models\ModPreset;
 use App\Models\Server;
 use App\Models\User;
-use App\Services\ServerProcessService;
+use App\Services\Server\ServerProcessService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\File;

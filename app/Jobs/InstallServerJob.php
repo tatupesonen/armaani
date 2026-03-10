@@ -7,7 +7,7 @@ use App\Events\GameInstallOutput;
 use App\GameManager;
 use App\Jobs\Concerns\InteractsWithFileSystem;
 use App\Models\GameInstall;
-use App\Services\SteamCmdService;
+use App\Services\Steam\SteamCmdService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;

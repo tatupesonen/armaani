@@ -10,7 +10,7 @@ use App\Jobs\BatchDownloadModsJob;
 use App\Jobs\DownloadModJob;
 use App\Models\ReforgerMod;
 use App\Models\WorkshopMod;
-use App\Services\SteamWorkshopService;
+use App\Services\Steam\SteamWorkshopService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;

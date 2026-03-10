@@ -1,0 +1,62 @@
+version=1;
+blood=1;
+singleVoice=0;
+gamma=1;
+brightness=1;
+volumeCD=5;
+volumeFX=5;
+volumeSpeech=5;
+volumeVoN=5;
+soundEnableEAX=1;
+soundEnableHW=0;
+volumeMapDucking=1;
+volumeUI=1;
+class DifficultyPresets
+{
+    class CustomDifficulty
+    {
+        class Options
+        {
+            /* Simulation */
+            reducedDamage = {{ reduced_damage }};
+
+            /* Situational awareness */
+            groupIndicators = {{ group_indicators }};
+            friendlyTags = {{ friendly_tags }};
+            enemyTags = {{ enemy_tags }};
+            detectedMines = {{ detected_mines }};
+            commands = {{ commands }};
+            waypoints = {{ waypoints }};
+            tacticalPing = {{ tactical_ping }};
+
+            /* Personal awareness */
+            weaponInfo = {{ weapon_info }};
+            stanceIndicator = {{ stance_indicator }};
+            staminaBar = {{ stamina_bar }};
+            weaponCrosshair = {{ weapon_crosshair }};
+            visionAid = {{ vision_aid }};
+
+            /* View */
+            thirdPersonView = {{ third_person_view }};
+            cameraShake = {{ camera_shake }};
+
+            /* Multiplayer */
+            scoreTable = {{ score_table }};
+            deathMessages = {{ death_messages }};
+            vonID = {{ von_id }};
+
+            /* Misc */
+            mapContent = {{ map_content }};
+            autoReport = {{ auto_report }};
+            multipleSaves = 0;
+        };
+
+        aiLevelPreset = {{ ai_level_preset }};
+    };
+
+    class CustomAILevel
+    {
+        skillAI = {{ skill_ai }};
+        precisionAI = {{ precision_ai }};
+    };
+};

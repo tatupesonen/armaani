@@ -1,12 +1,13 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Mod;
 
 use App\Enums\GameType;
 use App\Enums\InstallationStatus;
 use App\Jobs\BatchDownloadModsJob;
 use App\Models\ModPreset;
 use App\Models\WorkshopMod;
+use App\Services\Steam\SteamWorkshopService;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
 

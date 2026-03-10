@@ -10,7 +10,7 @@ use App\Http\Requests\ModPreset\UpdateModPresetRequest;
 use App\Models\ModPreset;
 use App\Models\ReforgerMod;
 use App\Models\WorkshopMod;
-use App\Services\PresetImportService;
+use App\Services\Mod\PresetImportService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;

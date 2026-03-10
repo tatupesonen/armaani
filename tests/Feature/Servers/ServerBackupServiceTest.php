@@ -4,7 +4,7 @@ namespace Tests\Feature\Servers;
 
 use App\Models\Server;
 use App\Models\ServerBackup;
-use App\Services\ServerBackupService;
+use App\Services\Server\ServerBackupService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Tests\TestCase;

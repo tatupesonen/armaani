@@ -8,10 +8,15 @@ use App\Contracts\GameHandler;
 use App\Enums\GameType;
 use App\Models\ReforgerSettings;
 use App\Models\Server;
+use App\Services\Renderer\JsonConfigRenderer;
 
 #[HandlesGame(GameType::ArmaReforger)]
 final class ReforgerHandler implements DetectsServerState, GameHandler
 {
+    public function __construct(
+        protected JsonConfigRenderer $configRenderer,
+    ) {}
+
     public function gameType(): GameType
     {
         return GameType::ArmaReforger;
@@ -127,7 +132,7 @@ final class ReforgerHandler implements DetectsServerState, GameHandler
 
         file_put_contents(
             $configPath,
-            json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)."\n"
+            $this->configRenderer->render('reforger/config.json', $config)
         );
     }
 

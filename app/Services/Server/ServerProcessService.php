@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Server;
 
 use App\Contracts\ManagesModAssets;
 use App\Contracts\SupportsBackups;

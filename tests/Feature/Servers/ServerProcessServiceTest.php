@@ -8,7 +8,7 @@ use App\Models\ModPreset;
 use App\Models\NetworkSettings;
 use App\Models\Server;
 use App\Models\WorkshopMod;
-use App\Services\ServerProcessService;
+use App\Services\Server\ServerProcessService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
@@ -53,7 +53,7 @@ class ServerProcessServiceTest extends TestCase
             'arma.mods_base_path' => $this->testModsBasePath,
         ]);
 
-        $this->handler = new Arma3Handler;
+        $this->handler = app(Arma3Handler::class);
     }
 
     protected function tearDown(): void
@@ -489,7 +489,7 @@ class ServerProcessServiceTest extends TestCase
         $server = $this->makeServer();
 
         // Use a partial mock to prevent real proc_open / exec calls
-        $mockService = Mockery::mock(ServerProcessService::class, [app(\App\GameManager::class), app(\App\Services\ServerBackupService::class)])->makePartial();
+        $mockService = Mockery::mock(ServerProcessService::class, [app(\App\GameManager::class), app(\App\Services\Server\ServerBackupService::class)])->makePartial();
         $mockService->shouldAllowMockingProtectedMethods();
         $mockService->shouldReceive('spawnProcess')->once()->andReturn(12345);
         $mockService->shouldReceive('startLogTail')->once();

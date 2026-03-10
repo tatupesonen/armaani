@@ -6,7 +6,7 @@ use App\Enums\ServerStatus;
 use App\Models\Server;
 use App\Models\ServerBackup;
 use App\Models\User;
-use App\Services\ServerBackupService;
+use App\Services\Server\ServerBackupService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\File;
@@ -22,11 +22,22 @@ class ServerBackupManagementTest extends TestCase
 
     protected string $testBasePath;
 
+    protected string $testStoragePath;
+
+    protected string $originalStoragePath;
+
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->testBasePath = sys_get_temp_dir().'/armaani_test_backups_'.uniqid();
+        $this->testStoragePath = sys_get_temp_dir().'/armaani_test_storage_'.uniqid();
+
+        @mkdir($this->testStoragePath.'/app', 0755, true);
+
+        $this->originalStoragePath = app()->storagePath();
+        app()->useStoragePath($this->testStoragePath);
+
         config(['arma.servers_base_path' => $this->testBasePath]);
 
         $this->user = User::factory()->create();
@@ -35,9 +46,10 @@ class ServerBackupManagementTest extends TestCase
 
     protected function tearDown(): void
     {
-        if (is_dir($this->testBasePath)) {
-            File::deleteDirectory($this->testBasePath);
-        }
+        File::deleteDirectory($this->testBasePath);
+        File::deleteDirectory($this->testStoragePath);
+
+        app()->useStoragePath($this->originalStoragePath);
 
         parent::tearDown();
     }
@@ -258,7 +270,7 @@ class ServerBackupManagementTest extends TestCase
     {
         $this->createVarsFileForServer($this->server, "version=148;\nauto=1;\n");
 
-        $mockService = \Mockery::mock(\App\Services\ServerProcessService::class, [app(\App\GameManager::class), app(\App\Services\ServerBackupService::class)])->makePartial();
+        $mockService = \Mockery::mock(\App\Services\Server\ServerProcessService::class, [app(\App\GameManager::class), app(\App\Services\Server\ServerBackupService::class)])->makePartial();
         $mockService->shouldAllowMockingProtectedMethods();
         $mockService->shouldReceive('spawnProcess')->once()->andReturn(12345);
         $mockService->shouldReceive('startLogTail')->once();
