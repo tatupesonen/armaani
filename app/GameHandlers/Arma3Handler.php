@@ -2,14 +2,13 @@
 
 namespace App\GameHandlers;
 
-use App\Attributes\HandlesGame;
 use App\Contracts\DetectsServerState;
 use App\Contracts\GameHandler;
 use App\Contracts\ManagesModAssets;
+use App\Contracts\SteamGameHandler;
 use App\Contracts\SupportsBackups;
 use App\Contracts\SupportsHeadlessClients;
 use App\Contracts\SupportsMissions;
-use App\Enums\GameType;
 use App\Models\DifficultySettings;
 use App\Models\NetworkSettings;
 use App\Models\Server;
@@ -17,16 +16,25 @@ use App\Services\Renderer\TwigConfigRenderer;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 
-#[HandlesGame(GameType::Arma3)]
-final class Arma3Handler implements DetectsServerState, GameHandler, ManagesModAssets, SupportsBackups, SupportsHeadlessClients, SupportsMissions
+final class Arma3Handler implements DetectsServerState, GameHandler, ManagesModAssets, SteamGameHandler, SupportsBackups, SupportsHeadlessClients, SupportsMissions
 {
     public function __construct(
         protected TwigConfigRenderer $configRenderer,
     ) {}
 
-    public function gameType(): GameType
+    public function value(): string
     {
-        return GameType::Arma3;
+        return 'arma3';
+    }
+
+    public function label(): string
+    {
+        return 'Arma 3';
+    }
+
+    public function consumerAppId(): int
+    {
+        return 107410;
     }
 
     public function serverAppId(): int

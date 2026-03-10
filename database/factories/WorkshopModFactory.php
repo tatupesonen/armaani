@@ -2,7 +2,6 @@
 
 namespace Database\Factories;
 
-use App\Enums\GameType;
 use App\Enums\InstallationStatus;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -17,7 +16,7 @@ class WorkshopModFactory extends Factory
     public function definition(): array
     {
         return [
-            'game_type' => GameType::Arma3,
+            'game_type' => 'arma3',
             'workshop_id' => fake()->unique()->numberBetween(100000, 9999999),
             'name' => fake()->words(3, true),
             'file_size' => fake()->numberBetween(1000000, 500000000),
@@ -58,10 +57,15 @@ class WorkshopModFactory extends Factory
         ]);
     }
 
-    public function dayz(): static
+    public function forGame(string $gameType): static
     {
         return $this->state(fn (): array => [
-            'game_type' => GameType::DayZ,
+            'game_type' => $gameType,
         ]);
+    }
+
+    public function dayz(): static
+    {
+        return $this->forGame('dayz');
     }
 }

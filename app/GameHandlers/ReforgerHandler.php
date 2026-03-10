@@ -2,24 +2,32 @@
 
 namespace App\GameHandlers;
 
-use App\Attributes\HandlesGame;
 use App\Contracts\DetectsServerState;
 use App\Contracts\GameHandler;
-use App\Enums\GameType;
+use App\Contracts\SteamGameHandler;
 use App\Models\ReforgerSettings;
 use App\Models\Server;
 use App\Services\Renderer\JsonConfigRenderer;
 
-#[HandlesGame(GameType::ArmaReforger)]
-final class ReforgerHandler implements DetectsServerState, GameHandler
+final class ReforgerHandler implements DetectsServerState, GameHandler, SteamGameHandler
 {
     public function __construct(
         protected JsonConfigRenderer $configRenderer,
     ) {}
 
-    public function gameType(): GameType
+    public function value(): string
     {
-        return GameType::ArmaReforger;
+        return 'reforger';
+    }
+
+    public function label(): string
+    {
+        return 'Arma Reforger';
+    }
+
+    public function consumerAppId(): int
+    {
+        return 1874900;
     }
 
     public function serverAppId(): int

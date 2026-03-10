@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\GameType;
+use App\Contracts\GameHandler;
 use App\GameManager;
 use App\Http\Requests\ModPreset\ImportModPresetRequest;
 use App\Http\Requests\ModPreset\StoreModPresetRequest;
@@ -35,15 +35,11 @@ class ModPresetController extends Controller
     public function create(): Response
     {
         return Inertia::render('presets/create', [
-            'gameTypes' => collect(GameType::cases())->map(function (GameType $gt) {
-                $handler = $this->gameManager->driver($gt->value);
-
-                return [
-                    'value' => $gt->value,
-                    'label' => $gt->label(),
-                    'supportsWorkshopMods' => $handler->supportsWorkshopMods(),
-                ];
-            }),
+            'gameTypes' => collect($this->gameManager->allHandlers())->map(fn (GameHandler $handler) => [
+                'value' => $handler->value(),
+                'label' => $handler->label(),
+                'supportsWorkshopMods' => $handler->supportsWorkshopMods(),
+            ])->values(),
             'workshopMods' => WorkshopMod::query()->orderBy('name')->get(),
             'reforgerMods' => ReforgerMod::query()->orderBy('name')->get(),
         ]);
@@ -52,14 +48,13 @@ class ModPresetController extends Controller
     public function store(StoreModPresetRequest $request): RedirectResponse
     {
         $validated = $request->validated();
-        $gameType = GameType::from($validated['game_type']);
 
         $preset = ModPreset::query()->create([
             'game_type' => $validated['game_type'],
             'name' => $validated['name'],
         ]);
 
-        if ($gameType === GameType::ArmaReforger) {
+        if ($validated['game_type'] === 'reforger') {
             $preset->reforgerMods()->sync($validated['reforger_mod_ids'] ?? []);
         } else {
             $preset->mods()->sync($validated['mod_ids'] ?? []);
@@ -91,7 +86,7 @@ class ModPresetController extends Controller
 
         $modPreset->update(['name' => $validated['name']]);
 
-        if ($gameType === GameType::ArmaReforger) {
+        if ($modPreset->game_type === 'reforger') {
             $modPreset->reforgerMods()->sync($validated['reforger_mod_ids'] ?? []);
         } else {
             $modPreset->mods()->sync($validated['mod_ids'] ?? []);

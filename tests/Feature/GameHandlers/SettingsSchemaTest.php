@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\GameHandlers;
 
-use App\Enums\GameType;
 use App\GameHandlers\Arma3Handler;
 use App\GameHandlers\DayZHandler;
 use App\GameHandlers\ReforgerHandler;
@@ -231,8 +230,7 @@ class SettingsSchemaTest extends TestCase
     {
         $validTypes = ['toggle', 'number', 'text', 'textarea', 'segmented', 'separator', 'custom'];
 
-        foreach (GameType::cases() as $gameType) {
-            $handler = app(GameManager::class)->driver($gameType->value);
+        foreach (app(GameManager::class)->allHandlers() as $driver => $handler) {
             $schema = $handler->settingsSchema();
 
             foreach ($schema as $section) {
@@ -246,7 +244,7 @@ class SettingsSchemaTest extends TestCase
                     $this->assertContains(
                         $field['type'],
                         $validTypes,
-                        "Invalid field type '{$field['type']}' in {$gameType->value} schema"
+                        "Invalid field type '{$field['type']}' in {$driver} schema"
                     );
                 }
             }
@@ -255,8 +253,7 @@ class SettingsSchemaTest extends TestCase
 
     public function test_all_non_separator_fields_have_keys(): void
     {
-        foreach (GameType::cases() as $gameType) {
-            $handler = app(GameManager::class)->driver($gameType->value);
+        foreach (app(GameManager::class)->allHandlers() as $driver => $handler) {
             $schema = $handler->settingsSchema();
 
             foreach ($schema as $section) {
@@ -274,7 +271,7 @@ class SettingsSchemaTest extends TestCase
                     $this->assertArrayHasKey(
                         'key',
                         $field,
-                        "Non-separator field missing 'key' in {$gameType->value} schema"
+                        "Non-separator field missing 'key' in {$driver} schema"
                     );
                     $this->assertNotEmpty($field['key']);
                 }
@@ -284,8 +281,7 @@ class SettingsSchemaTest extends TestCase
 
     public function test_segmented_fields_have_options(): void
     {
-        foreach (GameType::cases() as $gameType) {
-            $handler = app(GameManager::class)->driver($gameType->value);
+        foreach (app(GameManager::class)->allHandlers() as $driver => $handler) {
             $schema = $handler->settingsSchema();
 
             foreach ($schema as $section) {
@@ -303,7 +299,7 @@ class SettingsSchemaTest extends TestCase
                     $this->assertArrayHasKey(
                         'options',
                         $field,
-                        "Segmented field '{$field['key']}' missing 'options' in {$gameType->value}"
+                        "Segmented field '{$field['key']}' missing 'options' in {$driver}"
                     );
                     $this->assertNotEmpty($field['options']);
 
@@ -318,8 +314,7 @@ class SettingsSchemaTest extends TestCase
 
     public function test_custom_fields_have_component_name(): void
     {
-        foreach (GameType::cases() as $gameType) {
-            $handler = app(GameManager::class)->driver($gameType->value);
+        foreach (app(GameManager::class)->allHandlers() as $driver => $handler) {
             $schema = $handler->settingsSchema();
 
             foreach ($schema as $section) {
@@ -333,7 +328,7 @@ class SettingsSchemaTest extends TestCase
                     $this->assertArrayHasKey(
                         'component',
                         $field,
-                        "Custom field '{$field['key']}' missing 'component' in {$gameType->value}"
+                        "Custom field '{$field['key']}' missing 'component' in {$driver}"
                     );
                     $this->assertNotEmpty($field['component']);
                 }
@@ -365,14 +360,14 @@ class SettingsSchemaTest extends TestCase
                         'gameTypes.1',
                         fn (Assert $gt) => $gt
                             ->has('settingsSchema')
-                            ->where('value', 'reforger')
+                            ->where('value', 'dayz')
                             ->etc()
                     )
                     ->has(
                         'gameTypes.2',
                         fn (Assert $gt) => $gt
                             ->has('settingsSchema')
-                            ->where('value', 'dayz')
+                            ->where('value', 'reforger')
                             ->etc()
                     )
             );
@@ -403,7 +398,7 @@ class SettingsSchemaTest extends TestCase
             ->assertInertia(
                 fn (Assert $page) => $page
                     ->has(
-                        'gameTypes.1',
+                        'gameTypes.2',
                         fn (Assert $gt) => $gt
                             ->where('value', 'reforger')
                             ->has('settingsSchema', 1) // Reforger Settings
@@ -420,7 +415,7 @@ class SettingsSchemaTest extends TestCase
             ->assertInertia(
                 fn (Assert $page) => $page
                     ->has(
-                        'gameTypes.2',
+                        'gameTypes.1',
                         fn (Assert $gt) => $gt
                             ->where('value', 'dayz')
                             ->has('settingsSchema', 0) // Empty

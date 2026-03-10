@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Enums\GameType;
 use App\Enums\ServerStatus;
 use App\Events\ServerStatusChanged;
 use Illuminate\Database\Eloquent\Builder;
@@ -14,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Log;
 
 /**
- * @property GameType $game_type
+ * @property string $game_type
  * @property ServerStatus $status
  */
 class Server extends Model
@@ -55,7 +54,6 @@ class Server extends Model
     protected function casts(): array
     {
         return [
-            'game_type' => GameType::class,
             'status' => ServerStatus::class,
             'verify_signatures' => 'boolean',
             'allowed_file_patching' => 'boolean',
@@ -117,7 +115,7 @@ class Server extends Model
     /**
      * @param  Builder<Server>  $query
      */
-    public function scopeForGame(Builder $query, GameType $gameType): Builder
+    public function scopeForGame(Builder $query, string $gameType): Builder
     {
         return $query->where('game_type', $gameType);
     }

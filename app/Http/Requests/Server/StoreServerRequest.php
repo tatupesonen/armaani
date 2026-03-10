@@ -2,7 +2,6 @@
 
 namespace App\Http\Requests\Server;
 
-use App\Enums\GameType;
 use App\GameManager;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -17,8 +16,10 @@ class StoreServerRequest extends FormRequest
      */
     public function rules(): array
     {
+        $gameManager = app(GameManager::class);
+
         try {
-            $handler = app(GameManager::class)->driver($this->input('game_type'));
+            $handler = $gameManager->driver($this->input('game_type'));
             $handlerRules = $handler->serverValidationRules();
             $settingsRules = $handler->settingsValidationRules();
         } catch (\InvalidArgumentException) {
@@ -27,7 +28,7 @@ class StoreServerRequest extends FormRequest
         }
 
         return [
-            'game_type' => ['required', Rule::enum(GameType::class)],
+            'game_type' => ['required', Rule::in($gameManager->availableTypes())],
             'name' => ['required', 'string', 'max:255'],
             'port' => ['required', 'integer', 'min:1', 'max:65535', Rule::unique('servers', 'port'), Rule::unique('servers', 'query_port')],
             'max_players' => ['required', 'integer', 'min:1', 'max:256'],

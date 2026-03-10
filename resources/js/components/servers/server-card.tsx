@@ -1,4 +1,4 @@
-import { router } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
 import {
     Code,
     Loader2,
@@ -16,11 +16,7 @@ import HeadlessClientControls from '@/components/servers/headless-client-control
 import ServerEditPanel from '@/components/servers/server-edit-panel';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-    gameTypeLabel,
-    serverStatusLabel,
-    serverStatusVariant,
-} from '@/lib/utils';
+import { serverStatusLabel, serverStatusVariant } from '@/lib/utils';
 import {
     start,
     stop,
@@ -80,6 +76,7 @@ export default function ServerCard({
     supportsHeadlessClients,
     onDelete,
 }: ServerCardProps) {
+    const { gameTypeLabels } = usePage().props;
     const [showLogs, setShowLogs] = useState(
         ['booting', 'downloading_mods', 'running'].includes(server.status),
     );
@@ -125,7 +122,8 @@ export default function ServerCard({
                     <div className="flex items-center gap-2">
                         <h3 className="text-lg font-semibold">{server.name}</h3>
                         <Badge variant="outline">
-                            {gameTypeLabel(server.game_type)}
+                            {gameTypeLabels[server.game_type] ??
+                                server.game_type}
                         </Badge>
                         <Badge variant={serverStatusVariant(server.status)}>
                             {serverStatusLabel(server.status)}

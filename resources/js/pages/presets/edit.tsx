@@ -1,11 +1,10 @@
-import { Head, useForm } from '@inertiajs/react';
+import { Head, useForm, usePage } from '@inertiajs/react';
 import Heading from '@/components/heading';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { gameTypeLabel } from '@/lib/utils';
 import { index as presetsIndex, update } from '@/routes/presets';
 import type {
     BreadcrumbItem,
@@ -25,6 +24,7 @@ export default function PresetEdit({
     workshopMods,
     reforgerMods,
 }: Props) {
+    const { gameTypeLabels } = usePage().props;
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Mod Presets', href: presetsIndex() },
         { title: preset.name, href: '#' },
@@ -64,7 +64,7 @@ export default function PresetEdit({
             <div className="flex flex-col gap-6 p-4">
                 <Heading
                     title={`Edit Preset: ${preset.name}`}
-                    description={`Game: ${gameTypeLabel(preset.game_type)}`}
+                    description={`Game: ${gameTypeLabels[preset.game_type] ?? preset.game_type}`}
                 />
 
                 <form onSubmit={submit} className="max-w-2xl space-y-6">

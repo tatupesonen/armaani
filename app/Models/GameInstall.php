@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Enums\GameType;
 use App\Enums\InstallationStatus;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -10,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * @property GameType $game_type
+ * @property string $game_type
  * @property InstallationStatus $installation_status
  */
 class GameInstall extends Model
@@ -35,7 +34,6 @@ class GameInstall extends Model
     protected function casts(): array
     {
         return [
-            'game_type' => GameType::class,
             'installation_status' => InstallationStatus::class,
             'progress_pct' => 'integer',
             'disk_size_bytes' => 'integer',
@@ -46,7 +44,7 @@ class GameInstall extends Model
     /**
      * @param  Builder<GameInstall>  $query
      */
-    public function scopeForGame(Builder $query, GameType $gameType): Builder
+    public function scopeForGame(Builder $query, string $gameType): Builder
     {
         return $query->where('game_type', $gameType);
     }

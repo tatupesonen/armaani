@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Contracts\GameHandler;
 use App\Contracts\SupportsBackups;
 use App\Contracts\SupportsHeadlessClients;
 use App\Contracts\SupportsMissions;
-use App\Enums\GameType;
 use App\Enums\InstallationStatus;
 use App\Enums\ServerStatus;
 use App\GameManager;
@@ -50,31 +50,26 @@ class ServerController extends Controller
                 ->whereIn('installation_status', [InstallationStatus::Installed, InstallationStatus::Installing])
                 ->orderBy('name')
                 ->get(),
-            'gameTypes' => collect(GameType::cases())->map(function (GameType $gt) {
-                $handler = $this->gameManager->driver($gt->value);
-
-                return [
-                    'value' => $gt->value,
-                    'label' => $gt->label(),
-                    'defaultPort' => $handler->defaultPort(),
-                    'defaultQueryPort' => $handler->defaultQueryPort(),
-                    'supportsHeadlessClients' => $handler instanceof SupportsHeadlessClients,
-                    'supportsWorkshopMods' => $handler->supportsWorkshopMods(),
-                    'supportsMissionUpload' => $handler instanceof SupportsMissions,
-                    'settingsSchema' => $handler->settingsSchema(),
-                ];
-            }),
+            'gameTypes' => collect($this->gameManager->allHandlers())->map(fn (GameHandler $handler) => [
+                'value' => $handler->value(),
+                'label' => $handler->label(),
+                'defaultPort' => $handler->defaultPort(),
+                'defaultQueryPort' => $handler->defaultQueryPort(),
+                'supportsHeadlessClients' => $handler instanceof SupportsHeadlessClients,
+                'supportsWorkshopMods' => $handler->supportsWorkshopMods(),
+                'supportsMissionUpload' => $handler instanceof SupportsMissions,
+                'settingsSchema' => $handler->settingsSchema(),
+            ])->values(),
         ]);
     }
 
     public function store(StoreServerRequest $request): RedirectResponse
     {
         $validated = $request->validated();
-        $gameType = GameType::from($validated['game_type']);
 
         $server = Server::query()->create($validated);
 
-        $handler = $this->gameManager->driver($gameType->value);
+        $handler = $this->gameManager->driver($validated['game_type']);
         $handler->createRelatedSettings($server);
         $handler->updateRelatedSettings($server, $validated);
 
@@ -194,7 +189,7 @@ class ServerController extends Controller
 
     public function reforgerScenarios(Server $server, ReforgerScenarioService $scenarioService): JsonResponse
     {
-        if ($server->game_type !== GameType::ArmaReforger) {
+        if ($server->game_type !== 'reforger') {
             return response()->json(['scenarios' => []], 422);
         }
 
@@ -205,7 +200,7 @@ class ServerController extends Controller
 
     public function reloadReforgerScenarios(Server $server, ReforgerScenarioService $scenarioService): JsonResponse
     {
-        if ($server->game_type !== GameType::ArmaReforger) {
+        if ($server->game_type !== 'reforger') {
             return response()->json(['scenarios' => []], 422);
         }
 

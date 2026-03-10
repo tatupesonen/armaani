@@ -2,7 +2,6 @@
 
 namespace App\Http\Requests\GameInstall;
 
-use App\Enums\GameType;
 use App\GameManager;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -17,11 +16,11 @@ class StoreGameInstallRequest extends FormRequest
      */
     public function rules(): array
     {
-        $gameType = GameType::from($this->input('game_type', 'arma3'));
-        $handler = app(GameManager::class)->driver($gameType->value);
+        $gameManager = app(GameManager::class);
+        $handler = $gameManager->driver($this->input('game_type', 'arma3'));
 
         return [
-            'game_type' => ['required', Rule::enum(GameType::class)],
+            'game_type' => ['required', Rule::in($gameManager->availableTypes())],
             'name' => ['required', 'string', 'max:255'],
             'branch' => ['required', 'string', Rule::in($handler->branches())],
         ];

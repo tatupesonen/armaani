@@ -1,4 +1,4 @@
-export type GameType = 'arma3' | 'reforger' | 'dayz';
+export type GameType = string;
 
 export type ServerStatus =
     | 'stopped'

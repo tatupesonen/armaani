@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\GameType;
+use App\Contracts\GameHandler;
 use App\Enums\InstallationStatus;
 use App\GameManager;
 use App\Http\Requests\GameInstall\StoreGameInstallRequest;
@@ -29,16 +29,12 @@ class GameInstallController extends Controller
 
         return Inertia::render('game-installs/index', [
             'installs' => $installs,
-            'gameTypes' => collect(GameType::cases())->map(function (GameType $gt) {
-                $handler = $this->gameManager->driver($gt->value);
-
-                return [
-                    'value' => $gt->value,
-                    'label' => $gt->label(),
-                    'branches' => $handler->branches(),
-                    'defaultName' => $gt->label().' Server',
-                ];
-            }),
+            'gameTypes' => collect($this->gameManager->allHandlers())->map(fn (GameHandler $handler) => [
+                'value' => $handler->value(),
+                'label' => $handler->label(),
+                'branches' => $handler->branches(),
+                'defaultName' => $handler->label().' Server',
+            ])->values(),
         ]);
     }
 

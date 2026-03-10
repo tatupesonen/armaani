@@ -2,21 +2,16 @@
 
 namespace App;
 
-use App\Attributes\HandlesGame;
 use App\Contracts\GameHandler;
-use App\Enums\GameType;
+use App\Contracts\SteamGameHandler;
 use App\Models\Server;
 use Illuminate\Support\Manager;
-use ReflectionClass;
 
 class GameManager extends Manager
 {
-    /** @var array<string, class-string<GameHandler>>|null */
-    private ?array $handlerMap = null;
-
     public function getDefaultDriver(): string
     {
-        return GameType::Arma3->value;
+        return 'arma3';
     }
 
     /**
@@ -24,55 +19,47 @@ class GameManager extends Manager
      */
     public function for(Server $server): GameHandler
     {
-        return $this->driver($server->game_type->value);
+        return $this->driver($server->game_type);
     }
 
     /**
-     * Create a driver instance by discovering handlers via the HandlesGame attribute.
-     */
-    protected function createDriver(mixed $driver): GameHandler
-    {
-        $map = $this->discoverHandlers();
-
-        if (! isset($map[$driver])) {
-            throw new \InvalidArgumentException("No handler registered for [{$driver}].");
-        }
-
-        return $this->container->make($map[$driver]);
-    }
-
-    /**
-     * Scan the GameHandlers directory and build a map of game type values to handler classes.
-     * Results are cached for the lifetime of this manager instance.
+     * Get all registered game handlers.
      *
-     * @return array<string, class-string<GameHandler>>
+     * @return array<string, GameHandler>
      */
-    private function discoverHandlers(): array
+    public function allHandlers(): array
     {
-        if ($this->handlerMap !== null) {
-            return $this->handlerMap;
+        $handlers = [];
+
+        foreach (array_keys($this->customCreators) as $key) {
+            $handlers[$key] = $this->driver($key);
         }
 
-        $this->handlerMap = [];
-        $path = app_path('GameHandlers');
+        return $handlers;
+    }
 
-        foreach (glob($path.'/*.php') as $file) {
-            $class = 'App\\GameHandlers\\'.pathinfo($file, PATHINFO_FILENAME);
+    /**
+     * Get all available game type string values.
+     *
+     * @return list<string>
+     */
+    public function availableTypes(): array
+    {
+        return array_keys($this->customCreators);
+    }
 
-            if (! class_exists($class) || ! is_subclass_of($class, GameHandler::class)) {
-                continue;
+    /**
+     * Resolve a game handler by Steam consumer App ID.
+     * Returns null if no handler matches.
+     */
+    public function fromConsumerAppId(int $appId): ?GameHandler
+    {
+        foreach ($this->allHandlers() as $handler) {
+            if ($handler instanceof SteamGameHandler && $handler->consumerAppId() === $appId) {
+                return $handler;
             }
-
-            $attributes = (new ReflectionClass($class))->getAttributes(HandlesGame::class);
-
-            if ($attributes === []) {
-                continue;
-            }
-
-            $gameType = $attributes[0]->newInstance()->gameType;
-            $this->handlerMap[$gameType->value] = $class;
         }
 
-        return $this->handlerMap;
+        return null;
     }
 }

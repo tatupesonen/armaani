@@ -2,7 +2,6 @@
 
 namespace Database\Factories;
 
-use App\Enums\GameType;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -16,22 +15,25 @@ class ModPresetFactory extends Factory
     public function definition(): array
     {
         return [
-            'game_type' => GameType::Arma3,
+            'game_type' => 'arma3',
             'name' => fake()->unique()->words(2, true).' preset',
         ];
     }
 
-    public function reforger(): static
+    public function forGame(string $gameType): static
     {
         return $this->state(fn (): array => [
-            'game_type' => GameType::ArmaReforger,
+            'game_type' => $gameType,
         ]);
+    }
+
+    public function reforger(): static
+    {
+        return $this->forGame('reforger');
     }
 
     public function dayz(): static
     {
-        return $this->state(fn (): array => [
-            'game_type' => GameType::DayZ,
-        ]);
+        return $this->forGame('dayz');
     }
 }

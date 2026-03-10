@@ -2,7 +2,7 @@
 
 namespace Database\Factories;
 
-use App\Enums\GameType;
+use App\GameManager;
 use App\Models\GameInstall;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -19,7 +19,7 @@ class ServerFactory extends Factory
         $port = fake()->numberBetween(2302, 2400);
 
         return [
-            'game_type' => GameType::Arma3,
+            'game_type' => 'arma3',
             'name' => fake()->words(2, true).' Server',
             'port' => $port,
             'query_port' => $port + 1,
@@ -48,22 +48,28 @@ class ServerFactory extends Factory
         ]);
     }
 
+    /**
+     * Create a server for any registered game type, pulling defaults from the handler.
+     */
+    public function forGame(string $gameType): static
+    {
+        $handler = app(GameManager::class)->driver($gameType);
+
+        return $this->state(fn (): array => [
+            'game_type' => $gameType,
+            'port' => $handler->defaultPort(),
+            'query_port' => $handler->defaultQueryPort(),
+            'game_install_id' => GameInstall::factory()->installed()->forGame($gameType),
+        ]);
+    }
+
     public function forReforger(): static
     {
-        return $this->state(fn (): array => [
-            'game_type' => GameType::ArmaReforger,
-            'game_install_id' => GameInstall::factory()->installed()->reforger(),
-            'port' => 2001,
-            'query_port' => 17777,
-        ]);
+        return $this->forGame('reforger');
     }
 
     public function forDayZ(): static
     {
-        return $this->state(fn (): array => [
-            'game_type' => GameType::DayZ,
-            'game_install_id' => GameInstall::factory()->installed()->dayz(),
-            'query_port' => 27016,
-        ]);
+        return $this->forGame('dayz');
     }
 }

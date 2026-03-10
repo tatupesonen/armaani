@@ -1,4 +1,4 @@
-import { router } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
 import { Check, ChevronDown, X } from 'lucide-react';
 import { Fragment, useState } from 'react';
 import GameSettingsRenderer, {
@@ -20,7 +20,6 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { gameTypeLabel } from '@/lib/utils';
 import { update } from '@/routes/servers';
 import type { GameInstall, ModPreset, Server, SettingsSection } from '@/types';
 
@@ -62,6 +61,7 @@ export default function ServerEditPanel({
     settingsSchema,
     onCancel,
 }: ServerEditPanelProps) {
+    const { gameTypeLabels } = usePage().props;
     const [data, setData] = useState<Record<string, unknown>>(() =>
         buildEditData(server, settingsSchema),
     );
@@ -123,7 +123,7 @@ export default function ServerEditPanel({
                 <div className="flex items-center gap-2">
                     <span className="text-sm font-medium">Game Type:</span>
                     <Badge variant="outline">
-                        {gameTypeLabel(server.game_type)}
+                        {gameTypeLabels[server.game_type] ?? server.game_type}
                     </Badge>
                 </div>
 

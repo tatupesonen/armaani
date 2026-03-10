@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Enums\ServerStatus;
+use App\GameManager;
 use App\Models\Server;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -51,6 +52,9 @@ class HandleInertiaRequests extends Middleware
                 'info' => $request->session()->get('info'),
                 'warning' => $request->session()->get('warning'),
             ],
+            'gameTypeLabels' => fn () => collect(app(GameManager::class)->allHandlers())
+                ->mapWithKeys(fn ($handler, string $key): array => [$key => $handler->label()])
+                ->toArray(),
             'activeServers' => fn () => $request->user()
                 ? Server::query()
                     ->whereIn('status', [

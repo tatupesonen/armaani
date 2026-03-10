@@ -2,7 +2,7 @@
 
 namespace App\Services\Steam;
 
-use App\Enums\GameType;
+use App\GameManager;
 use App\Models\SteamAccount;
 use App\Models\WorkshopMod;
 use Carbon\Carbon;
@@ -14,7 +14,7 @@ class SteamWorkshopService
     /**
      * Fetch mod metadata from the Steam Web API.
      *
-     * @return array{name: string|null, file_size: int|null, time_updated: int|null, game_type: GameType|null}|null
+     * @return array{name: string|null, file_size: int|null, time_updated: int|null, game_type: string|null}|null
      */
     public function getModDetails(int $workshopId): ?array
     {
@@ -25,7 +25,7 @@ class SteamWorkshopService
      * Fetch metadata for multiple mods in a single Steam API call.
      *
      * @param  list<int>  $workshopIds
-     * @return array<int, array{name: string|null, file_size: int|null, time_updated: int|null, game_type: GameType|null}>
+     * @return array<int, array{name: string|null, file_size: int|null, time_updated: int|null, game_type: string|null}>
      */
     public function getMultipleModDetails(array $workshopIds): array
     {
@@ -64,7 +64,7 @@ class SteamWorkshopService
                     'file_size' => isset($detail['file_size']) ? (int) $detail['file_size'] : null,
                     'time_updated' => isset($detail['time_updated']) ? (int) $detail['time_updated'] : null,
                     'game_type' => isset($detail['consumer_appid'])
-                        ? GameType::fromConsumerAppId((int) $detail['consumer_appid'])
+                        ? app(GameManager::class)->fromConsumerAppId((int) $detail['consumer_appid'])?->value()
                         : null,
                 ];
             }
@@ -134,7 +134,7 @@ class SteamWorkshopService
     /**
      * Apply fetched Steam API metadata to a mod model.
      *
-     * @param  array{name: string|null, file_size: int|null, time_updated: int|null, game_type: GameType|null}  $details
+     * @param  array{name: string|null, file_size: int|null, time_updated: int|null, game_type: string|null}  $details
      */
     private function applyMetadata(WorkshopMod $mod, array $details): void
     {

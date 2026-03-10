@@ -2,18 +2,26 @@
 
 namespace App\GameHandlers;
 
-use App\Attributes\HandlesGame;
 use App\Contracts\GameHandler;
-use App\Enums\GameType;
+use App\Contracts\SteamGameHandler;
 use App\Models\DayZSettings;
 use App\Models\Server;
 
-#[HandlesGame(GameType::DayZ)]
-final class DayZHandler implements GameHandler
+final class DayZHandler implements GameHandler, SteamGameHandler
 {
-    public function gameType(): GameType
+    public function value(): string
     {
-        return GameType::DayZ;
+        return 'dayz';
+    }
+
+    public function label(): string
+    {
+        return 'DayZ';
+    }
+
+    public function consumerAppId(): int
+    {
+        return 221100;
     }
 
     public function serverAppId(): int

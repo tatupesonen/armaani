@@ -2,8 +2,8 @@
 
 namespace Database\Factories;
 
-use App\Enums\GameType;
 use App\Enums\InstallationStatus;
+use App\GameManager;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -17,7 +17,7 @@ class GameInstallFactory extends Factory
     public function definition(): array
     {
         return [
-            'game_type' => GameType::Arma3,
+            'game_type' => 'arma3',
             'name' => 'Arma 3 Server',
             'branch' => 'public',
             'installation_status' => InstallationStatus::Queued,
@@ -44,19 +44,26 @@ class GameInstallFactory extends Factory
         ]);
     }
 
+    /**
+     * Create a game install for any registered game type, pulling the label from the handler.
+     */
+    public function forGame(string $gameType): static
+    {
+        $handler = app(GameManager::class)->driver($gameType);
+
+        return $this->state(fn (): array => [
+            'game_type' => $gameType,
+            'name' => $handler->label().' Server',
+        ]);
+    }
+
     public function reforger(): static
     {
-        return $this->state(fn (): array => [
-            'game_type' => GameType::ArmaReforger,
-            'name' => 'Reforger Server',
-        ]);
+        return $this->forGame('reforger');
     }
 
     public function dayz(): static
     {
-        return $this->state(fn (): array => [
-            'game_type' => GameType::DayZ,
-            'name' => 'DayZ Server',
-        ]);
+        return $this->forGame('dayz');
     }
 }

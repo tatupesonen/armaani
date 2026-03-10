@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\GameType;
 use App\Enums\InstallationStatus;
 use App\Http\Requests\WorkshopMod\StoreWorkshopModRequest;
 use App\Http\Requests\WorkshopMod\UpdateSelectedModsRequest;
@@ -65,12 +64,10 @@ class WorkshopModController extends Controller
     {
         $validated = $request->validated();
 
-        $gameType = GameType::from($validated['game_type'] ?? 'arma3');
-
         $mod = WorkshopMod::query()->firstOrCreate(
             [
                 'workshop_id' => $validated['workshop_id'],
-                'game_type' => $gameType,
+                'game_type' => $validated['game_type'] ?? 'arma3',
             ],
             [
                 'installation_status' => InstallationStatus::Queued,

@@ -2,7 +2,6 @@
 
 namespace App\Contracts;
 
-use App\Enums\GameType;
 use App\Models\Server;
 
 /**
@@ -52,19 +51,18 @@ use App\Models\Server;
  */
 interface GameHandler
 {
-    public function gameType(): GameType;
+    /**
+     * Unique string identifier for this game type (e.g., 'arma3', 'reforger', 'dayz').
+     * Used as the database value and driver key.
+     */
+    public function value(): string;
+
+    /**
+     * Human-readable display name (e.g., 'Arma 3', 'Arma Reforger', 'DayZ').
+     */
+    public function label(): string;
 
     // --- Game Metadata ---
-
-    /**
-     * Steam App ID for the dedicated server binary.
-     */
-    public function serverAppId(): int;
-
-    /**
-     * Steam Game ID (used for workshop mod downloads).
-     */
-    public function gameId(): int;
 
     /**
      * Default game port for new servers.
