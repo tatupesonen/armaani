@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.0](https://github.com/tatupesonen/Armaani/compare/v1.4.0...v1.5.0) (2026-03-10)
+
+
+### Features
+
+* add Project Zomboid game handler with full server management ([cfe281b](https://github.com/tatupesonen/Armaani/commit/cfe281b7c3e142ae653b075639e705e471e36ae3))
+* add Project Zomboid game handler with full server management ([0075a53](https://github.com/tatupesonen/Armaani/commit/0075a53e794bc92bafa010f0ea0096cca6d19cb8))
+
 ## [1.4.0](https://github.com/tatupesonen/Armaani/compare/v1.3.2...v1.4.0) (2026-03-10)
 
 
