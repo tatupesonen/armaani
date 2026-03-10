@@ -125,6 +125,21 @@ Implement `App\Contracts\SteamGameHandler` for Steam-based games:
 
 Look up these IDs on [SteamDB](https://steamdb.info).
 
+### DownloadsDirectly (non-Steam games)
+
+Implement `App\Contracts\DownloadsDirectly` for games whose server binaries are downloaded via HTTP rather than SteamCMD (e.g., Factorio). The handler declares _what_ it is; `InstallerResolver` determines _how_ to install. Handlers never import or reference installer classes.
+
+| Method                             | Purpose                                                                                       |
+| ---------------------------------- | --------------------------------------------------------------------------------------------- |
+| `getDownloadUrl(string): string`   | Full URL to download the server archive for the given branch.                                 |
+| `getArchiveStripComponents(): int` | Leading directory components to strip during tar extraction (e.g., 1 for `factorio/bin/...`). |
+
+**Important:** `DownloadsDirectly` handlers do NOT implement `SteamGameHandler`. They have no Steam App IDs. The `InstallerResolver` maps `SteamGameHandler` → `SteamGameInstaller` and `DownloadsDirectly` → `HttpGameInstaller` automatically.
+
+#### Per-server config.ini pattern
+
+Games downloaded via HTTP often write runtime data relative to their binary. To isolate per-server state from the shared game install directory, generate a per-server config file that redirects the write path to the server's profiles directory, and pass it via a CLI flag (e.g., `--config`). See `FactorioHandler::generateConfigIni()` for the reference implementation.
+
 ### SupportsRegisteredMods (optional)
 
 Implement `App\Contracts\SupportsRegisteredMods` for games with GUID-based mods (not Steam Workshop). Requires its own mod model, pivot table, and CRUD logic.
@@ -311,12 +326,13 @@ The `formField` key must exactly match the field name expected by the backend va
 
 ## Existing Handlers (Reference)
 
-| Handler                 | Game            | Complexity | Best Reference For                                               |
-| ----------------------- | --------------- | ---------- | ---------------------------------------------------------------- |
-| `DayZHandler`           | DayZ            | Simplest   | Minimal scaffold, unimplemented methods throw `RuntimeException` |
-| `ReforgerHandler`       | Arma Reforger   | Medium     | JSON config, registered mods, scenarios, custom component        |
-| `ProjectZomboidHandler` | Project Zomboid | Full       | Twig INI templates, DetectsServerState, wrapper-script games     |
-| `Arma3Handler`          | Arma 3          | Full       | Twig templates, complex settings schema, headless clients        |
+| Handler                 | Game            | Complexity | Best Reference For                                                            |
+| ----------------------- | --------------- | ---------- | ----------------------------------------------------------------------------- |
+| `DayZHandler`           | DayZ            | Simplest   | Minimal scaffold, unimplemented methods throw `RuntimeException`              |
+| `ReforgerHandler`       | Arma Reforger   | Medium     | JSON config, registered mods, scenarios, custom component                     |
+| `FactorioHandler`       | Factorio        | Full       | HTTP download (DownloadsDirectly), JSON config, save creation, non-Steam game |
+| `ProjectZomboidHandler` | Project Zomboid | Full       | Twig INI templates, DetectsServerState, wrapper-script games                  |
+| `Arma3Handler`          | Arma 3          | Full       | Twig templates, complex settings schema, headless clients                     |
 
 ## Post-Creation Checklist
 
@@ -331,10 +347,11 @@ After scaffolding a handler:
 7. Fill in `settingsValidationRules()` matching the schema fields
 8. Run `php artisan game:generate-types` to update TypeScript types
 9. If settings model was generated, add columns to the migration and run `php artisan migrate`
-10. Write tests (use `tests/Concerns/CreatesGameScenarios.php` trait — add a `create{Game}Server()` method)
-11. Run `vendor/bin/pint --dirty --format agent`
-12. Run `vendor/bin/phpstan analyse --memory-limit=512M`
-13. Run `php artisan test --compact`
+10. Add a `create{Game}Server()` method to `tests/Concerns/CreatesGameScenarios.php`
+11. Do **not** write tests for game handlers directly — handler logic is covered by integration and feature tests elsewhere
+12. Run `vendor/bin/pint --dirty --format agent`
+13. Run `vendor/bin/phpstan analyse --memory-limit=512M`
+14. Run `php artisan test --compact`
 
 ## Common Pitfalls
 
@@ -346,3 +363,7 @@ After scaffolding a handler:
 - **Interactive stdin prompts** — Some servers prompt for input on first run (e.g., PZ admin password). Since the process runs detached with `/dev/null` as stdin, this causes a crash. Pass required values as launch flags instead (e.g., `-adminpassword`)
 - **Config auto-expansion** — Some games (e.g., Project Zomboid) auto-expand partial config files with all default values on first boot. The Twig template only needs to set managed values; the game fills in the rest. Don't try to template every possible setting
 - **Invalid launch flags** — Not all parameters documented online are valid launch flags. Some settings (like IP binding in PZ) must be set in the config file, not on the command line. Test launch commands against actual server behavior
+- **Partial JSON config sections** — Some games (e.g., Factorio 2.0) require ALL sub-keys when a JSON section is present — they do not merge with built-in defaults. If you provide `"pollution": {"enabled": true}` but omit `diffusion_ratio` etc., the server crashes. Either include all sub-keys with their defaults or omit the section entirely. Check the game's example config files (e.g., `data/map-settings.example.json`) for the full required structure. This applies to ALL top-level sections too — if the game expects `steering`, `path_finder`, `unit_group`, etc., they must all be present
+- **Write-data isolation** — Games that use a single `write-data` directory (e.g., Factorio) will write saves, logs, and player data to the game install directory by default. Multiple servers sharing the same install will conflict. Generate a per-server config that redirects write-data to the server's profiles path
+- **Save file location** — When using per-server write-data paths, save files end up in the profiles directory, not the game install directory. Use explicit save path flags (e.g., `--start-server path/to/save.zip`) instead of relative flags like `--start-server-load-latest` which search the write-data directory
+- **Coupled CLI flags** — Some flags require companion flags (e.g., Factorio's `--rcon-port` requires `--rcon-password`). Only include the full set when all values are configured, otherwise the server crashes

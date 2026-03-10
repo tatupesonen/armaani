@@ -2,19 +2,17 @@
 
 namespace Tests\Feature\Jobs;
 
+use App\Contracts\GameServerInstaller;
 use App\Enums\InstallationStatus;
 use App\Events\GameInstallOutput;
-use App\GameManager;
 use App\Jobs\InstallServerJob;
 use App\Models\GameInstall;
 use App\Models\SteamAccount;
-use App\Services\Steam\SteamCmdService;
-use Illuminate\Contracts\Process\ProcessResult;
+use App\Services\Installers\InstallerResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
-use Mockery;
 use Tests\TestCase;
 
 class InstallServerJobTest extends TestCase
@@ -42,58 +40,7 @@ class InstallServerJobTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_successful_install_parses_build_id_from_appmanifest(): void
-    {
-        $install = GameInstall::factory()->create([
-            'installation_status' => InstallationStatus::Queued,
-        ]);
-
-        $installDir = $install->getInstallationPath();
-        $manifestDir = $installDir.'/steamapps';
-        @mkdir($manifestDir, 0755, true);
-
-        file_put_contents(
-            $manifestDir.'/appmanifest_'.app(GameManager::class)->driver($install->game_type)->serverAppId().'.acf',
-            <<<'ACF'
-            "AppState"
-            {
-                "appid"		"233780"
-                "Universe"		"1"
-                "name"		"Arma 3 Server"
-                "StateFlags"		"4"
-                "installdir"		"Arma 3 Server"
-                "LastUpdated"		"1700000000"
-                "SizeOnDisk"		"5384428737"
-                "buildid"		"15873241"
-                "LastOwner"		"0"
-                "BytesToDownload"		"0"
-                "BytesDownloaded"		"0"
-                "AutoUpdateBehavior"		"0"
-            }
-            ACF
-        );
-
-        Process::fake(['du *' => Process::result("5384428737\t{$installDir}")]);
-
-        $result = Mockery::mock(ProcessResult::class);
-        $result->shouldReceive('successful')->andReturn(true);
-
-        $steamCmd = Mockery::mock(SteamCmdService::class);
-        $steamCmd->shouldReceive('installServer')->once()->andReturn($result);
-
-        $this->app->instance(SteamCmdService::class, $steamCmd);
-
-        $job = new InstallServerJob($install);
-        $job->handle($steamCmd);
-
-        $install->refresh();
-        $this->assertEquals(InstallationStatus::Installed, $install->installation_status);
-        $this->assertEquals('15873241', $install->build_id);
-        $this->assertEquals(100, $install->progress_pct);
-        $this->assertNotNull($install->installed_at);
-    }
-
-    public function test_successful_install_without_appmanifest_sets_null_build_id(): void
+    public function test_successful_install_updates_status_and_broadcasts(): void
     {
         $install = GameInstall::factory()->create([
             'installation_status' => InstallationStatus::Queued,
@@ -101,16 +48,42 @@ class InstallServerJobTest extends TestCase
 
         Process::fake(['du *' => Process::result("5000000\t/fake/path")]);
 
-        $result = Mockery::mock(ProcessResult::class);
-        $result->shouldReceive('successful')->andReturn(true);
+        $mockInstaller = $this->createMock(GameServerInstaller::class);
+        $mockInstaller->expects($this->once())
+            ->method('install')
+            ->willReturn('15873241');
 
-        $steamCmd = Mockery::mock(SteamCmdService::class);
-        $steamCmd->shouldReceive('installServer')->once()->andReturn($result);
-
-        $this->app->instance(SteamCmdService::class, $steamCmd);
+        $this->mockInstallerResolver($mockInstaller);
 
         $job = new InstallServerJob($install);
-        $job->handle($steamCmd);
+        $job->handle();
+
+        $install->refresh();
+        $this->assertEquals(InstallationStatus::Installed, $install->installation_status);
+        $this->assertEquals('15873241', $install->build_id);
+        $this->assertEquals(100, $install->progress_pct);
+        $this->assertNotNull($install->installed_at);
+
+        Event::assertDispatched(GameInstallOutput::class);
+    }
+
+    public function test_successful_install_with_null_build_id(): void
+    {
+        $install = GameInstall::factory()->create([
+            'installation_status' => InstallationStatus::Queued,
+        ]);
+
+        Process::fake(['du *' => Process::result("5000000\t/fake/path")]);
+
+        $mockInstaller = $this->createMock(GameServerInstaller::class);
+        $mockInstaller->expects($this->once())
+            ->method('install')
+            ->willReturn(null);
+
+        $this->mockInstallerResolver($mockInstaller);
+
+        $job = new InstallServerJob($install);
+        $job->handle();
 
         $install->refresh();
         $this->assertEquals(InstallationStatus::Installed, $install->installation_status);
@@ -123,20 +96,31 @@ class InstallServerJobTest extends TestCase
             'installation_status' => InstallationStatus::Queued,
         ]);
 
-        $result = Mockery::mock(ProcessResult::class);
-        $result->shouldReceive('successful')->andReturn(false);
-        $result->shouldReceive('errorOutput')->andReturn('SteamCMD error');
+        $mockInstaller = $this->createMock(GameServerInstaller::class);
+        $mockInstaller->expects($this->once())
+            ->method('install')
+            ->willThrowException(new \RuntimeException('Download failed'));
 
-        $steamCmd = Mockery::mock(SteamCmdService::class);
-        $steamCmd->shouldReceive('installServer')->once()->andReturn($result);
+        $this->mockInstallerResolver($mockInstaller);
 
-        $this->app->instance(SteamCmdService::class, $steamCmd);
-
-        $job = new InstallServerJob($install);
-        $job->handle($steamCmd);
+        $job = (new InstallServerJob($install))->withFakeQueueInteractions();
+        $job->handle();
 
         $install->refresh();
         $this->assertEquals(InstallationStatus::Failed, $install->installation_status);
         $this->assertNull($install->build_id);
+
+        $job->assertFailed();
+    }
+
+    /**
+     * Bind a mock InstallerResolver that always returns the given installer.
+     */
+    private function mockInstallerResolver(GameServerInstaller $installer): void
+    {
+        $resolver = $this->createMock(InstallerResolver::class);
+        $resolver->method('resolve')->willReturn($installer);
+
+        $this->app->instance(InstallerResolver::class, $resolver);
     }
 }

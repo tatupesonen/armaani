@@ -44,4 +44,9 @@ trait CreatesGameScenarios
     {
         return $this->createServer('projectzomboid', $overrides);
     }
+
+    protected function createFactorioServer(array $overrides = []): Server
+    {
+        return $this->createServer('factorio', $overrides);
+    }
 }

@@ -6,6 +6,12 @@ use App\Models\ModPreset;
 use App\Models\Server;
 
 /**
+ * Core contract for game handlers in the manager pattern.
+ *
+ * Installation strategy is determined by which additional interface the handler
+ * implements (SteamGameHandler → SteamGameInstaller, DownloadsDirectly → HttpGameInstaller),
+ * resolved automatically by InstallerResolver.
+ *
  * @phpstan-type SettingsFieldOption array{value: string, label: string}
  * @phpstan-type SettingsField array{
  *     key?: string,
@@ -76,7 +82,7 @@ interface GameHandler
     public function defaultQueryPort(): int;
 
     /**
-     * Available SteamCMD beta branches for this game.
+     * Available installation branches for this game (e.g., 'public', 'stable', 'experimental').
      *
      * @return list<string>
      */

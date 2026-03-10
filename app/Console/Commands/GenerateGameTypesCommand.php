@@ -39,7 +39,7 @@ class GenerateGameTypesCommand extends Command
         $lines[] = ' * Regenerate with: php artisan game:generate-types';
         $lines[] = ' */';
         $lines[] = '';
-        $lines[] = "import type { GameInstall, ModPreset, ServerBackup } from './game';";
+        $lines[] = "import type { GameInstall, ModPreset, ServerBackup, ServerStatus } from './game';";
         $lines[] = '';
 
         // Collect per-handler data
@@ -224,7 +224,7 @@ export type ServerBase = {
     description: string | null;
     active_preset_id: number | null;
     game_install_id: number | null;
-    status: import('./game').ServerStatus;
+    status: ServerStatus;
     auto_restart: boolean;
     additional_params: string | null;
     verify_signatures: boolean;

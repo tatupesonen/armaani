@@ -7,7 +7,7 @@ use App\Events\GameInstallOutput;
 use App\GameManager;
 use App\Jobs\Concerns\InteractsWithFileSystem;
 use App\Models\GameInstall;
-use App\Services\Steam\SteamCmdService;
+use App\Services\Installers\InstallerResolver;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
@@ -23,7 +23,7 @@ class InstallServerJob implements ShouldQueue
 
     public function __construct(public GameInstall $gameInstall) {}
 
-    public function handle(SteamCmdService $steamCmd): void
+    public function handle(): void
     {
         $installDir = $this->gameInstall->getInstallationPath();
 
@@ -40,90 +40,48 @@ class InstallServerJob implements ShouldQueue
 
         Log::info("{$context} Starting installation (branch: {$this->gameInstall->branch}) to {$installDir}");
 
-        $lastProgressUpdate = 0;
-
         $handler = app(GameManager::class)->driver($this->gameInstall->game_type);
 
-        $result = $steamCmd->installServer(
-            $installDir,
-            $this->gameInstall->branch,
-            handler: $handler,
-            onOutput: function (string $line) use (&$lastProgressUpdate, $context): void {
+        $installer = app(InstallerResolver::class)->resolve($handler);
+
+        try {
+            $lastPctWritten = 0;
+
+            $buildId = $installer->install($this->gameInstall, $handler, function (int $pct, string $line) use (&$lastPctWritten, $context): void {
                 Log::info("{$context} {$line}");
 
-                $pctToSend = $this->gameInstall->progress_pct;
-
-                if (preg_match('/progress:\s*([\d.]+)\s*\((\d+)\s*\/\s*(\d+)\)/', $line, $m)) {
-                    $pct = (int) round((float) $m[1]);
-                    $totalBytes = (int) $m[3];
-
-                    if ($pct >= $lastProgressUpdate + 1 || $pct === 100) {
-                        $lastProgressUpdate = $pct;
-                        $pctToSend = $pct;
-
-                        $this->gameInstall->updateQuietly([
-                            'progress_pct' => $pct,
-                            'disk_size_bytes' => $totalBytes > 0 ? $totalBytes : $this->gameInstall->disk_size_bytes,
-                        ]);
-                    }
+                if ($pct >= $lastPctWritten + 1 || $pct === 100) {
+                    $lastPctWritten = $pct;
+                    $this->gameInstall->updateQuietly(['progress_pct' => $pct]);
                 }
 
-                GameInstallOutput::dispatch(
-                    $this->gameInstall->id,
-                    $pctToSend,
-                    $line,
-                );
-            }
-        );
-
-        if ($result->successful()) {
-            $diskSize = $this->getDirectorySize($installDir);
-            $buildId = $this->parseBuildId($installDir, $handler);
-
-            $this->gameInstall->update([
-                'installation_status' => InstallationStatus::Installed,
-                'progress_pct' => 100,
-                'disk_size_bytes' => $diskSize > 0 ? $diskSize : $this->gameInstall->disk_size_bytes,
-                'build_id' => $buildId,
-                'installed_at' => now(),
-            ]);
-
-            Log::info("{$context} Completed successfully (disk: {$diskSize} bytes, build: {$buildId})");
-
-            GameInstallOutput::dispatch($this->gameInstall->id, 100, 'Installation completed successfully.');
-        } else {
+                GameInstallOutput::dispatch($this->gameInstall->id, $pct, $line);
+            });
+        } catch (\Throwable $e) {
             $this->gameInstall->update(['installation_status' => InstallationStatus::Failed]);
 
-            Log::error("{$context} Installation failed: {$result->errorOutput()}");
+            Log::error("{$context} Installation failed: {$e->getMessage()}");
 
-            GameInstallOutput::dispatch($this->gameInstall->id, 0, 'Installation failed: '.$result->errorOutput());
+            GameInstallOutput::dispatch($this->gameInstall->id, 0, "Installation failed: {$e->getMessage()}");
 
-            $this->fail(new \RuntimeException('SteamCMD failed: '.$result->errorOutput()));
-        }
-    }
+            $this->fail($e);
 
-    /**
-     * Parse the build ID from the SteamCMD appmanifest ACF file.
-     */
-    protected function parseBuildId(string $installDir, \App\Contracts\SteamGameHandler $handler): ?string
-    {
-        $manifestPath = $installDir.'/steamapps/appmanifest_'.$handler->serverAppId().'.acf';
-
-        if (! file_exists($manifestPath)) {
-            Log::warning("[GameInstall:{$this->gameInstall->id}] Appmanifest not found at {$manifestPath}");
-
-            return null;
+            return;
         }
 
-        $contents = file_get_contents($manifestPath);
+        $diskSize = $this->getDirectorySize($installDir);
 
-        if ($contents !== false && preg_match('/"buildid"\s+"(\d+)"/', $contents, $matches)) {
-            return $matches[1];
-        }
+        $this->gameInstall->update([
+            'installation_status' => InstallationStatus::Installed,
+            'progress_pct' => 100,
+            'disk_size_bytes' => $diskSize > 0 ? $diskSize : $this->gameInstall->disk_size_bytes,
+            'build_id' => $buildId,
+            'installed_at' => now(),
+        ]);
 
-        Log::warning("[GameInstall:{$this->gameInstall->id}] Could not parse buildid from {$manifestPath}");
+        Log::info("{$context} Completed successfully (disk: {$diskSize} bytes, build: {$buildId})");
 
-        return null;
+        GameInstallOutput::dispatch($this->gameInstall->id, 100, 'Installation completed successfully.');
     }
 
     public function failed(?\Throwable $exception): void

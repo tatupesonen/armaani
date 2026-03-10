@@ -21,12 +21,14 @@ use Illuminate\Support\Facades\Log;
  * @method \Illuminate\Database\Eloquent\Relations\HasOne reforgerSettings()
  * @method \Illuminate\Database\Eloquent\Relations\HasOne dayzSettings()
  * @method \Illuminate\Database\Eloquent\Relations\HasOne projectzomboidSettings()
+ * @method \Illuminate\Database\Eloquent\Relations\HasOne factorioSettings()
  * @method \Illuminate\Database\Eloquent\Relations\HasMany reforgerScenarios()
  *
  * @property \App\Models\Arma3Settings|null $arma3Settings
  * @property \App\Models\ReforgerSettings|null $reforgerSettings
  * @property \App\Models\DayZSettings|null $dayzSettings
  * @property \App\Models\ProjectZomboidSettings|null $projectzomboidSettings
+ * @property \App\Models\FactorioSettings|null $factorioSettings
  * @property \Illuminate\Database\Eloquent\Collection<int, \App\Models\ReforgerScenario> $reforgerScenarios
  */
 class Server extends Model

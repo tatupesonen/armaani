@@ -2,11 +2,11 @@ import { router, usePage } from '@inertiajs/react';
 import { Check, ChevronDown, X } from 'lucide-react';
 import { Fragment, useState } from 'react';
 import '@/components/servers/custom-components';
+import BackupSection from '@/components/servers/backup-section';
 import GameSettingsRenderer, {
     buildEditDataFromSchema,
     getAdvancedFields,
 } from '@/components/servers/game-settings-renderer';
-import BackupSection from '@/components/servers/backup-section';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
