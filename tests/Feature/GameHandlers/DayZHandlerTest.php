@@ -2,6 +2,11 @@
 
 namespace Tests\Feature\GameHandlers;
 
+use App\Contracts\DetectsServerState;
+use App\Contracts\ManagesModAssets;
+use App\Contracts\SupportsBackups;
+use App\Contracts\SupportsHeadlessClients;
+use App\Contracts\SupportsMissions;
 use App\Enums\GameType;
 use App\GameHandlers\DayZHandler;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -50,35 +55,29 @@ class DayZHandlerTest extends TestCase
         $this->assertEquals($expected, $this->handler->getServerLogPath($server));
     }
 
-    public function test_boot_detection_string_is_null(): void
+    public function test_does_not_implement_detects_server_state(): void
     {
-        $this->assertSame([], $this->handler->getBootDetectionStrings());
+        $this->assertNotInstanceOf(DetectsServerState::class, $this->handler);
     }
 
-    public function test_does_not_support_headless_clients(): void
+    public function test_does_not_implement_supports_headless_clients(): void
     {
-        $this->assertFalse($this->handler->supportsHeadlessClients());
+        $this->assertNotInstanceOf(SupportsHeadlessClients::class, $this->handler);
     }
 
-    public function test_build_headless_client_command_returns_null(): void
+    public function test_does_not_implement_supports_backups(): void
     {
-        $server = $this->createDayZServer();
-
-        $this->assertNull($this->handler->buildHeadlessClientCommand($server, 0));
+        $this->assertNotInstanceOf(SupportsBackups::class, $this->handler);
     }
 
-    public function test_get_backup_file_path_returns_null(): void
+    public function test_does_not_implement_manages_mod_assets(): void
     {
-        $server = $this->createDayZServer();
-
-        $this->assertNull($this->handler->getBackupFilePath($server));
+        $this->assertNotInstanceOf(ManagesModAssets::class, $this->handler);
     }
 
-    public function test_get_backup_download_filename(): void
+    public function test_does_not_implement_supports_missions(): void
     {
-        $server = $this->createDayZServer();
-
-        $this->assertEquals('dayz_'.$server->id.'_backup', $this->handler->getBackupDownloadFilename($server));
+        $this->assertNotInstanceOf(SupportsMissions::class, $this->handler);
     }
 
     public function test_build_launch_command_throws_not_implemented(): void
@@ -101,32 +100,25 @@ class DayZHandlerTest extends TestCase
         $this->handler->generateConfigFiles($server);
     }
 
-    public function test_symlink_mods_throws_not_implemented(): void
+    public function test_create_related_settings_creates_dayz_settings(): void
     {
         $server = $this->createDayZServer();
 
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('DayZ server support is not yet implemented.');
+        // Delete existing settings created by factory
+        $server->dayzSettings()->delete();
 
-        $this->handler->symlinkMods($server);
+        $this->handler->createRelatedSettings($server);
+
+        $this->assertNotNull($server->fresh()->dayzSettings);
     }
 
-    public function test_symlink_missions_is_noop(): void
+    public function test_server_validation_rules_returns_empty_array(): void
     {
-        $server = $this->createDayZServer();
-
-        // Should not throw
-        $this->handler->symlinkMissions($server);
-        $this->assertTrue(true);
+        $this->assertSame([], $this->handler->serverValidationRules());
     }
 
-    public function test_copy_bikeys_throws_not_implemented(): void
+    public function test_settings_validation_rules_returns_empty_array(): void
     {
-        $server = $this->createDayZServer();
-
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('DayZ server support is not yet implemented.');
-
-        $this->handler->copyBiKeys($server);
+        $this->assertSame([], $this->handler->settingsValidationRules());
     }
 }

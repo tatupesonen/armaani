@@ -44,7 +44,7 @@ class MissionController extends Controller
             $count++;
         }
 
-        Log::info('User '.auth()->id().' ('.auth()->user()->name.") uploaded {$count} mission(s)");
+        Log::info(auth_context()." uploaded {$count} mission(s)");
 
         return back()->with('success', "{$count} mission file(s) uploaded.");
     }
@@ -64,7 +64,7 @@ class MissionController extends Controller
 
         if ($path !== null) {
             unlink($path);
-            Log::info('User '.auth()->id().' ('.auth()->user()->name.') deleted mission: '.basename($path));
+            Log::info(auth_context().' deleted mission: '.basename($path));
         }
 
         return back()->with('success', 'Mission file deleted.');

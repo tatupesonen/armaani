@@ -2,6 +2,7 @@
 
 namespace App\Listeners;
 
+use App\Contracts\DetectsServerState;
 use App\Enums\ServerStatus;
 use App\Events\ServerLogOutput;
 use App\Events\ServerStatusChanged;
@@ -37,6 +38,10 @@ class DetectServerEvents
         }
 
         $handler = $this->gameManager->for($server);
+
+        if (! $handler instanceof DetectsServerState) {
+            return;
+        }
 
         // Check for mod download started (Booting → DownloadingMods)
         $modDownloadStarted = $handler->getModDownloadStartedString();
@@ -78,7 +83,7 @@ class DetectServerEvents
                 );
 
                 if ($server->auto_restart) {
-                    Log::info("[Server:{$server->id}] Auto-restart enabled — queuing restart");
+                    Log::info("{$server->logContext()} Auto-restart enabled — queuing restart");
                     Bus::chain([
                         new StopServerJob($server),
                         new StartServerJob($server),
@@ -108,7 +113,7 @@ class DetectServerEvents
             return false;
         }
 
-        Log::info("[Server:{$server->id}] Status changed to {$toStatus->value}");
+        Log::info("{$server->logContext()} Status changed to {$toStatus->value}");
         ServerStatusChanged::dispatch($server->id, $toStatus->value, $server->name);
 
         return true;

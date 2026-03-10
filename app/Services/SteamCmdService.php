@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
+use App\Contracts\GameHandler;
 use App\Enums\GameType;
+use App\GameManager;
 use App\Models\SteamAccount;
 use Illuminate\Contracts\Process\ProcessResult;
 use Illuminate\Process\InvokedProcess;
@@ -27,11 +29,11 @@ class SteamCmdService
      *
      * @param  callable(string): void  $onOutput
      */
-    public function installServer(string $installDir, string $branch = 'public', ?callable $onOutput = null, ?GameType $gameType = null): ProcessResult
+    public function installServer(string $installDir, string $branch = 'public', ?callable $onOutput = null, ?GameHandler $handler = null): ProcessResult
     {
         $args = $this->baseArgs($installDir);
 
-        $appId = ($gameType ?? GameType::default())->serverAppId();
+        $appId = ($handler ?? $this->defaultHandler())->serverAppId();
         $appUpdate = '+app_update '.$appId;
 
         if ($branch !== 'public') {
@@ -60,10 +62,10 @@ class SteamCmdService
      * Start a SteamCMD workshop mod download asynchronously.
      * Returns a pending process so the caller can poll while it runs.
      */
-    public function startDownloadMod(string $installDir, int $workshopId, ?GameType $gameType = null): InvokedProcess
+    public function startDownloadMod(string $installDir, int $workshopId, ?GameHandler $handler = null): InvokedProcess
     {
         $args = $this->baseArgs($installDir);
-        $gameId = ($gameType ?? GameType::default())->gameId();
+        $gameId = ($handler ?? $this->defaultHandler())->gameId();
         $args[] = '+workshop_download_item '.$gameId.' '.$workshopId.' validate';
         $args[] = '+quit';
 
@@ -78,11 +80,11 @@ class SteamCmdService
      *
      * @param  list<int>  $workshopIds
      */
-    public function startBatchDownloadMods(string $installDir, array $workshopIds, ?GameType $gameType = null): InvokedProcess
+    public function startBatchDownloadMods(string $installDir, array $workshopIds, ?GameHandler $handler = null): InvokedProcess
     {
         $args = $this->baseArgs($installDir);
 
-        $gameId = ($gameType ?? GameType::default())->gameId();
+        $gameId = ($handler ?? $this->defaultHandler())->gameId();
 
         foreach ($workshopIds as $workshopId) {
             $args[] = '+workshop_download_item '.$gameId.' '.$workshopId.' validate';
@@ -158,6 +160,14 @@ class SteamCmdService
             '+force_install_dir', $installDir,
             '+login', $account->username, $account->password,
         ];
+    }
+
+    /**
+     * Resolve the default game handler (Arma 3) as a fallback.
+     */
+    private function defaultHandler(): GameHandler
+    {
+        return app(GameManager::class)->driver(GameType::default()->value);
     }
 
     /**

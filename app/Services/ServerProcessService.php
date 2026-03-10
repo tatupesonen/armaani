@@ -2,6 +2,10 @@
 
 namespace App\Services;
 
+use App\Contracts\ManagesModAssets;
+use App\Contracts\SupportsBackups;
+use App\Contracts\SupportsHeadlessClients;
+use App\Contracts\SupportsMissions;
 use App\Enums\ServerStatus;
 use App\GameManager;
 use App\Models\Server;
@@ -27,11 +31,10 @@ class ServerProcessService
      */
     public function start(Server $server): void
     {
-        $context = "[Server:{$server->id} '{$server->name}']";
         $handler = $this->gameManager->for($server);
 
         if ($this->isRunning($server)) {
-            Log::info("{$context} Server is already running, skipping start");
+            Log::info("{$server->logContext()} Server is already running, skipping start");
 
             return;
         }
@@ -43,14 +46,21 @@ class ServerProcessService
         }
 
         // Auto-backup profile data before overwriting configs (only for games that support it)
-        if ($handler->getBackupFilePath($server)) {
+        if ($handler instanceof SupportsBackups) {
             $this->backupService->createFromServer($server, 'Auto-backup before start', isAutomatic: true);
         }
 
         $server->load('activePreset.mods');
-        $handler->symlinkMods($server);
-        $handler->symlinkMissions($server);
-        $handler->copyBiKeys($server);
+
+        if ($handler instanceof ManagesModAssets) {
+            $handler->symlinkMods($server);
+            $handler->copyBiKeys($server);
+        }
+
+        if ($handler instanceof SupportsMissions) {
+            $handler->symlinkMissions($server);
+        }
+
         $handler->generateConfigFiles($server);
 
         $command = $handler->buildLaunchCommand($server);
@@ -58,9 +68,9 @@ class ServerProcessService
         $logFile = $handler->getServerLogPath($server);
         $binaryDir = $server->gameInstall->getInstallationPath();
 
-        Log::info("{$context} Starting server from {$binaryDir}");
-        Log::info("{$context} Launch command: ".implode(' ', $command));
-        Log::info("{$context} Log file: {$logFile}");
+        Log::info("{$server->logContext()} Starting server from {$binaryDir}");
+        Log::info("{$server->logContext()} Launch command: ".implode(' ', $command));
+        Log::info("{$server->logContext()} Log file: {$logFile}");
 
         // Truncate/create log file before the server process.
         file_put_contents($logFile, '');
@@ -69,7 +79,7 @@ class ServerProcessService
         // Start the server as a detached child process using proc_open.
         // Array-form proc_open bypasses the shell entirely, so the PID we
         // capture IS the server process — signals target it directly.
-        $this->spawnProcess($command, $binaryDir, $logFile, $pidFile, $context);
+        $this->spawnProcess($command, $binaryDir, $logFile, $pidFile, $server->logContext());
     }
 
     /**
@@ -77,14 +87,12 @@ class ServerProcessService
      */
     public function stop(Server $server): void
     {
-        $context = "[Server:{$server->id} '{$server->name}']";
-
         $this->stopLogTail($server);
 
         $pid = $this->getPid($server);
 
         if ($pid && $this->isProcessRunning($pid)) {
-            Log::info("{$context} Stopping server (PID {$pid})");
+            Log::info("{$server->logContext()} Stopping server (PID {$pid})");
             posix_kill($pid, SIGTERM);
 
             $waited = 0;
@@ -94,13 +102,13 @@ class ServerProcessService
             }
 
             if ($this->isProcessRunning($pid)) {
-                Log::warning("{$context} Server did not stop gracefully, sending SIGKILL (PID {$pid})");
+                Log::warning("{$server->logContext()} Server did not stop gracefully, sending SIGKILL (PID {$pid})");
                 posix_kill($pid, SIGKILL);
             }
 
-            Log::info("{$context} Server stopped");
+            Log::info("{$server->logContext()} Server stopped");
         } else {
-            Log::info("{$context} Server was not running (no active PID)");
+            Log::info("{$server->logContext()} Server was not running (no active PID)");
         }
 
         $this->cleanupPidFile($server);
@@ -168,14 +176,14 @@ class ServerProcessService
     {
         $handler = $this->gameManager->for($server);
 
-        if (! $handler->supportsHeadlessClients()) {
+        if (! $handler instanceof SupportsHeadlessClients) {
             return null;
         }
 
         $runningIndices = $this->getRunningHcIndices($server);
 
         if (count($runningIndices) >= 10) {
-            Log::warning("[Server:{$server->id} '{$server->name}'] Cannot add HC — already at maximum (10)");
+            Log::warning("{$server->logContext()} Cannot add HC — already at maximum (10)");
 
             return null;
         }
@@ -212,11 +220,10 @@ class ServerProcessService
      */
     public function stopAllHeadlessClients(Server $server): void
     {
-        $context = "[Server:{$server->id} '{$server->name}']";
         $pidFiles = glob(storage_path('app/server_'.$server->id.'_hc_*.pid')) ?: [];
 
         foreach ($pidFiles as $pidFile) {
-            $this->terminateProcess($pidFile, $context);
+            $this->terminateProcess($pidFile, $server->logContext());
         }
     }
 
@@ -279,25 +286,26 @@ class ServerProcessService
      */
     protected function stopHeadlessClient(Server $server, int $index): void
     {
-        $context = "[Server:{$server->id} '{$server->name}' HC:{$index}]";
+        $context = "{$server->logContext()} HC:{$index}";
         $this->terminateProcess($this->getHcPidFilePath($server, $index), $context);
     }
 
     protected function startHeadlessClient(Server $server, int $index): void
     {
         $handler = $this->gameManager->for($server);
-        $context = "[Server:{$server->id} '{$server->name}' HC:{$index}]";
+
+        if (! $handler instanceof SupportsHeadlessClients) {
+            Log::warning("{$server->logContext()} Game type does not support headless clients");
+
+            return;
+        }
+
+        $context = "{$server->logContext()} HC:{$index}";
         $binaryDir = $server->gameInstall->getInstallationPath();
         $pidFile = $this->getHcPidFilePath($server, $index);
         $logFile = $this->getHeadlessClientLogPath($server, $index);
 
         $command = $handler->buildHeadlessClientCommand($server, $index);
-
-        if ($command === null) {
-            Log::warning("{$context} Game type does not support headless clients");
-
-            return;
-        }
 
         Log::info("{$context} Starting headless client: ".implode(' ', $command));
 

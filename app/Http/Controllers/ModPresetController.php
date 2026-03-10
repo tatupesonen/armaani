@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\GameType;
+use App\GameManager;
 use App\Http\Requests\ModPreset\ImportModPresetRequest;
 use App\Http\Requests\ModPreset\StoreModPresetRequest;
 use App\Http\Requests\ModPreset\UpdateModPresetRequest;
@@ -17,6 +18,10 @@ use Inertia\Response;
 
 class ModPresetController extends Controller
 {
+    public function __construct(
+        private GameManager $gameManager,
+    ) {}
+
     public function index(): Response
     {
         return Inertia::render('presets/index', [
@@ -30,11 +35,15 @@ class ModPresetController extends Controller
     public function create(): Response
     {
         return Inertia::render('presets/create', [
-            'gameTypes' => collect(GameType::cases())->map(fn (GameType $gt) => [
-                'value' => $gt->value,
-                'label' => $gt->label(),
-                'supportsWorkshopMods' => $gt->supportsWorkshopMods(),
-            ]),
+            'gameTypes' => collect(GameType::cases())->map(function (GameType $gt) {
+                $handler = $this->gameManager->driver($gt->value);
+
+                return [
+                    'value' => $gt->value,
+                    'label' => $gt->label(),
+                    'supportsWorkshopMods' => $handler->supportsWorkshopMods(),
+                ];
+            }),
             'workshopMods' => WorkshopMod::query()->orderBy('name')->get(),
             'reforgerMods' => ReforgerMod::query()->orderBy('name')->get(),
         ]);
@@ -56,7 +65,7 @@ class ModPresetController extends Controller
             $preset->mods()->sync($validated['mod_ids'] ?? []);
         }
 
-        Log::info('User '.auth()->id().' ('.auth()->user()->name.") created preset: {$preset->name}");
+        Log::info(auth_context()." created preset: {$preset->name}");
 
         return to_route('presets.index')->with('success', "Preset '{$preset->name}' created.");
     }
@@ -88,14 +97,14 @@ class ModPresetController extends Controller
             $modPreset->mods()->sync($validated['mod_ids'] ?? []);
         }
 
-        Log::info('User '.auth()->id().' ('.auth()->user()->name.") updated preset: {$modPreset->name}");
+        Log::info(auth_context()." updated preset: {$modPreset->name}");
 
         return to_route('presets.index')->with('success', "Preset '{$modPreset->name}' updated.");
     }
 
     public function destroy(ModPreset $modPreset): RedirectResponse
     {
-        Log::info('User '.auth()->id().' ('.auth()->user()->name.") deleted preset: {$modPreset->name}");
+        Log::info(auth_context()." deleted preset: {$modPreset->name}");
 
         $modPreset->delete();
 
@@ -114,7 +123,7 @@ class ModPresetController extends Controller
 
         $modCount = $preset->mods()->count();
 
-        Log::info('User '.auth()->id().' ('.auth()->user()->name.") imported preset: {$preset->name}");
+        Log::info(auth_context()." imported preset: {$preset->name}");
 
         return back()->with('success', "Preset '{$preset->name}' imported with {$modCount} mod(s).");
     }

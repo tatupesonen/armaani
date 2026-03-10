@@ -4,6 +4,7 @@ namespace Tests\Feature\Jobs;
 
 use App\Enums\InstallationStatus;
 use App\Events\GameInstallOutput;
+use App\GameManager;
 use App\Jobs\InstallServerJob;
 use App\Models\GameInstall;
 use App\Models\SteamAccount;
@@ -52,7 +53,7 @@ class InstallServerJobTest extends TestCase
         @mkdir($manifestDir, 0755, true);
 
         file_put_contents(
-            $manifestDir.'/appmanifest_'.$install->game_type->serverAppId().'.acf',
+            $manifestDir.'/appmanifest_'.app(GameManager::class)->driver($install->game_type->value)->serverAppId().'.acf',
             <<<'ACF'
             "AppState"
             {

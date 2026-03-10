@@ -2,15 +2,53 @@
 
 namespace App\GameHandlers;
 
+use App\Attributes\HandlesGame;
 use App\Contracts\GameHandler;
 use App\Enums\GameType;
+use App\Models\DayZSettings;
 use App\Models\Server;
 
-class DayZHandler implements GameHandler
+#[HandlesGame(GameType::DayZ)]
+final class DayZHandler implements GameHandler
 {
     public function gameType(): GameType
     {
         return GameType::DayZ;
+    }
+
+    public function serverAppId(): int
+    {
+        return 223350;
+    }
+
+    public function gameId(): int
+    {
+        return 221100;
+    }
+
+    public function defaultPort(): int
+    {
+        return 2302;
+    }
+
+    public function defaultQueryPort(): int
+    {
+        return 27016;
+    }
+
+    public function branches(): array
+    {
+        return ['public', 'experimental'];
+    }
+
+    public function supportsWorkshopMods(): bool
+    {
+        return true;
+    }
+
+    public function requiresLowercaseConversion(): bool
+    {
+        return true;
     }
 
     public function buildLaunchCommand(Server $server): array
@@ -38,60 +76,7 @@ class DayZHandler implements GameHandler
         return $server->getProfilesPath().'/server.log';
     }
 
-    public function getBootDetectionStrings(): array
-    {
-        return [];
-    }
-
-    public function getModDownloadStartedString(): ?string
-    {
-        return null;
-    }
-
-    public function getModDownloadFinishedString(): ?string
-    {
-        return null;
-    }
-
-    public function getCrashDetectionStrings(): array
-    {
-        return [];
-    }
-
-    public function symlinkMods(Server $server): void
-    {
-        throw new \RuntimeException('DayZ server support is not yet implemented.');
-    }
-
-    public function symlinkMissions(Server $server): void
-    {
-        // No-op: DayZ configures missions via server config
-    }
-
-    public function copyBiKeys(Server $server): void
-    {
-        throw new \RuntimeException('DayZ server support is not yet implemented.');
-    }
-
-    public function supportsHeadlessClients(): bool
-    {
-        return false;
-    }
-
-    public function buildHeadlessClientCommand(Server $server, int $index): ?array
-    {
-        return null;
-    }
-
-    public function getBackupFilePath(Server $server): ?string
-    {
-        return null;
-    }
-
-    public function getBackupDownloadFilename(Server $server): string
-    {
-        return 'dayz_'.$server->id.'_backup';
-    }
+    // --- Validation ---
 
     public function serverValidationRules(): array
     {
@@ -101,5 +86,26 @@ class DayZHandler implements GameHandler
     public function settingsValidationRules(): array
     {
         return [];
+    }
+
+    // --- Related Settings ---
+
+    public function createRelatedSettings(Server $server): void
+    {
+        DayZSettings::query()->create(['server_id' => $server->id]);
+    }
+
+    public function updateRelatedSettings(Server $server, array $validated): void
+    {
+        $dayzFields = collect($validated)->only(
+            (new DayZSettings)->getFillable()
+        )->except('server_id')->toArray();
+
+        if (! empty($dayzFields)) {
+            $server->dayzSettings()->updateOrCreate(
+                ['server_id' => $server->id],
+                $dayzFields,
+            );
+        }
     }
 }

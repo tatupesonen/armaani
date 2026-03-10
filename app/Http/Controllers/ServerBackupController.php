@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Contracts\SupportsBackups;
 use App\Enums\ServerStatus;
+use App\GameManager;
 use App\Http\Requests\ServerBackup\StoreServerBackupRequest;
 use App\Http\Requests\ServerBackup\UploadServerBackupRequest;
 use App\Models\Server;
@@ -22,7 +24,7 @@ class ServerBackupController extends Controller
             return back()->with('error', 'No profile file found to back up.');
         }
 
-        Log::info('User '.auth()->id().' ('.auth()->user()->name.") created backup for server: {$server->name}");
+        Log::info(auth_context()." created backup for server: {$server->name}");
 
         return back()->with('success', 'Backup created.');
     }
@@ -37,7 +39,7 @@ class ServerBackupController extends Controller
             $request->input('backup_name') ?: $request->file('backup_file')->getClientOriginalName(),
         );
 
-        Log::info('User '.auth()->id().' ('.auth()->user()->name.") uploaded backup for server: {$server->name}");
+        Log::info(auth_context()." uploaded backup for server: {$server->name}");
 
         return back()->with('success', 'Backup uploaded.');
     }
@@ -52,16 +54,19 @@ class ServerBackupController extends Controller
 
         $backupService->restore($serverBackup);
 
-        Log::info('User '.auth()->id().' ('.auth()->user()->name.") restored backup for server: {$server->name}");
+        Log::info(auth_context()." restored backup for server: {$server->name}");
 
         return back()->with('success', 'Backup restored.');
     }
 
-    public function download(ServerBackup $serverBackup): StreamedResponse
+    public function download(ServerBackup $serverBackup, GameManager $gameManager): StreamedResponse
     {
         $server = $serverBackup->server;
-        $extension = $server->game_type->profileExtension() ?? '.profile';
-        $filename = ($serverBackup->name ?? 'backup-'.$serverBackup->id).$extension;
+        $handler = $gameManager->for($server);
+
+        $filename = $handler instanceof SupportsBackups
+            ? $handler->getBackupDownloadFilename($server)
+            : ($serverBackup->name ?? 'backup-'.$serverBackup->id).'.profile';
 
         return response()->streamDownload(function () use ($serverBackup): void {
             echo $serverBackup->data;
@@ -70,7 +75,7 @@ class ServerBackupController extends Controller
 
     public function destroy(ServerBackup $serverBackup): RedirectResponse
     {
-        Log::info('User '.auth()->id().' ('.auth()->user()->name.") deleted backup #{$serverBackup->id}");
+        Log::info(auth_context()." deleted backup #{$serverBackup->id}");
 
         $serverBackup->delete();
 

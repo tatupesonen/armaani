@@ -57,7 +57,7 @@ class SteamSettingsController extends Controller
             SteamAccount::query()->create($validated);
         }
 
-        Log::info('User '.auth()->id().' ('.auth()->user()->name.') updated Steam credentials');
+        Log::info(auth_context().' updated Steam credentials');
 
         return back()->with('success', 'Steam credentials saved.');
     }
@@ -75,7 +75,7 @@ class SteamSettingsController extends Controller
             $account->update(['steam_api_key' => $validated['steam_api_key']]);
         }
 
-        Log::info('User '.auth()->id().' ('.auth()->user()->name.') updated Steam API key');
+        Log::info(auth_context().' updated Steam API key');
 
         return back()->with('success', 'Steam API key saved.');
     }

@@ -2,6 +2,11 @@
 
 namespace Tests\Feature\GameHandlers;
 
+use App\Contracts\DetectsServerState;
+use App\Contracts\ManagesModAssets;
+use App\Contracts\SupportsBackups;
+use App\Contracts\SupportsHeadlessClients;
+use App\Contracts\SupportsMissions;
 use App\Enums\GameType;
 use App\GameHandlers\ReforgerHandler;
 use App\Models\ModPreset;
@@ -73,6 +78,11 @@ class ReforgerHandlerTest extends TestCase
         $this->assertEquals($expected, $this->handler->getServerLogPath($server));
     }
 
+    public function test_implements_detects_server_state(): void
+    {
+        $this->assertInstanceOf(DetectsServerState::class, $this->handler);
+    }
+
     public function test_boot_detection_string(): void
     {
         $this->assertSame(['Server registered with addr'], $this->handler->getBootDetectionStrings());
@@ -88,30 +98,24 @@ class ReforgerHandlerTest extends TestCase
         $this->assertSame('Required addons are ready to use.', $this->handler->getModDownloadFinishedString());
     }
 
-    public function test_does_not_support_headless_clients(): void
+    public function test_does_not_implement_supports_headless_clients(): void
     {
-        $this->assertFalse($this->handler->supportsHeadlessClients());
+        $this->assertNotInstanceOf(SupportsHeadlessClients::class, $this->handler);
     }
 
-    public function test_build_headless_client_command_returns_null(): void
+    public function test_does_not_implement_supports_backups(): void
     {
-        $server = $this->createReforgerServer();
-
-        $this->assertNull($this->handler->buildHeadlessClientCommand($server, 0));
+        $this->assertNotInstanceOf(SupportsBackups::class, $this->handler);
     }
 
-    public function test_get_backup_file_path_returns_null(): void
+    public function test_does_not_implement_manages_mod_assets(): void
     {
-        $server = $this->createReforgerServer();
-
-        $this->assertNull($this->handler->getBackupFilePath($server));
+        $this->assertNotInstanceOf(ManagesModAssets::class, $this->handler);
     }
 
-    public function test_get_backup_download_filename(): void
+    public function test_does_not_implement_supports_missions(): void
     {
-        $server = $this->createReforgerServer();
-
-        $this->assertEquals('reforger_'.$server->id.'_backup', $this->handler->getBackupDownloadFilename($server));
+        $this->assertNotInstanceOf(SupportsMissions::class, $this->handler);
     }
 
     public function test_build_launch_command_includes_config_and_flags(): void
@@ -292,34 +296,15 @@ class ReforgerHandlerTest extends TestCase
         $this->assertContains('string', $rules['scenario_id']);
     }
 
-    public function test_symlink_mods_is_noop(): void
+    public function test_create_related_settings_creates_reforger_settings(): void
     {
         $server = $this->createReforgerServer();
 
-        // Should not throw or create any symlinks
-        $this->handler->symlinkMods($server);
+        // Delete existing settings created by factory
+        $server->reforgerSettings()->delete();
 
-        $gameInstallPath = $server->gameInstall->getInstallationPath();
-        $this->assertDirectoryDoesNotExist($gameInstallPath.'/@');
-    }
+        $this->handler->createRelatedSettings($server);
 
-    public function test_symlink_missions_is_noop(): void
-    {
-        $server = $this->createReforgerServer();
-
-        $this->handler->symlinkMissions($server);
-
-        $mpmissionsPath = $server->gameInstall->getInstallationPath().'/mpmissions';
-        $this->assertDirectoryDoesNotExist($mpmissionsPath);
-    }
-
-    public function test_copy_bikeys_is_noop(): void
-    {
-        $server = $this->createReforgerServer();
-
-        $this->handler->copyBiKeys($server);
-
-        $keysPath = $server->gameInstall->getInstallationPath().'/keys';
-        $this->assertDirectoryDoesNotExist($keysPath);
+        $this->assertNotNull($server->fresh()->reforgerSettings);
     }
 }

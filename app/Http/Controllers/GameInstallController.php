@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\GameType;
 use App\Enums\InstallationStatus;
+use App\GameManager;
 use App\Http\Requests\GameInstall\StoreGameInstallRequest;
 use App\Jobs\InstallServerJob;
 use App\Models\GameInstall;
@@ -15,6 +16,10 @@ use Inertia\Response;
 
 class GameInstallController extends Controller
 {
+    public function __construct(
+        private GameManager $gameManager,
+    ) {}
+
     public function index(): Response
     {
         $installs = GameInstall::query()->orderBy('name')->get()
@@ -24,12 +29,16 @@ class GameInstallController extends Controller
 
         return Inertia::render('game-installs/index', [
             'installs' => $installs,
-            'gameTypes' => collect(GameType::cases())->map(fn (GameType $gt) => [
-                'value' => $gt->value,
-                'label' => $gt->label(),
-                'branches' => $gt->branches(),
-                'defaultName' => $gt->label().' Server',
-            ]),
+            'gameTypes' => collect(GameType::cases())->map(function (GameType $gt) {
+                $handler = $this->gameManager->driver($gt->value);
+
+                return [
+                    'value' => $gt->value,
+                    'label' => $gt->label(),
+                    'branches' => $handler->branches(),
+                    'defaultName' => $gt->label().' Server',
+                ];
+            }),
         ]);
     }
 
@@ -39,7 +48,7 @@ class GameInstallController extends Controller
 
         $install = GameInstall::query()->create($validated);
 
-        Log::info('User '.auth()->id().' ('.auth()->user()->name.") created game install: {$install->name}");
+        Log::info(auth_context()." created game install: {$install->name}");
 
         InstallServerJob::dispatch($install);
 
@@ -53,7 +62,7 @@ class GameInstallController extends Controller
             'progress_pct' => 0,
         ]);
 
-        Log::info('User '.auth()->id().' ('.auth()->user()->name.") reinstalled game: {$gameInstall->name}");
+        Log::info(auth_context()." reinstalled game: {$gameInstall->name}");
 
         InstallServerJob::dispatch($gameInstall);
 
@@ -72,7 +81,7 @@ class GameInstallController extends Controller
 
         $path = $gameInstall->getInstallationPath();
 
-        Log::info('User '.auth()->id().' ('.auth()->user()->name.") deleted game install: {$gameInstall->name}");
+        Log::info(auth_context()." deleted game install: {$gameInstall->name}");
 
         $gameInstall->delete();
 

@@ -9,6 +9,45 @@ interface GameHandler
 {
     public function gameType(): GameType;
 
+    // --- Game Metadata ---
+
+    /**
+     * Steam App ID for the dedicated server binary.
+     */
+    public function serverAppId(): int;
+
+    /**
+     * Steam Game ID (used for workshop mod downloads).
+     */
+    public function gameId(): int;
+
+    /**
+     * Default game port for new servers.
+     */
+    public function defaultPort(): int;
+
+    /**
+     * Default Steam query port for new servers.
+     */
+    public function defaultQueryPort(): int;
+
+    /**
+     * Available SteamCMD beta branches for this game.
+     *
+     * @return list<string>
+     */
+    public function branches(): array;
+
+    /**
+     * Whether this game uses Steam Workshop mods downloaded via SteamCMD.
+     */
+    public function supportsWorkshopMods(): bool;
+
+    /**
+     * Whether mod files need to be converted to lowercase (Linux requirement).
+     */
+    public function requiresLowercaseConversion(): bool;
+
     // --- Server Process ---
 
     /**
@@ -39,87 +78,11 @@ interface GameHandler
      */
     public function getServerLogPath(Server $server): string;
 
-    /**
-     * Strings that appear in server log when the server is fully booted.
-     * Return an empty array to skip auto-detection (server stays in Booting until manually changed or timed out).
-     *
-     * @return array<int, string>
-     */
-    public function getBootDetectionStrings(): array;
-
-    /**
-     * String that appears in server log when the server begins downloading mods.
-     * Return null if this game does not download mods at startup.
-     */
-    public function getModDownloadStartedString(): ?string;
-
-    /**
-     * String that appears in server log when the server finishes downloading mods.
-     * Return null if this game does not download mods at startup.
-     */
-    public function getModDownloadFinishedString(): ?string;
-
-    /**
-     * Strings that appear in server log when the server has crashed.
-     * Return an empty array to skip auto-detection of crashes.
-     *
-     * @return array<int, string>
-     */
-    public function getCrashDetectionStrings(): array;
-
-    // --- Mods & Assets ---
-
-    /**
-     * Create mod symlinks in the game install directory for the server's active preset.
-     * No-op for games where the server handles its own mod downloads (e.g., Reforger).
-     */
-    public function symlinkMods(Server $server): void;
-
-    /**
-     * Create mission file symlinks in the game install directory.
-     * No-op for games that handle missions differently.
-     */
-    public function symlinkMissions(Server $server): void;
-
-    /**
-     * Copy BiKey signature files from mod directories to the server's keys directory.
-     * No-op for games that don't use BiKeys.
-     */
-    public function copyBiKeys(Server $server): void;
-
-    // --- Headless Clients ---
-
-    /**
-     * Whether this game supports headless clients.
-     */
-    public function supportsHeadlessClients(): bool;
-
-    /**
-     * Build the launch command arguments for a headless client instance.
-     * Return null if headless clients are not supported.
-     *
-     * @return array<int, string>|null The binary path as the first element, followed by arguments.
-     */
-    public function buildHeadlessClientCommand(Server $server, int $index): ?array;
-
-    // --- Backups ---
-
-    /**
-     * Get the path to the file that should be backed up (e.g., .vars.Arma3Profile).
-     * Return null if this game has no profile backup concept.
-     */
-    public function getBackupFilePath(Server $server): ?string;
-
-    /**
-     * Get the filename to use when downloading a backup.
-     */
-    public function getBackupDownloadFilename(Server $server): string;
-
     // --- Validation ---
 
     /**
      * Validation rules for game-specific server fields.
-     * Merged with common server validation rules in the Livewire component.
+     * Merged with common server validation rules in the form request.
      */
     public function serverValidationRules(): array;
 
@@ -127,4 +90,18 @@ interface GameHandler
      * Validation rules for game-specific settings (difficulty, network, reforger settings, etc.)
      */
     public function settingsValidationRules(): array;
+
+    // --- Related Settings ---
+
+    /**
+     * Create default related settings models for a newly created server.
+     * Called from ServerController::store().
+     */
+    public function createRelatedSettings(Server $server): void;
+
+    /**
+     * Update game-specific related settings from validated request data.
+     * Called from ServerController::update().
+     */
+    public function updateRelatedSettings(Server $server, array $validated): void;
 }

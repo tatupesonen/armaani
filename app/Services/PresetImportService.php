@@ -5,9 +5,7 @@ namespace App\Services;
 use App\Enums\GameType;
 use App\Enums\InstallationStatus;
 use App\Jobs\BatchDownloadModsJob;
-use App\Jobs\DownloadModJob;
 use App\Models\ModPreset;
-use App\Models\SteamAccount;
 use App\Models\WorkshopMod;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
@@ -107,7 +105,7 @@ class PresetImportService
 
         $preset->mods()->sync($modIds);
 
-        $this->dispatchBatchedDownloads($modsToDownload);
+        BatchDownloadModsJob::dispatchInBatches($modsToDownload);
 
         return $preset;
     }
@@ -121,28 +119,5 @@ class PresetImportService
     protected function fetchBulkMetadata(array $workshopIds): array
     {
         return $this->steamWorkshopService->getMultipleModDetails($workshopIds);
-    }
-
-    /**
-     * Dispatch download jobs for the given mods, batching them according to the configured batch size.
-     * Single-mod batches use DownloadModJob; multi-mod batches use BatchDownloadModsJob.
-     *
-     * @param  Collection<int, WorkshopMod>  $mods
-     */
-    public function dispatchBatchedDownloads(Collection $mods): void
-    {
-        if ($mods->isEmpty()) {
-            return;
-        }
-
-        $batchSize = SteamAccount::current()?->mod_download_batch_size ?? 5;
-
-        foreach ($mods->chunk($batchSize) as $batch) {
-            if ($batch->count() === 1) {
-                DownloadModJob::dispatch($batch->first());
-            } else {
-                BatchDownloadModsJob::dispatch($batch);
-            }
-        }
     }
 }

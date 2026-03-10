@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Contracts\SupportsBackups;
 use App\GameManager;
 use App\Models\Server;
 use App\Models\ServerBackup;
@@ -19,7 +20,13 @@ class ServerBackupService
      */
     public function getVarsFilePath(Server $server): ?string
     {
-        return $this->gameManager->for($server)->getBackupFilePath($server);
+        $handler = $this->gameManager->for($server);
+
+        if (! $handler instanceof SupportsBackups) {
+            return null;
+        }
+
+        return $handler->getBackupFilePath($server);
     }
 
     /**
@@ -36,7 +43,7 @@ class ServerBackupService
         }
 
         if (! file_exists($varsPath)) {
-            Log::info("[Server:{$server->id} '{$server->name}'] No profile backup file found, skipping backup");
+            Log::info("{$server->logContext()} No profile backup file found, skipping backup");
 
             return null;
         }
@@ -67,7 +74,7 @@ class ServerBackupService
         ]);
 
         $type = $isAutomatic ? 'automatic' : 'manual';
-        Log::info("[Server:{$server->id} '{$server->name}'] Created {$type} backup #{$backup->id} ({$fileSize} bytes)");
+        Log::info("{$server->logContext()} Created {$type} backup #{$backup->id} ({$fileSize} bytes)");
 
         $this->pruneOldBackups($server);
 
@@ -83,7 +90,7 @@ class ServerBackupService
         $varsPath = $this->getVarsFilePath($server);
 
         if ($varsPath === null) {
-            Log::warning("[Server:{$server->id} '{$server->name}'] Game type does not support profile backups, cannot restore");
+            Log::warning("{$server->logContext()} Game type does not support profile backups, cannot restore");
 
             return;
         }
@@ -95,7 +102,7 @@ class ServerBackupService
 
         file_put_contents($varsPath, $backup->data);
 
-        Log::info("[Server:{$server->id} '{$server->name}'] Restored backup #{$backup->id}");
+        Log::info("{$server->logContext()} Restored backup #{$backup->id}");
     }
 
     /**
@@ -121,7 +128,7 @@ class ServerBackupService
             ->get();
 
         foreach ($toDelete as $backup) {
-            Log::info("[Server:{$server->id} '{$server->name}'] Pruning old backup #{$backup->id}");
+            Log::info("{$server->logContext()} Pruning old backup #{$backup->id}");
             $backup->delete();
         }
     }

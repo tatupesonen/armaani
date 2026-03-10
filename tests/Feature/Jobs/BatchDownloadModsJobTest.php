@@ -13,6 +13,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Process\InvokedProcess;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Process;
 use Mockery;
 use Tests\Concerns\MocksSteamCmdProcess;
@@ -44,12 +45,12 @@ class BatchDownloadModsJobTest extends TestCase
     }
 
     /**
-     * Create a SteamWorkshopService mock that allows getMultipleModDetails calls.
+     * Create a SteamWorkshopService mock that allows syncMetadataForMany calls.
      */
     private function mockWorkshopService(): \Mockery\MockInterface
     {
         $workshop = Mockery::mock(SteamWorkshopService::class);
-        $workshop->shouldReceive('getMultipleModDetails')->andReturn([]);
+        $workshop->shouldReceive('syncMetadataForMany')->andReturnNull();
 
         return $workshop;
     }
@@ -142,25 +143,37 @@ class BatchDownloadModsJobTest extends TestCase
 
         Process::fake(['du *' => Process::result('75000000	/fake/path')]);
 
+        Http::fake([
+            'api.steampowered.com/*' => Http::response([
+                'response' => [
+                    'publishedfiledetails' => [
+                        [
+                            'publishedfileid' => (string) $mods[0]->workshop_id,
+                            'result' => 1,
+                            'title' => 'Fetched Name',
+                            'file_size' => 75000000,
+                            'time_updated' => 1700000000,
+                            'consumer_appid' => 107410,
+                        ],
+                        [
+                            'publishedfileid' => (string) $mods[1]->workshop_id,
+                            'result' => 1,
+                            'title' => 'Already Named',
+                            'file_size' => 30000000,
+                            'time_updated' => 1700000001,
+                            'consumer_appid' => 107410,
+                        ],
+                    ],
+                ],
+            ]),
+        ]);
+
         $steamCmd = Mockery::mock(SteamCmdService::class);
         $steamCmd->shouldReceive('startBatchDownloadMods')->once()->andReturn($this->makeInvokedProcess(true));
 
-        $workshop = Mockery::mock(SteamWorkshopService::class);
-        $workshop->shouldReceive('getMultipleModDetails')->once()->andReturn([
-            $mods[0]->workshop_id => [
-                'name' => 'Fetched Name',
-                'file_size' => 75000000,
-                'time_updated' => 1700000000,
-            ],
-            $mods[1]->workshop_id => [
-                'name' => 'Already Named',
-                'file_size' => 30000000,
-                'time_updated' => 1700000001,
-            ],
-        ]);
-
         $this->app->instance(SteamCmdService::class, $steamCmd);
-        $this->app->instance(SteamWorkshopService::class, $workshop);
+
+        $workshop = app(SteamWorkshopService::class);
 
         $job = new BatchDownloadModsJob($mods);
         $job->handle($steamCmd, $workshop);

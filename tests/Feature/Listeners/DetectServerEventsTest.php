@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Listeners;
 
+use App\Contracts\DetectsServerState;
 use App\Contracts\GameHandler;
 use App\Enums\ServerStatus;
 use App\Events\ServerLogOutput;
@@ -323,7 +324,7 @@ class DetectServerEventsTest extends TestCase
      */
     private function mockGameManagerWithCrashString(string $crashString): void
     {
-        $handler = Mockery::mock(GameHandler::class);
+        $handler = Mockery::mock(GameHandler::class.', '.DetectsServerState::class);
         $handler->shouldReceive('getModDownloadStartedString')->andReturnNull();
         $handler->shouldReceive('getModDownloadFinishedString')->andReturnNull();
         $handler->shouldReceive('getBootDetectionStrings')->andReturn([]);

@@ -2,18 +2,60 @@
 
 namespace App\GameHandlers;
 
+use App\Attributes\HandlesGame;
+use App\Contracts\DetectsServerState;
 use App\Contracts\GameHandler;
+use App\Contracts\ManagesModAssets;
+use App\Contracts\SupportsBackups;
+use App\Contracts\SupportsHeadlessClients;
+use App\Contracts\SupportsMissions;
 use App\Enums\GameType;
 use App\Models\DifficultySettings;
 use App\Models\NetworkSettings;
 use App\Models\Server;
 use Illuminate\Support\Facades\Log;
 
-class Arma3Handler implements GameHandler
+#[HandlesGame(GameType::Arma3)]
+final class Arma3Handler implements DetectsServerState, GameHandler, ManagesModAssets, SupportsBackups, SupportsHeadlessClients, SupportsMissions
 {
     public function gameType(): GameType
     {
         return GameType::Arma3;
+    }
+
+    public function serverAppId(): int
+    {
+        return 233780;
+    }
+
+    public function gameId(): int
+    {
+        return 107410;
+    }
+
+    public function defaultPort(): int
+    {
+        return 2302;
+    }
+
+    public function defaultQueryPort(): int
+    {
+        return 2303;
+    }
+
+    public function branches(): array
+    {
+        return ['public', 'contact', 'creatordlc', 'profiling', 'performance', 'legacy'];
+    }
+
+    public function supportsWorkshopMods(): bool
+    {
+        return true;
+    }
+
+    public function requiresLowercaseConversion(): bool
+    {
+        return true;
     }
 
     public function buildLaunchCommand(Server $server): array
@@ -65,6 +107,8 @@ class Arma3Handler implements GameHandler
         return $server->getProfilesPath().'/server.log';
     }
 
+    // --- DetectsServerState ---
+
     public function getBootDetectionStrings(): array
     {
         return ['Connected to Steam servers'];
@@ -84,6 +128,8 @@ class Arma3Handler implements GameHandler
     {
         return [];
     }
+
+    // --- ManagesModAssets ---
 
     public function symlinkMods(Server $server): void
     {
@@ -118,33 +164,6 @@ class Arma3Handler implements GameHandler
                 symlink($modInstallPath, $linkPath);
                 Log::info("[Server:{$server->id}] Symlinked mod {$mod->getNormalizedName()} -> {$modInstallPath}");
             }
-        }
-    }
-
-    public function symlinkMissions(Server $server): void
-    {
-        $missionsPath = config('arma.missions_base_path');
-        $mpmissionsPath = $server->gameInstall->getInstallationPath().'/mpmissions';
-
-        if (! is_dir($missionsPath)) {
-            return;
-        }
-
-        if (! is_dir($mpmissionsPath)) {
-            mkdir($mpmissionsPath, 0755, true);
-        }
-
-        $existingLinks = glob($mpmissionsPath.'/*.pbo') ?: [];
-        foreach ($existingLinks as $link) {
-            if (is_link($link)) {
-                unlink($link);
-            }
-        }
-
-        $pboFiles = glob($missionsPath.'/*.pbo') ?: [];
-        foreach ($pboFiles as $pboFile) {
-            $linkPath = $mpmissionsPath.'/'.basename($pboFile);
-            symlink($pboFile, $linkPath);
         }
     }
 
@@ -184,12 +203,38 @@ class Arma3Handler implements GameHandler
         }
     }
 
-    public function supportsHeadlessClients(): bool
+    // --- SupportsMissions ---
+
+    public function symlinkMissions(Server $server): void
     {
-        return true;
+        $missionsPath = config('arma.missions_base_path');
+        $mpmissionsPath = $server->gameInstall->getInstallationPath().'/mpmissions';
+
+        if (! is_dir($missionsPath)) {
+            return;
+        }
+
+        if (! is_dir($mpmissionsPath)) {
+            mkdir($mpmissionsPath, 0755, true);
+        }
+
+        $existingLinks = glob($mpmissionsPath.'/*.pbo') ?: [];
+        foreach ($existingLinks as $link) {
+            if (is_link($link)) {
+                unlink($link);
+            }
+        }
+
+        $pboFiles = glob($missionsPath.'/*.pbo') ?: [];
+        foreach ($pboFiles as $pboFile) {
+            $linkPath = $mpmissionsPath.'/'.basename($pboFile);
+            symlink($pboFile, $linkPath);
+        }
     }
 
-    public function buildHeadlessClientCommand(Server $server, int $index): ?array
+    // --- SupportsHeadlessClients ---
+
+    public function buildHeadlessClientCommand(Server $server, int $index): array
     {
         $binary = $this->getBinaryPath($server);
 
@@ -215,7 +260,9 @@ class Arma3Handler implements GameHandler
         return $params;
     }
 
-    public function getBackupFilePath(Server $server): ?string
+    // --- SupportsBackups ---
+
+    public function getBackupFilePath(Server $server): string
     {
         $profileName = $this->getProfileName($server);
 
@@ -226,6 +273,8 @@ class Arma3Handler implements GameHandler
     {
         return 'arma3_'.$server->id.'.vars.Arma3Profile';
     }
+
+    // --- Validation ---
 
     public function serverValidationRules(): array
     {
@@ -280,6 +329,39 @@ class Arma3Handler implements GameHandler
             'terrain_grid' => ['nullable', 'numeric', 'min:0'],
             'view_distance' => ['nullable', 'integer', 'min:0'],
         ];
+    }
+
+    // --- Related Settings ---
+
+    public function createRelatedSettings(Server $server): void
+    {
+        DifficultySettings::query()->create(['server_id' => $server->id]);
+        NetworkSettings::query()->create(['server_id' => $server->id]);
+    }
+
+    public function updateRelatedSettings(Server $server, array $validated): void
+    {
+        $difficultyFields = collect($validated)->only(
+            (new DifficultySettings)->getFillable()
+        )->except('server_id')->toArray();
+
+        $networkFields = collect($validated)->only(
+            (new NetworkSettings)->getFillable()
+        )->except('server_id')->toArray();
+
+        if (! empty($difficultyFields)) {
+            $server->difficultySettings()->updateOrCreate(
+                ['server_id' => $server->id],
+                $difficultyFields,
+            );
+        }
+
+        if (! empty($networkFields)) {
+            $server->networkSettings()->updateOrCreate(
+                ['server_id' => $server->id],
+                $networkFields,
+            );
+        }
     }
 
     /**
