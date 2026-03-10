@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Enums\ServerStatus;
+use App\Events\ServerLogOutput;
 use App\Models\Server;
 use App\Services\Server\ServerProcessService;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -30,12 +31,17 @@ class StartServerJob implements ShouldQueue
         } else {
             $this->server->transitionTo(ServerStatus::Stopped);
             Log::error("{$this->server->logContext()} Server failed to start");
+            ServerLogOutput::dispatch($this->server->id, 'Server process exited immediately after starting');
         }
     }
 
     public function failed(?\Throwable $exception): void
     {
         $this->server->transitionTo(ServerStatus::Stopped);
-        Log::error("{$this->server->logContext()} StartServerJob failed: {$exception?->getMessage()}");
+
+        $message = $exception?->getMessage() ?? 'Unknown error';
+        Log::error("{$this->server->logContext()} StartServerJob failed: {$message}");
+
+        ServerLogOutput::dispatch($this->server->id, "Server failed to start: {$message}");
     }
 }

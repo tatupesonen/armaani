@@ -77,4 +77,9 @@ class ServerFactory extends Factory
     {
         return $this->forGame('projectzomboid');
     }
+
+    public function forFactorio(): static
+    {
+        return $this->forGame('factorio');
+    }
 }

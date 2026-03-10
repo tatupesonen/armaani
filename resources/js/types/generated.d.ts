@@ -5,7 +5,7 @@
  * Regenerate with: php artisan game:generate-types
  */
 
-import type { GameInstall, ModPreset, ServerBackup } from './game';
+import type { GameInstall, ModPreset, ServerBackup, ServerStatus } from './game';
 
 export type ServerBase = {
     id: number;
@@ -19,7 +19,7 @@ export type ServerBase = {
     description: string | null;
     active_preset_id: number | null;
     game_install_id: number | null;
-    status: import('./game').ServerStatus;
+    status: ServerStatus;
     auto_restart: boolean;
     additional_params: string | null;
     verify_signatures: boolean;
@@ -76,6 +76,67 @@ export type Arma3Settings = {
     terrain_grid: string;
 };
 
+export type FactorioSettings = {
+    id: number;
+    server_id: number;
+    rcon_password: string;
+    visibility_public: boolean;
+    visibility_lan: boolean;
+    require_user_verification: boolean;
+    auto_pause: boolean;
+    only_admins_can_pause: boolean;
+    allow_commands: number;
+    autosave_interval: number;
+    autosave_slots: number;
+    afk_autokick_interval: number;
+    max_upload_kbps: number;
+    max_heartbeats_per_second: number;
+    ignore_player_limit_for_returning: boolean;
+    autosave_only_on_server: boolean;
+    non_blocking_saving: boolean;
+    tags: string;
+    iron_ore_frequency: number;
+    iron_ore_size: number;
+    iron_ore_richness: number;
+    copper_ore_frequency: number;
+    copper_ore_size: number;
+    copper_ore_richness: number;
+    coal_frequency: number;
+    coal_size: number;
+    coal_richness: number;
+    stone_frequency: number;
+    stone_size: number;
+    stone_richness: number;
+    crude_oil_frequency: number;
+    crude_oil_size: number;
+    crude_oil_richness: number;
+    uranium_ore_frequency: number;
+    uranium_ore_size: number;
+    uranium_ore_richness: number;
+    trees_frequency: number;
+    trees_size: number;
+    trees_richness: number;
+    enemy_base_frequency: number;
+    enemy_base_size: number;
+    enemy_base_richness: number;
+    map_width: number;
+    map_height: number;
+    starting_area: number;
+    water: number;
+    terrain_segmentation: number;
+    cliff_richness: number;
+    cliff_elevation_0: number;
+    cliff_elevation_interval: number;
+    peaceful_mode: boolean;
+    map_seed: string;
+    pollution_enabled: boolean;
+    evolution_enabled: boolean;
+    evolution_time_factor: string;
+    evolution_destroy_factor: string;
+    evolution_pollution_factor: string;
+    expansion_enabled: boolean;
+};
+
 export type ProjectzomboidSettings = {
     id: number;
     server_id: number;
@@ -113,6 +174,11 @@ export type DayzServer = ServerBase & {
     game_type: 'dayz';
 };
 
+export type FactorioServer = ServerBase & {
+    game_type: 'factorio';
+    factorio_settings?: FactorioSettings;
+};
+
 export type ProjectzomboidServer = ServerBase & {
     game_type: 'projectzomboid';
     projectzomboid_settings?: ProjectzomboidSettings;
@@ -123,4 +189,4 @@ export type ReforgerServer = ServerBase & {
     reforger_settings?: ReforgerSettings;
 };
 
-export type Server = Arma3Server | DayzServer | ProjectzomboidServer | ReforgerServer;
+export type Server = Arma3Server | DayzServer | FactorioServer | ProjectzomboidServer | ReforgerServer;

@@ -51,7 +51,7 @@ class GenerateGameTypesCommandTest extends TestCase
         $this->assertStringContainsString('export type ServerBase = {', $content);
         $this->assertStringContainsString('id: number;', $content);
         $this->assertStringContainsString('game_type: string;', $content);
-        $this->assertStringContainsString("status: import('./game').ServerStatus;", $content);
+        $this->assertStringContainsString('status: ServerStatus;', $content);
     }
 
     public function test_output_contains_arma3_settings_type(): void

@@ -304,7 +304,7 @@ Wayfinder generates TypeScript functions for Laravel routes. Import from `@/acti
 
 ## Project Overview
 
-Armaani is a web-based game server manager built with Laravel 12, Inertia v2, React 19, and Tailwind CSS v4. It supports Arma 3, Arma Reforger, Project Zomboid, and DayZ (scaffolded). It allows users to install, configure, and manage multiple server instances (including starting/stopping/restarting processes), download Steam Workshop mods via SteamCMD, organize mods into presets, import Arma 3 Launcher HTML preset files, and assign presets to server instances. Game-specific logic is handled by the GameHandler pattern (Manager pattern). The application supports dynamic headless client management (Arma 3), server difficulty settings, and profile backup/restore. It ships as a single Docker container with SteamCMD bundled inside.
+Armaani is a web-based game server manager built with Laravel 12, Inertia v2, React 19, and Tailwind CSS v4. It supports Arma 3, Arma Reforger, Project Zomboid, Factorio, and DayZ (scaffolded). It allows users to install, configure, and manage multiple server instances (including starting/stopping/restarting processes), download Steam Workshop mods via SteamCMD, organize mods into presets, import Arma 3 Launcher HTML preset files, and assign presets to server instances. Game-specific logic is handled by the GameHandler pattern (Manager pattern). Installation is handled by an InstallerResolver that maps handler interfaces to installer strategies: `SteamGameHandler` → `SteamGameInstaller` (SteamCMD), `DownloadsDirectly` → `HttpGameInstaller` (HTTP download + tar extraction). The application supports dynamic headless client management (Arma 3), server difficulty settings, and profile backup/restore. It ships as a single Docker container with SteamCMD bundled inside.
 
 ## Static Analysis
 
@@ -322,7 +322,7 @@ Armaani is a web-based game server manager built with Laravel 12, Inertia v2, Re
 
 ## Scope
 
-- **Multi-game support** — Arma 3 (full), Arma Reforger (full), Project Zomboid (full), DayZ (scaffolded — throws RuntimeException for unimplemented features).
+- **Multi-game support** — Arma 3 (full), Arma Reforger (full), Project Zomboid (full), Factorio (full), DayZ (scaffolded — throws RuntimeException for unimplemented features).
 - Game-specific logic isolated into handler classes via the `GameManager` (Laravel Manager pattern).
 - Full server process control (start/stop/restart) from the web UI via queued jobs.
 - Dynamic headless client support (Arma 3 only, max 10).
@@ -438,6 +438,7 @@ The toast system (`resources/js/components/toast-manager.tsx`) handles:
 - `DifficultySettings` — per-server Arma 3 difficulty options (one-to-one with Server)
 - `ReforgerSettings` — per-server Reforger options (scenario_id, third_person_view_enabled)
 - `ProjectZomboidSettings` — per-server PZ options (pvp, pause_empty, global_chat, map, safety_system, sleep, etc.)
+- `FactorioSettings` — per-server Factorio options (RCON, server settings, map gen resources 8×3, terrain, gameplay; 56 columns)
 - `DayZSettings` — per-server DayZ options (uses `$table = 'dayz_settings'`)
 - `ServerBackup` — server_id, name, file_size, is_automatic, data
 - `WorkshopMod` — workshop_id, name, file_size, installation_status, progress_pct, installed_at, game_type
@@ -469,15 +470,22 @@ The toast system (`resources/js/components/toast-manager.tsx`) handles:
 
 - `app/Contracts/GameHandler.php` — Interface defining `value()`, `label()`, and game-specific methods
 - `app/Contracts/SteamGameHandler.php` — Interface for Steam-specific methods (`serverAppId()`, `gameId()`, `consumerAppId()`)
+- `app/Contracts/DownloadsDirectly.php` — Interface for HTTP-downloadable games (`getDownloadUrl()`, `getArchiveStripComponents()`)
+- `app/Contracts/GameServerInstaller.php` — Unified installer interface (`install()`)
 - `app/GameManager.php` — Extends `Illuminate\Support\Manager`; `for(Server|GameInstall)` resolves handler; `allHandlers()`, `availableTypes()`, `fromConsumerAppId()`
 - `app/Providers/GameServiceProvider.php` — Auto-discovers handler classes via glob and registers them with `GameManager::extend()`. Supports a cached manifest at `bootstrap/cache/game-handlers.php` via `game-handlers:cache` / `game-handlers:clear` artisan commands, integrated with `php artisan optimize`.
 - `app/GameHandlers/Arma3Handler.php` — Full implementation (~510 lines); implements `GameHandler` + `SteamGameHandler`; generates server.cfg, server_basic.cfg, .Arma3Profile
 - `app/GameHandlers/ReforgerHandler.php` — Full implementation; implements `GameHandler` + `SteamGameHandler`; generates JSON config
 - `app/GameHandlers/ProjectZomboidHandler.php` — Full implementation; implements `GameHandler` + `SteamGameHandler` + `DetectsServerState`; generates INI config via Twig; PZ auto-expands partial INI on first boot
+- `app/GameHandlers/FactorioHandler.php` — Full implementation; implements `GameHandler` + `DownloadsDirectly` + `DetectsServerState`; generates 3 JSON configs + per-server config.ini; auto-creates save file on first start
 - `app/GameHandlers/DayZHandler.php` — Scaffold; implements `GameHandler` + `SteamGameHandler`; throws RuntimeException for unimplemented features
 
 ### Services
 
+- `app/Services/Installers/SteamGameInstaller.php` — Installs games via SteamCMD
+- `app/Services/Installers/HttpGameInstaller.php` — Installs games via HTTP download + tar extraction
+- `app/Services/Installers/InstallerResolver.php` — Maps handler interfaces to installer strategies (`SteamGameHandler` → `SteamGameInstaller`, `DownloadsDirectly` → `HttpGameInstaller`)
+- `app/Services/HttpDownloadService.php` — Downloads tarball with curl + extracts with tar (preserves permissions via `xpf`)
 - `app/Services/SteamCmdService.php` — SteamCMD process management, `stripAnsi()` for ANSI code stripping
 - `app/Services/SteamWorkshopService.php` — Steam API integration for mod metadata and API key validation
 - `app/Services/Server/ServerProcessService.php` — Server lifecycle orchestrator (~440 lines), delegates to GameHandler. Uses `killProcessTree()` (recursive `pgrep -P`) to kill child processes for wrapper-script games (e.g., PZ's `start-server.sh` → Java). Log tail continues until process is fully dead so shutdown logs stream to UI.
