@@ -445,9 +445,10 @@ The toast system (`resources/js/components/toast-manager.tsx`) handles:
 
 ### Enums
 
-- `GameType` — Arma3, ArmaReforger, DayZ
 - `InstallationStatus` — Queued, Installing, Installed, Failed (used by both GameInstall and WorkshopMod)
 - `ServerStatus` — Stopped, Starting, Booting, Running, Stopping
+
+**Note:** There is no `GameType` enum. Game types are plain strings (e.g. `'arma3'`, `'reforger'`, `'dayz'`). The `game_type` column on models has no cast. Game type values and labels are defined by handler classes in `app/GameHandlers/`. Validation uses `Rule::in(app(GameManager::class)->availableTypes())`.
 
 ## Key Files
 
@@ -464,11 +465,13 @@ The toast system (`resources/js/components/toast-manager.tsx`) handles:
 
 ### Game Handlers
 
-- `app/Contracts/GameHandler.php` — Interface with 16 methods
-- `app/GameManager.php` — Extends `Illuminate\Support\Manager`; `for(Server|GameInstall)` resolves handler
-- `app/GameHandlers/Arma3Handler.php` — Full implementation (~510 lines); generates server.cfg, server_basic.cfg, .Arma3Profile
-- `app/GameHandlers/ReforgerHandler.php` — Full implementation; generates JSON config
-- `app/GameHandlers/DayZHandler.php` — Scaffold; throws RuntimeException
+- `app/Contracts/GameHandler.php` — Interface defining `value()`, `label()`, and game-specific methods
+- `app/Contracts/SteamGameHandler.php` — Interface for Steam-specific methods (`serverAppId()`, `gameId()`, `consumerAppId()`)
+- `app/GameManager.php` — Extends `Illuminate\Support\Manager`; `for(Server|GameInstall)` resolves handler; `allHandlers()`, `availableTypes()`, `fromConsumerAppId()`
+- `app/Providers/GameServiceProvider.php` — Auto-discovers handler classes via glob and registers them with `GameManager::extend()`. Supports a cached manifest at `bootstrap/cache/game-handlers.php` via `game-handlers:cache` / `game-handlers:clear` artisan commands, integrated with `php artisan optimize`.
+- `app/GameHandlers/Arma3Handler.php` — Full implementation (~510 lines); implements `GameHandler` + `SteamGameHandler`; generates server.cfg, server_basic.cfg, .Arma3Profile
+- `app/GameHandlers/ReforgerHandler.php` — Full implementation; implements `GameHandler` + `SteamGameHandler`; generates JSON config
+- `app/GameHandlers/DayZHandler.php` — Scaffold; implements `GameHandler` + `SteamGameHandler`; throws RuntimeException for unimplemented features
 
 ### Services
 
@@ -553,7 +556,7 @@ Form Request conventions: array-based validation rules, no `authorize()` method 
 
 ### Test Traits
 
-- `tests/Concerns/CreatesGameScenarios.php` — `createArma3Server()`, `createReforgerServer()`, `createDayZServer()`
+- `tests/Concerns/CreatesGameScenarios.php` — `createServer(string $gameType)`, `createArma3Server()`, `createReforgerServer()`, `createDayZServer()`
 - `tests/Concerns/MocksGameManager.php` — mock GameManager singleton
 - `tests/Concerns/MocksServerProcessService.php` — mock ServerProcessService with configurable status
 - `tests/Concerns/MocksSteamCmdProcess.php` — `makeInvokedProcess(bool): InvokedProcess`
@@ -564,7 +567,7 @@ Form Request conventions: array-based validation rules, no `authorize()` method 
 - For `DownloadModJob` tests: mock `startDownloadMod()` returning mock `InvokedProcess`.
 - Broadcast events use `PrivateChannel` — tests check for `private-` prefixed channel names.
 - `Process::fake()` does not intercept `rm -rf` reliably — use real filesystem assertions.
-- `SteamCmdService` methods accept optional `?GameType $gameType` — mocks must match signature.
+- `SteamCmdService` methods accept optional `?string $gameType` — mocks must match signature.
 - `SteamWorkshopService::validateApiKey()` returns `array{valid: bool, error: string|null}`.
 - Streamed downloads use `$response->streamedContent()` not `$response->getContent()`.
 
