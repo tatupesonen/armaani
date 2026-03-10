@@ -9,12 +9,23 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Log;
 
 /**
  * @property string $game_type
  * @property ServerStatus $status
+ *
+ * Dynamic relationships registered by GameServiceProvider via resolveRelationUsing:
+ *
+ * @method \Illuminate\Database\Eloquent\Relations\HasOne arma3Settings()
+ * @method \Illuminate\Database\Eloquent\Relations\HasOne reforgerSettings()
+ * @method \Illuminate\Database\Eloquent\Relations\HasOne dayzSettings()
+ * @method \Illuminate\Database\Eloquent\Relations\HasMany reforgerScenarios()
+ *
+ * @property \App\Models\Arma3Settings|null $arma3Settings
+ * @property \App\Models\ReforgerSettings|null $reforgerSettings
+ * @property \App\Models\DayZSettings|null $dayzSettings
+ * @property \Illuminate\Database\Eloquent\Collection<int, \App\Models\ReforgerScenario> $reforgerScenarios
  */
 class Server extends Model
 {
@@ -74,36 +85,6 @@ class Server extends Model
     public function gameInstall(): BelongsTo
     {
         return $this->belongsTo(GameInstall::class);
-    }
-
-    /** @return HasOne<DifficultySettings, $this> */
-    public function difficultySettings(): HasOne
-    {
-        return $this->hasOne(DifficultySettings::class);
-    }
-
-    /** @return HasOne<NetworkSettings, $this> */
-    public function networkSettings(): HasOne
-    {
-        return $this->hasOne(NetworkSettings::class);
-    }
-
-    /** @return HasOne<ReforgerSettings, $this> */
-    public function reforgerSettings(): HasOne
-    {
-        return $this->hasOne(ReforgerSettings::class);
-    }
-
-    /** @return HasOne<DayZSettings, $this> */
-    public function dayzSettings(): HasOne
-    {
-        return $this->hasOne(DayZSettings::class);
-    }
-
-    /** @return HasMany<ReforgerScenario, $this> */
-    public function reforgerScenarios(): HasMany
-    {
-        return $this->hasMany(ReforgerScenario::class);
     }
 
     /** @return HasMany<ServerBackup, $this> */

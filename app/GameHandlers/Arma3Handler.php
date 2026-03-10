@@ -9,8 +9,8 @@ use App\Contracts\SteamGameHandler;
 use App\Contracts\SupportsBackups;
 use App\Contracts\SupportsHeadlessClients;
 use App\Contracts\SupportsMissions;
-use App\Models\DifficultySettings;
-use App\Models\NetworkSettings;
+use App\Models\Arma3Settings;
+use App\Models\ModPreset;
 use App\Models\Server;
 use App\Services\Renderer\TwigConfigRenderer;
 use Illuminate\Support\Facades\Log;
@@ -330,7 +330,7 @@ final class Arma3Handler implements DetectsServerState, GameHandler, ManagesModA
                 'title' => 'Difficulty Settings',
                 'description' => 'HUD elements, third-person view, AI behavior, and gameplay options.',
                 'collapsible' => true,
-                'source' => 'difficulty_settings',
+                'source' => 'arma3_settings',
                 'layout' => 'columns',
                 'groups' => [
                     // Column 1: Boolean toggles
@@ -394,7 +394,7 @@ final class Arma3Handler implements DetectsServerState, GameHandler, ManagesModA
                 'title' => 'Network Settings',
                 'description' => 'Bandwidth, packet sizes, terrain detail, and view distance tuning for server_basic.cfg.',
                 'collapsible' => true,
-                'source' => 'network_settings',
+                'source' => 'arma3_settings',
                 'layout' => 'rows',
                 'presets' => [
                     [
@@ -559,35 +559,59 @@ final class Arma3Handler implements DetectsServerState, GameHandler, ManagesModA
 
     // --- Related Settings ---
 
+    /** @phpstan-ignore return.unusedType */
+    public function settingsModelClass(): ?string
+    {
+        return Arma3Settings::class;
+    }
+
+    /** @phpstan-ignore return.unusedType */
+    public function settingsRelationName(): ?string
+    {
+        return 'arma3Settings';
+    }
+
     public function createRelatedSettings(Server $server): void
     {
-        DifficultySettings::query()->create(['server_id' => $server->id]);
-        NetworkSettings::query()->create(['server_id' => $server->id]);
+        Arma3Settings::query()->create(['server_id' => $server->id]);
     }
 
     public function updateRelatedSettings(Server $server, array $validated): void
     {
-        $difficultyFields = collect($validated)->only(
-            (new DifficultySettings)->getFillable()
+        $settingsFields = collect($validated)->only(
+            (new Arma3Settings)->getFillable()
         )->except('server_id')->toArray();
 
-        $networkFields = collect($validated)->only(
-            (new NetworkSettings)->getFillable()
-        )->except('server_id')->toArray();
-
-        if (! empty($difficultyFields)) {
-            $server->difficultySettings()->updateOrCreate(
+        if (! empty($settingsFields)) {
+            $server->arma3Settings()->updateOrCreate(
                 ['server_id' => $server->id],
-                $difficultyFields,
+                $settingsFields,
             );
         }
+    }
 
-        if (! empty($networkFields)) {
-            $server->networkSettings()->updateOrCreate(
-                ['server_id' => $server->id],
-                $networkFields,
-            );
-        }
+    // --- Mod Presets ---
+
+    public function modSections(): array
+    {
+        return [
+            [
+                'type' => 'workshop',
+                'label' => 'Workshop Mods',
+                'relationship' => 'mods',
+                'formField' => 'mod_ids',
+            ],
+        ];
+    }
+
+    public function syncPresetMods(ModPreset $preset, array $validated): void
+    {
+        $preset->mods()->sync($validated['mod_ids'] ?? []);
+    }
+
+    public function getPresetModCount(ModPreset $preset): int
+    {
+        return $preset->mods()->count();
     }
 
     /**
@@ -641,7 +665,7 @@ final class Arma3Handler implements DetectsServerState, GameHandler, ManagesModA
     protected function generateBasicConfig(Server $server): void
     {
         $renderer = $this->configRenderer;
-        $settings = $server->networkSettings ?? $this->getDefaultNetworkSettings();
+        $settings = $server->arma3Settings ?? $this->getDefaultSettings();
 
         $content = $renderer->render('arma3/server_basic.cfg.twig', [
             'max_msg_send' => $settings->max_msg_send,
@@ -669,7 +693,7 @@ final class Arma3Handler implements DetectsServerState, GameHandler, ManagesModA
     protected function generateProfileConfig(Server $server): void
     {
         $renderer = $this->configRenderer;
-        $settings = $server->difficultySettings ?? $this->getDefaultDifficultySettings();
+        $settings = $server->arma3Settings ?? $this->getDefaultSettings();
         $profileName = $this->getProfileName($server);
         $profileDir = $server->getProfilesPath().'/home/'.$profileName;
 
@@ -710,32 +734,12 @@ final class Arma3Handler implements DetectsServerState, GameHandler, ManagesModA
     }
 
     /**
-     * Build a default NetworkSettings object for servers without custom network settings.
+     * Build a default Arma3Settings object for servers without custom settings.
      */
-    protected function getDefaultNetworkSettings(): NetworkSettings
+    protected function getDefaultSettings(): Arma3Settings
     {
-        $settings = new NetworkSettings;
-        $settings->max_msg_send = 128;
-        $settings->max_size_guaranteed = 512;
-        $settings->max_size_nonguaranteed = 256;
-        $settings->min_bandwidth = 131072;
-        $settings->max_bandwidth = 10000000000;
-        $settings->min_error_to_send = 0.001;
-        $settings->min_error_to_send_near = 0.01;
-        $settings->max_packet_size = 1400;
-        $settings->max_custom_file_size = 0;
-        $settings->terrain_grid = 25.0;
-        $settings->view_distance = 0;
-
-        return $settings;
-    }
-
-    /**
-     * Build a default DifficultySettings object for servers without custom difficulty settings.
-     */
-    protected function getDefaultDifficultySettings(): DifficultySettings
-    {
-        $settings = new DifficultySettings;
+        $settings = new Arma3Settings;
+        // Difficulty defaults
         $settings->reduced_damage = false;
         $settings->group_indicators = 2;
         $settings->friendly_tags = 2;
@@ -759,6 +763,18 @@ final class Arma3Handler implements DetectsServerState, GameHandler, ManagesModA
         $settings->ai_level_preset = 1;
         $settings->skill_ai = 0.50;
         $settings->precision_ai = 0.50;
+        // Network defaults
+        $settings->max_msg_send = 128;
+        $settings->max_size_guaranteed = 512;
+        $settings->max_size_nonguaranteed = 256;
+        $settings->min_bandwidth = 131072;
+        $settings->max_bandwidth = 10000000000;
+        $settings->min_error_to_send = 0.001;
+        $settings->min_error_to_send_near = 0.01;
+        $settings->max_packet_size = 1400;
+        $settings->max_custom_file_size = 0;
+        $settings->terrain_grid = 25.0;
+        $settings->view_distance = 0;
 
         return $settings;
     }

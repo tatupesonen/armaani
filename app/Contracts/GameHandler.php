@@ -2,6 +2,7 @@
 
 namespace App\Contracts;
 
+use App\Models\ModPreset;
 use App\Models\Server;
 
 /**
@@ -167,6 +168,19 @@ interface GameHandler
     // --- Related Settings ---
 
     /**
+     * The Eloquent model class for this game's server settings, or null if none.
+     *
+     * @return class-string<\Illuminate\Database\Eloquent\Model>|null
+     */
+    public function settingsModelClass(): ?string;
+
+    /**
+     * The relationship name to register on Server via resolveRelationUsing.
+     * Returns null if no settings model exists.
+     */
+    public function settingsRelationName(): ?string;
+
+    /**
      * Create default related settings models for a newly created server.
      * Called from ServerController::store().
      */
@@ -177,4 +191,27 @@ interface GameHandler
      * Called from ServerController::update().
      */
     public function updateRelatedSettings(Server $server, array $validated): void;
+
+    // --- Mod Presets ---
+
+    /**
+     * Define the mod sections this game supports for the frontend UI.
+     *
+     * Each section describes a tab/panel of mods that can be assigned to a preset.
+     * The frontend renders these dynamically.
+     *
+     * @return list<array{type: 'workshop'|'registered', label: string, relationship: string, formField: string}>
+     */
+    public function modSections(): array;
+
+    /**
+     * Sync a preset's mods from validated request data.
+     * Each handler knows which relationships to sync.
+     */
+    public function syncPresetMods(ModPreset $preset, array $validated): void;
+
+    /**
+     * Get the total mod count for a preset (across all mod types this game uses).
+     */
+    public function getPresetModCount(ModPreset $preset): int;
 }

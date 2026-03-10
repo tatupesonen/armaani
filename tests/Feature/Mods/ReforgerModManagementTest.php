@@ -28,7 +28,7 @@ class ReforgerModManagementTest extends TestCase
     public function test_user_can_add_reforger_mod(): void
     {
         $this->actingAs($this->user)
-            ->post(route('reforger-mods.store'), [
+            ->post(route('registered-mods.store', ['gameType' => 'reforger']), [
                 'mod_id' => 'ABC123DEF456',
                 'name' => 'Test Reforger Mod',
             ])
@@ -43,7 +43,7 @@ class ReforgerModManagementTest extends TestCase
 
     public function test_store_requires_authentication(): void
     {
-        $this->post(route('reforger-mods.store'), [
+        $this->post(route('registered-mods.store', ['gameType' => 'reforger']), [
             'mod_id' => 'ABC123',
             'name' => 'Test',
         ])->assertRedirect(route('login'));
@@ -52,7 +52,7 @@ class ReforgerModManagementTest extends TestCase
     public function test_store_validates_mod_id_required(): void
     {
         $this->actingAs($this->user)
-            ->post(route('reforger-mods.store'), [
+            ->post(route('registered-mods.store', ['gameType' => 'reforger']), [
                 'mod_id' => '',
                 'name' => 'Test Mod',
             ])
@@ -62,7 +62,7 @@ class ReforgerModManagementTest extends TestCase
     public function test_store_validates_name_required(): void
     {
         $this->actingAs($this->user)
-            ->post(route('reforger-mods.store'), [
+            ->post(route('registered-mods.store', ['gameType' => 'reforger']), [
                 'mod_id' => 'ABC123',
                 'name' => '',
             ])
@@ -74,7 +74,7 @@ class ReforgerModManagementTest extends TestCase
         ReforgerMod::factory()->create(['mod_id' => 'DUPLICATE123']);
 
         $this->actingAs($this->user)
-            ->post(route('reforger-mods.store'), [
+            ->post(route('registered-mods.store', ['gameType' => 'reforger']), [
                 'mod_id' => 'DUPLICATE123',
                 'name' => 'Another Mod',
             ])
@@ -92,7 +92,7 @@ class ReforgerModManagementTest extends TestCase
         $mod = ReforgerMod::factory()->create();
 
         $this->actingAs($this->user)
-            ->delete(route('reforger-mods.destroy', $mod))
+            ->delete(route('registered-mods.destroy', ['gameType' => 'reforger', 'modId' => $mod->id]))
             ->assertRedirect()
             ->assertSessionHas('success');
 
@@ -103,7 +103,7 @@ class ReforgerModManagementTest extends TestCase
     {
         $mod = ReforgerMod::factory()->create();
 
-        $this->delete(route('reforger-mods.destroy', $mod))
+        $this->delete(route('registered-mods.destroy', ['gameType' => 'reforger', 'modId' => $mod->id]))
             ->assertRedirect(route('login'));
 
         $this->assertDatabaseHas('reforger_mods', ['id' => $mod->id]);
@@ -118,7 +118,7 @@ class ReforgerModManagementTest extends TestCase
         $this->assertDatabaseHas('mod_preset_reforger_mod', ['reforger_mod_id' => $mod->id]);
 
         $this->actingAs($this->user)
-            ->delete(route('reforger-mods.destroy', $mod));
+            ->delete(route('registered-mods.destroy', ['gameType' => 'reforger', 'modId' => $mod->id]));
 
         $this->assertDatabaseMissing('reforger_mods', ['id' => $mod->id]);
         $this->assertDatabaseMissing('mod_preset_reforger_mod', ['reforger_mod_id' => $mod->id]);

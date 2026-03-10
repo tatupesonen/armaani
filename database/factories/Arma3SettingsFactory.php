@@ -6,9 +6,9 @@ use App\Models\Server;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\DifficultySettings>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Arma3Settings>
  */
-class DifficultySettingsFactory extends Factory
+class Arma3SettingsFactory extends Factory
 {
     /**
      * @return array<string, mixed>
@@ -17,6 +17,7 @@ class DifficultySettingsFactory extends Factory
     {
         return [
             'server_id' => Server::factory(),
+            // Difficulty settings
             'reduced_damage' => false,
             'group_indicators' => 2,
             'friendly_tags' => 2,
@@ -40,6 +41,18 @@ class DifficultySettingsFactory extends Factory
             'ai_level_preset' => 1,
             'skill_ai' => 0.50,
             'precision_ai' => 0.50,
+            // Network settings
+            'max_msg_send' => 128,
+            'max_size_guaranteed' => 512,
+            'max_size_nonguaranteed' => 256,
+            'min_bandwidth' => 131072,
+            'max_bandwidth' => 10000000000,
+            'min_error_to_send' => 0.001,
+            'min_error_to_send_near' => 0.01,
+            'max_packet_size' => 1400,
+            'max_custom_file_size' => 0,
+            'terrain_grid' => 25.0,
+            'view_distance' => 0,
         ];
     }
 }

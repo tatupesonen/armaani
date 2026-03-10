@@ -1,10 +1,9 @@
 import { router } from '@inertiajs/react';
 import { useState } from 'react';
+import '@/components/servers/custom-components';
 import GameSettingsRenderer, {
     getSchemaDefaults,
-    registerCustomComponent,
 } from '@/components/servers/game-settings-renderer';
-import ReforgerScenarioPicker from '@/components/servers/reforger-scenario-picker';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -25,9 +24,6 @@ import {
 } from '@/components/ui/select';
 import { store } from '@/routes/servers';
 import type { GameInstall, ModPreset, ServerGameTypeOption } from '@/types';
-
-// Register custom field components
-registerCustomComponent('scenario-picker', ReforgerScenarioPicker);
 
 type CreateServerDialogProps = {
     open: boolean;

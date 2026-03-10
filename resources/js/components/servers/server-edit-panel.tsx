@@ -1,12 +1,11 @@
 import { router, usePage } from '@inertiajs/react';
 import { Check, ChevronDown, X } from 'lucide-react';
 import { Fragment, useState } from 'react';
+import '@/components/servers/custom-components';
 import GameSettingsRenderer, {
     buildEditDataFromSchema,
     getAdvancedFields,
-    registerCustomComponent,
 } from '@/components/servers/game-settings-renderer';
-import ReforgerScenarioPicker from '@/components/servers/reforger-scenario-picker';
 import BackupSection from '@/components/servers/backup-section';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -22,9 +21,6 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { update } from '@/routes/servers';
 import type { GameInstall, ModPreset, Server, SettingsSection } from '@/types';
-
-// Register custom field components
-registerCustomComponent('scenario-picker', ReforgerScenarioPicker);
 
 type ServerEditPanelProps = {
     server: Server;

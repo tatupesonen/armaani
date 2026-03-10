@@ -3,9 +3,9 @@
 namespace Tests\Feature\Servers;
 
 use App\GameHandlers\Arma3Handler;
+use App\Models\Arma3Settings;
 use App\Models\GameInstall;
 use App\Models\ModPreset;
-use App\Models\NetworkSettings;
 use App\Models\Server;
 use App\Models\WorkshopMod;
 use App\Services\Server\ServerProcessService;
@@ -265,7 +265,7 @@ class ServerProcessServiceTest extends TestCase
     {
         $server = $this->makeServer();
 
-        NetworkSettings::factory()->create([
+        Arma3Settings::factory()->create([
             'server_id' => $server->id,
             'max_msg_send' => 2048,
             'max_size_guaranteed' => 1024,
@@ -321,7 +321,7 @@ class ServerProcessServiceTest extends TestCase
     {
         $server = $this->makeServer();
 
-        NetworkSettings::factory()->create([
+        Arma3Settings::factory()->create([
             'server_id' => $server->id,
             'view_distance' => 0,
         ]);
@@ -340,7 +340,7 @@ class ServerProcessServiceTest extends TestCase
     {
         $server = $this->makeServer();
 
-        NetworkSettings::factory()->create([
+        Arma3Settings::factory()->create([
             'server_id' => $server->id,
             'view_distance' => 3000,
         ]);

@@ -127,15 +127,9 @@ export default function PresetsIndex({ presets }: Props) {
                                         </Badge>
                                     </div>
                                     <p className="mt-0.5 text-sm text-muted-foreground">
-                                        {(preset.mods_count ?? 0) > 0 &&
-                                            `${preset.mods_count} workshop mod(s)`}
-                                        {(preset.reforger_mods_count ?? 0) >
-                                            0 &&
-                                            `${preset.reforger_mods_count} reforger mod(s)`}
-                                        {(preset.mods_count ?? 0) === 0 &&
-                                            (preset.reforger_mods_count ??
-                                                0) === 0 &&
-                                            'No mods'}
+                                        {(preset.total_mod_count ?? 0) > 0
+                                            ? `${preset.total_mod_count} mod(s)`
+                                            : 'No mods'}
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-1">

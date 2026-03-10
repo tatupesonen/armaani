@@ -10,6 +10,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * @property string $game_type
+ *
+ * Dynamic relationships registered by GameServiceProvider via resolveRelationUsing:
+ *
+ * @method \Illuminate\Database\Eloquent\Relations\BelongsToMany reforgerMods()
+ *
+ * @property \Illuminate\Database\Eloquent\Collection<int, \App\Models\ReforgerMod> $reforgerMods
  */
 class ModPreset extends Model
 {
@@ -25,12 +31,6 @@ class ModPreset extends Model
     public function mods(): BelongsToMany
     {
         return $this->belongsToMany(WorkshopMod::class, 'mod_preset_workshop_mod');
-    }
-
-    /** @return BelongsToMany<ReforgerMod, $this> */
-    public function reforgerMods(): BelongsToMany
-    {
-        return $this->belongsToMany(ReforgerMod::class, 'mod_preset_reforger_mod');
     }
 
     /** @return HasMany<Server, $this> */

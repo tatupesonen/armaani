@@ -56,7 +56,7 @@ class SettingsSchemaTest extends TestCase
         $difficulty = collect($schema)->firstWhere('title', 'Difficulty Settings');
         $this->assertNotNull($difficulty);
         $this->assertTrue($difficulty['collapsible']);
-        $this->assertEquals('difficulty_settings', $difficulty['source']);
+        $this->assertEquals('arma3_settings', $difficulty['source']);
         $this->assertEquals('columns', $difficulty['layout']);
         $this->assertArrayHasKey('groups', $difficulty);
         $this->assertCount(3, $difficulty['groups']);
@@ -96,7 +96,7 @@ class SettingsSchemaTest extends TestCase
         $network = collect($schema)->firstWhere('title', 'Network Settings');
         $this->assertNotNull($network);
         $this->assertTrue($network['collapsible']);
-        $this->assertEquals('network_settings', $network['source']);
+        $this->assertEquals('arma3_settings', $network['source']);
         $this->assertEquals('rows', $network['layout']);
         $this->assertArrayHasKey('presets', $network);
         $this->assertCount(2, $network['presets']);

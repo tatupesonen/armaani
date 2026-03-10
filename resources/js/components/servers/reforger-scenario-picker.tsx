@@ -2,8 +2,8 @@ import axios from 'axios';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    reforgerScenarios,
-    reloadReforgerScenarios,
+    scenarios as fetchScenarios,
+    reloadScenarios as refreshScenarios,
 } from '@/actions/App/Http/Controllers/ServerController';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -44,7 +44,7 @@ export default function ReforgerScenarioPicker({
         }
         setLoading(true);
         axios
-            .get(reforgerScenarios.url(serverId))
+            .get(fetchScenarios.url(serverId))
             .then((res) => {
                 setScenarios(res.data.scenarios ?? []);
                 setLoaded(true);
@@ -59,7 +59,7 @@ export default function ReforgerScenarioPicker({
         }
         setLoading(true);
         axios
-            .post(reloadReforgerScenarios.url(serverId))
+            .post(refreshScenarios.url(serverId))
             .then((res) => {
                 setScenarios(res.data.scenarios ?? []);
                 setLoaded(true);

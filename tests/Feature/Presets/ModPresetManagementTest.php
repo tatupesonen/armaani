@@ -119,7 +119,7 @@ class ModPresetManagementTest extends TestCase
                 ->component('presets/create')
                 ->has('gameTypes')
                 ->has('workshopMods')
-                ->has('reforgerMods')
+                ->has('registeredMods')
             );
     }
 
@@ -134,7 +134,7 @@ class ModPresetManagementTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->component('presets/create')
                 ->has('workshopMods', 1)
-                ->has('reforgerMods', 1)
+                ->has('registeredMods.reforger', 1)
             );
     }
 
@@ -269,7 +269,8 @@ class ModPresetManagementTest extends TestCase
                 ->component('presets/edit')
                 ->has('preset')
                 ->has('workshopMods')
-                ->has('reforgerMods')
+                ->has('registeredMods')
+                ->has('modSections')
             );
     }
 

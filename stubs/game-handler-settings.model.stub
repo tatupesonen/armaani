@@ -1,0 +1,40 @@
+<?php
+
+namespace {{ namespace }};
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class {{ class }} extends Model
+{
+    use HasFactory;
+
+    protected $table = '{{ table }}';
+
+    /**
+     * @var list<string>
+     */
+    protected $fillable = [
+        'server_id',
+        // TODO: Add your settings columns here
+    ];
+
+    /**
+     * @return BelongsTo<Server, $this>
+     */
+    public function server(): BelongsTo
+    {
+        return $this->belongsTo(Server::class);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            // TODO: Add casts for your settings columns
+        ];
+    }
+}

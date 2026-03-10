@@ -3,7 +3,12 @@
 namespace App\Providers;
 
 use App\Contracts\GameHandler;
+use App\Contracts\SupportsRegisteredMods;
+use App\Contracts\SupportsScenarios;
 use App\GameManager;
+use App\Models\ModPreset;
+use App\Models\ReforgerScenario;
+use App\Models\Server;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Support\ServiceProvider;
 
@@ -32,8 +37,10 @@ class GameServiceProvider extends ServiceProvider
     /**
      * Bootstrap services.
      *
-     * Registers the game-handlers:cache and game-handlers:clear commands
-     * with Laravel's optimize pipeline so they run on `php artisan optimize`.
+     * Dynamically registers Eloquent relationships on Server and ModPreset
+     * based on what each game handler declares. This means adding a new game
+     * handler automatically wires up its settings/mod relationships without
+     * editing the Server or ModPreset models.
      */
     public function boot(): void
     {
@@ -41,6 +48,50 @@ class GameServiceProvider extends ServiceProvider
             optimize: 'game-handlers:cache',
             clear: 'game-handlers:clear',
         );
+
+        $this->registerDynamicRelationships();
+    }
+
+    /**
+     * Register settings and mod relationships from all game handlers.
+     */
+    protected function registerDynamicRelationships(): void
+    {
+        /** @var GameManager $gameManager */
+        $gameManager = $this->app->make(GameManager::class);
+
+        foreach ($gameManager->allHandlers() as $handler) {
+            // Register settings HasOne on Server
+            $settingsRelation = $handler->settingsRelationName();
+            $settingsModel = $handler->settingsModelClass();
+
+            if ($settingsRelation !== null && $settingsModel !== null) {
+                Server::resolveRelationUsing($settingsRelation, function (Server $server) use ($settingsModel) {
+                    return $server->hasOne($settingsModel);
+                });
+            }
+
+            // Register registered mod BelongsToMany on ModPreset
+            if ($handler instanceof SupportsRegisteredMods) {
+                ModPreset::resolveRelationUsing(
+                    $handler->registeredModRelationName(),
+                    function (ModPreset $preset) use ($handler) {
+                        return $preset->belongsToMany(
+                            $handler->registeredModModelClass(),
+                            $handler->registeredModPivotTable(),
+                        );
+                    },
+                );
+            }
+
+            // Register scenario HasMany on Server
+            if ($handler instanceof SupportsScenarios) {
+                $scenarioRelation = $handler->value().'Scenarios';
+                Server::resolveRelationUsing($scenarioRelation, function (Server $server) {
+                    return $server->hasMany(ReforgerScenario::class);
+                });
+            }
+        }
     }
 
     /**

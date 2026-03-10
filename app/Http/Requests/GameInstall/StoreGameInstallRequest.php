@@ -17,7 +17,7 @@ class StoreGameInstallRequest extends FormRequest
     public function rules(): array
     {
         $gameManager = app(GameManager::class);
-        $handler = $gameManager->driver($this->input('game_type', 'arma3'));
+        $handler = $gameManager->driver($this->input('game_type'));
 
         return [
             'game_type' => ['required', Rule::in($gameManager->availableTypes())],

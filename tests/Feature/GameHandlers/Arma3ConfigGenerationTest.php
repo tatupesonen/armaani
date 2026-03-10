@@ -3,8 +3,7 @@
 namespace Tests\Feature\GameHandlers;
 
 use App\GameHandlers\Arma3Handler;
-use App\Models\DifficultySettings;
-use App\Models\NetworkSettings;
+use App\Models\Arma3Settings;
 use App\Models\Server;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
@@ -140,7 +139,7 @@ class Arma3ConfigGenerationTest extends TestCase
     public function test_basic_cfg_matches_expected_output_with_view_distance(): void
     {
         $server = $this->createArma3Server();
-        $server->networkSettings()->update(['view_distance' => 3000]);
+        $server->arma3Settings()->update(['view_distance' => 3000]);
         $server->refresh();
 
         $expected = $this->buildExpectedBasicCfg($server);
@@ -152,7 +151,7 @@ class Arma3ConfigGenerationTest extends TestCase
     public function test_basic_cfg_matches_expected_output_without_terrain_grid(): void
     {
         $server = $this->createArma3Server();
-        $server->networkSettings()->update(['terrain_grid' => 0]);
+        $server->arma3Settings()->update(['terrain_grid' => 0]);
         $server->refresh();
 
         $expected = $this->buildExpectedBasicCfg($server);
@@ -164,7 +163,7 @@ class Arma3ConfigGenerationTest extends TestCase
     public function test_basic_cfg_matches_expected_output_with_all_sections(): void
     {
         $server = $this->createArma3Server();
-        $server->networkSettings()->update([
+        $server->arma3Settings()->update([
             'view_distance' => 5000,
             'terrain_grid' => 12.5,
             'min_error_to_send' => 0.0035,
@@ -193,7 +192,7 @@ class Arma3ConfigGenerationTest extends TestCase
     public function test_profile_matches_expected_output_with_custom_difficulty(): void
     {
         $server = $this->createArma3Server();
-        $server->difficultySettings()->update([
+        $server->arma3Settings()->update([
             'reduced_damage' => true,
             'group_indicators' => 0,
             'friendly_tags' => 0,
@@ -318,7 +317,7 @@ class Arma3ConfigGenerationTest extends TestCase
 
     private function buildExpectedBasicCfg(Server $server): string
     {
-        $settings = $server->networkSettings ?? $this->getDefaultNetworkSettings();
+        $settings = $server->arma3Settings ?? $this->getDefaultArma3Settings();
 
         $lines = [];
 
@@ -353,7 +352,7 @@ class Arma3ConfigGenerationTest extends TestCase
 
     private function buildExpectedProfile(Server $server): string
     {
-        $settings = $server->difficultySettings ?? $this->getDefaultDifficultySettings();
+        $settings = $server->arma3Settings ?? $this->getDefaultArma3Settings();
 
         $lines = [];
         $lines[] = 'version=1;';
@@ -422,9 +421,11 @@ class Arma3ConfigGenerationTest extends TestCase
         return implode("\n", $lines)."\n";
     }
 
-    private function getDefaultNetworkSettings(): NetworkSettings
+    private function getDefaultArma3Settings(): Arma3Settings
     {
-        $settings = new NetworkSettings;
+        $settings = new Arma3Settings;
+
+        // Network settings
         $settings->max_msg_send = 128;
         $settings->max_size_guaranteed = 512;
         $settings->max_size_nonguaranteed = 256;
@@ -437,12 +438,7 @@ class Arma3ConfigGenerationTest extends TestCase
         $settings->terrain_grid = 25.0;
         $settings->view_distance = 0;
 
-        return $settings;
-    }
-
-    private function getDefaultDifficultySettings(): DifficultySettings
-    {
-        $settings = new DifficultySettings;
+        // Difficulty settings
         $settings->reduced_damage = false;
         $settings->group_indicators = 2;
         $settings->friendly_tags = 2;

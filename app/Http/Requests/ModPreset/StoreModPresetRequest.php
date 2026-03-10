@@ -16,7 +16,7 @@ class StoreModPresetRequest extends FormRequest
      */
     public function rules(): array
     {
-        $gameType = $this->input('game_type', 'arma3');
+        $gameType = $this->input('game_type');
 
         return [
             'game_type' => ['required', Rule::in(app(GameManager::class)->availableTypes())],

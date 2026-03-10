@@ -11,7 +11,7 @@ class GameManager extends Manager
 {
     public function getDefaultDriver(): string
     {
-        return 'arma3';
+        return array_key_first($this->customCreators) ?? 'arma3';
     }
 
     /**

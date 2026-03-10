@@ -13,18 +13,24 @@ import {
 } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
 import { index as presetsIndex, store } from '@/routes/presets';
-import type { BreadcrumbItem, ReforgerMod, WorkshopMod } from '@/types';
+import type {
+    BreadcrumbItem,
+    ModSection,
+    RegisteredMod,
+    WorkshopMod,
+} from '@/types';
 
 type GameTypeOption = {
     value: string;
     label: string;
     supportsWorkshopMods: boolean;
+    modSections: ModSection[];
 };
 
 type Props = {
     gameTypes: GameTypeOption[];
     workshopMods: WorkshopMod[];
-    reforgerMods: ReforgerMod[];
+    registeredMods: Record<string, RegisteredMod[]>;
 };
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -35,33 +41,59 @@ const breadcrumbs: BreadcrumbItem[] = [
 export default function PresetCreate({
     gameTypes,
     workshopMods,
-    reforgerMods,
+    registeredMods,
 }: Props) {
-    const form = useForm({
-        game_type: 'arma3',
+    const firstGameType = gameTypes[0]?.value ?? '';
+
+    // Build initial form data including registered mod fields from all game types
+    const initialData: Record<string, string | number[]> = {
+        game_type: firstGameType,
         name: '',
-        mod_ids: [] as number[],
-        reforger_mod_ids: [] as number[],
-    });
-
-    const isReforger = form.data.game_type === 'reforger';
-    const availableMods = isReforger
-        ? []
-        : workshopMods.filter((m) => m.game_type === form.data.game_type);
-    const availableReforgerMods = isReforger ? reforgerMods : [];
-
-    function toggleMod(modId: number) {
-        const ids = form.data.mod_ids.includes(modId)
-            ? form.data.mod_ids.filter((id) => id !== modId)
-            : [...form.data.mod_ids, modId];
-        form.setData('mod_ids', ids);
+        mod_ids: [],
+    };
+    for (const gt of gameTypes) {
+        for (const section of gt.modSections) {
+            if (section.type === 'registered') {
+                initialData[section.formField] = [];
+            }
+        }
     }
 
-    function toggleReforgerMod(modId: number) {
-        const ids = form.data.reforger_mod_ids.includes(modId)
-            ? form.data.reforger_mod_ids.filter((id) => id !== modId)
-            : [...form.data.reforger_mod_ids, modId];
-        form.setData('reforger_mod_ids', ids);
+    const form = useForm(initialData);
+
+    const currentGameType = gameTypes.find(
+        (gt) => gt.value === form.data.game_type,
+    );
+    const sections = currentGameType?.modSections ?? [];
+
+    // Workshop mods filtered to current game type
+    const availableWorkshopMods = workshopMods.filter(
+        (m) => m.game_type === form.data.game_type,
+    );
+
+    function toggleMod(fieldName: string, modId: number) {
+        const current = (form.data[fieldName] as number[]) ?? [];
+        const updated = current.includes(modId)
+            ? current.filter((id) => id !== modId)
+            : [...current, modId];
+        form.setData(fieldName, updated);
+    }
+
+    function handleGameTypeChange(value: string) {
+        const resetData: Record<string, string | number[]> = {
+            game_type: value,
+            name: form.data.name as string,
+            mod_ids: [],
+        };
+        // Reset all registered mod ID fields
+        for (const gt of gameTypes) {
+            for (const section of gt.modSections) {
+                if (section.type === 'registered') {
+                    resetData[section.formField] = [];
+                }
+            }
+        }
+        form.setData(resetData);
     }
 
     function submit(e: React.FormEvent) {
@@ -83,15 +115,8 @@ export default function PresetCreate({
                     <div className="space-y-2">
                         <Label>Game Type</Label>
                         <Select
-                            value={form.data.game_type}
-                            onValueChange={(v) => {
-                                form.setData({
-                                    ...form.data,
-                                    game_type: v,
-                                    mod_ids: [],
-                                    reforger_mod_ids: [],
-                                });
-                            }}
+                            value={form.data.game_type as string}
+                            onValueChange={handleGameTypeChange}
                         >
                             <SelectTrigger>
                                 <SelectValue />
@@ -109,7 +134,7 @@ export default function PresetCreate({
                     <div className="space-y-2">
                         <Label>Preset Name</Label>
                         <Input
-                            value={form.data.name}
+                            value={form.data.name as string}
                             onChange={(e) =>
                                 form.setData('name', e.target.value)
                             }
@@ -123,77 +148,110 @@ export default function PresetCreate({
                         )}
                     </div>
 
-                    {!isReforger && (
-                        <div className="space-y-2">
-                            <Label>
-                                Workshop Mods ({form.data.mod_ids.length}{' '}
-                                selected)
-                            </Label>
-                            {availableMods.length === 0 ? (
-                                <p className="text-sm text-muted-foreground">
-                                    No workshop mods available for this game
-                                    type.
-                                </p>
-                            ) : (
-                                <div className="max-h-64 space-y-1 overflow-y-auto rounded-lg border p-2">
-                                    {availableMods.map((mod) => (
-                                        <label
-                                            key={mod.id}
-                                            className="flex cursor-pointer items-center gap-2 rounded p-1.5 hover:bg-muted"
-                                        >
-                                            <Checkbox
-                                                checked={form.data.mod_ids.includes(
-                                                    mod.id,
-                                                )}
-                                                onCheckedChange={() =>
-                                                    toggleMod(mod.id)
-                                                }
-                                            />
-                                            <span className="text-sm">
-                                                {mod.name ||
-                                                    `Mod #${mod.workshop_id}`}
-                                            </span>
-                                        </label>
-                                    ))}
+                    {/* Dynamic mod sections from handler */}
+                    {sections.map((section) => {
+                        if (section.type === 'workshop') {
+                            const selectedIds =
+                                (form.data.mod_ids as number[]) ?? [];
+                            return (
+                                <div
+                                    key={section.relationship}
+                                    className="space-y-2"
+                                >
+                                    <Label>
+                                        {section.label} ({selectedIds.length}{' '}
+                                        selected)
+                                    </Label>
+                                    {availableWorkshopMods.length === 0 ? (
+                                        <p className="text-sm text-muted-foreground">
+                                            No workshop mods available for this
+                                            game type.
+                                        </p>
+                                    ) : (
+                                        <div className="max-h-64 space-y-1 overflow-y-auto rounded-lg border p-2">
+                                            {availableWorkshopMods.map(
+                                                (mod) => (
+                                                    <label
+                                                        key={mod.id}
+                                                        className="flex cursor-pointer items-center gap-2 rounded p-1.5 hover:bg-muted"
+                                                    >
+                                                        <Checkbox
+                                                            checked={selectedIds.includes(
+                                                                mod.id,
+                                                            )}
+                                                            onCheckedChange={() =>
+                                                                toggleMod(
+                                                                    'mod_ids',
+                                                                    mod.id,
+                                                                )
+                                                            }
+                                                        />
+                                                        <span className="text-sm">
+                                                            {mod.name ||
+                                                                `Mod #${mod.workshop_id}`}
+                                                        </span>
+                                                    </label>
+                                                ),
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
-                            )}
-                        </div>
-                    )}
+                            );
+                        }
 
-                    {isReforger && (
-                        <div className="space-y-2">
-                            <Label>
-                                Reforger Mods (
-                                {form.data.reforger_mod_ids.length} selected)
-                            </Label>
-                            {availableReforgerMods.length === 0 ? (
-                                <p className="text-sm text-muted-foreground">
-                                    No Reforger mods available.
-                                </p>
-                            ) : (
-                                <div className="max-h-64 space-y-1 overflow-y-auto rounded-lg border p-2">
-                                    {availableReforgerMods.map((mod) => (
-                                        <label
-                                            key={mod.id}
-                                            className="flex cursor-pointer items-center gap-2 rounded p-1.5 hover:bg-muted"
-                                        >
-                                            <Checkbox
-                                                checked={form.data.reforger_mod_ids.includes(
-                                                    mod.id,
-                                                )}
-                                                onCheckedChange={() =>
-                                                    toggleReforgerMod(mod.id)
-                                                }
-                                            />
-                                            <span className="text-sm">
-                                                {mod.name}
-                                            </span>
-                                        </label>
-                                    ))}
+                        if (section.type === 'registered') {
+                            const selectedIds =
+                                (form.data[section.formField] as number[]) ??
+                                [];
+                            const gameType = form.data.game_type as string;
+                            const availableMods =
+                                registeredMods[gameType] ?? [];
+
+                            return (
+                                <div
+                                    key={section.relationship}
+                                    className="space-y-2"
+                                >
+                                    <Label>
+                                        {section.label} ({selectedIds.length}{' '}
+                                        selected)
+                                    </Label>
+                                    {availableMods.length === 0 ? (
+                                        <p className="text-sm text-muted-foreground">
+                                            No {section.label.toLowerCase()}{' '}
+                                            available.
+                                        </p>
+                                    ) : (
+                                        <div className="max-h-64 space-y-1 overflow-y-auto rounded-lg border p-2">
+                                            {availableMods.map((mod) => (
+                                                <label
+                                                    key={mod.id}
+                                                    className="flex cursor-pointer items-center gap-2 rounded p-1.5 hover:bg-muted"
+                                                >
+                                                    <Checkbox
+                                                        checked={selectedIds.includes(
+                                                            mod.id,
+                                                        )}
+                                                        onCheckedChange={() =>
+                                                            toggleMod(
+                                                                section.formField,
+                                                                mod.id,
+                                                            )
+                                                        }
+                                                    />
+                                                    <span className="text-sm">
+                                                        {mod.name}
+                                                    </span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
-                            )}
-                        </div>
-                    )}
+                            );
+                        }
+
+                        return null;
+                    })}
 
                     <div className="flex gap-2">
                         <Button type="submit" disabled={form.processing}>

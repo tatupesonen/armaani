@@ -1,95 +1,80 @@
 <?php
 
-namespace App\GameHandlers;
+namespace {{ namespace }};
 
 use App\Contracts\GameHandler;
-use App\Contracts\SteamGameHandler;
-use App\Models\DayZSettings;
 use App\Models\ModPreset;
 use App\Models\Server;
+{{ extraImports }}
 
-final class DayZHandler implements GameHandler, SteamGameHandler
+final class {{ class }} implements GameHandler{{ extraInterfaces }}
 {
     public function value(): string
     {
-        return 'dayz';
+        return '{{ gameType }}';
     }
 
     public function label(): string
     {
-        return 'DayZ';
+        return '{{ gameLabel }}';
     }
 
-    public function consumerAppId(): int
-    {
-        return 221100;
-    }
-
-    public function serverAppId(): int
-    {
-        return 223350;
-    }
-
-    public function gameId(): int
-    {
-        return 221100;
-    }
+    // --- Game Metadata ---
 
     public function defaultPort(): int
     {
+        // TODO: Set the default game server port
         return 2302;
     }
 
     public function defaultQueryPort(): int
     {
+        // TODO: Set the default query port
         return 27016;
     }
 
     public function branches(): array
     {
-        return ['public', 'experimental'];
+        return ['public'];
     }
 
     public function supportsWorkshopMods(): bool
     {
-        return true;
+        return false;
     }
 
     public function requiresLowercaseConversion(): bool
     {
-        return true;
+        return false;
     }
+
+    // --- Server Process ---
 
     public function buildLaunchCommand(Server $server): array
     {
-        throw new \RuntimeException('DayZ server support is not yet implemented.');
+        // TODO: Build the command to launch the dedicated server
+        throw new \RuntimeException('{{ gameLabel }} server support is not yet implemented.');
     }
 
     public function generateConfigFiles(Server $server): void
     {
-        throw new \RuntimeException('DayZ server support is not yet implemented.');
+        // TODO: Write config files (server.cfg, etc.)
     }
 
     public function getBinaryPath(Server $server): string
     {
-        return $server->gameInstall->getInstallationPath().'/DayZServer_x64';
+        // TODO: Return the path to the server executable
+        throw new \RuntimeException('{{ gameLabel }} server support is not yet implemented.');
     }
 
     public function getProfileName(Server $server): string
     {
-        return 'dayz_'.$server->id;
+        return '{{ gameType }}_' . $server->id;
     }
 
     public function getServerLogPath(Server $server): string
     {
-        return $server->getProfilesPath().'/server.log';
-    }
-
-    // --- UI Schema ---
-
-    public function settingsSchema(): array
-    {
-        return [];
+        return $server->getProfilesPath() . '/server.log';
     }
 
     // --- Validation ---
@@ -104,41 +89,44 @@ final class DayZHandler implements GameHandler, SteamGameHandler
         return [];
     }
 
+    // --- UI Schema ---
+
+    public function settingsSchema(): array
+    {
+        // TODO: Define sections & fields for the server settings UI.
+        // See Arma3Handler::settingsSchema() for a comprehensive example.
+        return [];
+    }
+
     // --- Related Settings ---
 
     /** @phpstan-ignore return.unusedType */
     public function settingsModelClass(): ?string
     {
-        return DayZSettings::class;
+        {{ settingsModelReturn }}
     }
 
     /** @phpstan-ignore return.unusedType */
     public function settingsRelationName(): ?string
     {
-        return 'dayzSettings';
+        {{ settingsRelationReturn }}
     }
 
     public function createRelatedSettings(Server $server): void
     {
-        DayZSettings::query()->create(['server_id' => $server->id]);
+        {{ createRelatedSettings }}
     }
 
     public function updateRelatedSettings(Server $server, array $validated): void
     {
-        $dayzFields = collect($validated)->only(
-            (new DayZSettings)->getFillable()
-        )->except('server_id')->toArray();
-
-        if (! empty($dayzFields)) {
-            $server->dayzSettings()->updateOrCreate(
-                ['server_id' => $server->id],
-                $dayzFields,
-            );
-        }
+        {{ updateRelatedSettings }}
     }
 
     // --- Mod Presets ---
 
+    /**
+     * @return list<array{type: 'workshop'|'registered', label: string, relationship: string, formField: string}>
+     */
     public function modSections(): array
     {
         return [
@@ -160,4 +148,5 @@ final class DayZHandler implements GameHandler, SteamGameHandler
     {
         return $preset->mods()->count();
     }
+{{ extraMethods }}
 }

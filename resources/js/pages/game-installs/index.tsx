@@ -69,8 +69,8 @@ export default function GameInstallsIndex({ installs, gameTypes }: Props) {
     }
 
     const createForm = useForm({
-        game_type: 'arma3' as string,
-        name: 'Arma 3 Server',
+        game_type: (gameTypes[0]?.value ?? '') as string,
+        name: (gameTypes[0]?.defaultName ?? '') as string,
         branch: 'public',
     });
 
