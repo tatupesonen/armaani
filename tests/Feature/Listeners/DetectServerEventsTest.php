@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Listeners;
 
+use App\Contracts\DetectsServerState;
 use App\Contracts\GameHandler;
 use App\Enums\ServerStatus;
 use App\Events\ServerLogOutput;
@@ -22,6 +23,14 @@ class DetectServerEventsTest extends TestCase
 {
     use RefreshDatabase;
 
+    private DetectServerEvents $listener;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->listener = app(DetectServerEvents::class);
+    }
+
     public function test_listener_is_registered_for_server_log_output_event(): void
     {
         Event::fake();
@@ -34,8 +43,7 @@ class DetectServerEventsTest extends TestCase
 
         $server = Server::factory()->create(['name' => 'Boot Test', 'status' => ServerStatus::Booting]);
 
-        $listener = app(DetectServerEvents::class);
-        $listener->handle(new ServerLogOutput($server->id, '15:42:30 Connected to Steam servers'));
+        $this->listener->handle(new ServerLogOutput($server->id, '15:42:30 Connected to Steam servers'));
 
         $this->assertEquals(ServerStatus::Running, $server->fresh()->status);
 
@@ -50,8 +58,7 @@ class DetectServerEventsTest extends TestCase
     {
         $server = Server::factory()->create(['status' => ServerStatus::Booting]);
 
-        $listener = app(DetectServerEvents::class);
-        $listener->handle(new ServerLogOutput($server->id, '15:42:30 BattlEye Server: Initialized'));
+        $this->listener->handle(new ServerLogOutput($server->id, '15:42:30 BattlEye Server: Initialized'));
 
         $this->assertEquals(ServerStatus::Booting, $server->fresh()->status);
     }
@@ -62,8 +69,7 @@ class DetectServerEventsTest extends TestCase
 
         $server = Server::factory()->create(['status' => ServerStatus::Running]);
 
-        $listener = app(DetectServerEvents::class);
-        $listener->handle(new ServerLogOutput($server->id, '15:42:30 Connected to Steam servers'));
+        $this->listener->handle(new ServerLogOutput($server->id, '15:42:30 Connected to Steam servers'));
 
         $this->assertEquals(ServerStatus::Running, $server->fresh()->status);
 
@@ -74,8 +80,7 @@ class DetectServerEventsTest extends TestCase
     {
         $server = Server::factory()->create(['status' => ServerStatus::Stopped]);
 
-        $listener = app(DetectServerEvents::class);
-        $listener->handle(new ServerLogOutput($server->id, '15:42:30 Connected to Steam servers'));
+        $this->listener->handle(new ServerLogOutput($server->id, '15:42:30 Connected to Steam servers'));
 
         $this->assertEquals(ServerStatus::Stopped, $server->fresh()->status);
     }
@@ -90,8 +95,7 @@ class DetectServerEventsTest extends TestCase
             'status' => ServerStatus::Booting,
         ]);
 
-        $listener = app(DetectServerEvents::class);
-        $listener->handle(new ServerLogOutput($server->id, 'Addon Download started'));
+        $this->listener->handle(new ServerLogOutput($server->id, 'Addon Download started'));
 
         $this->assertEquals(ServerStatus::DownloadingMods, $server->fresh()->status);
 
@@ -112,8 +116,7 @@ class DetectServerEventsTest extends TestCase
             'status' => ServerStatus::DownloadingMods,
         ]);
 
-        $listener = app(DetectServerEvents::class);
-        $listener->handle(new ServerLogOutput($server->id, 'Required addons are ready to use.'));
+        $this->listener->handle(new ServerLogOutput($server->id, 'Required addons are ready to use.'));
 
         $this->assertEquals(ServerStatus::Booting, $server->fresh()->status);
 
@@ -134,8 +137,7 @@ class DetectServerEventsTest extends TestCase
             'status' => ServerStatus::DownloadingMods,
         ]);
 
-        $listener = app(DetectServerEvents::class);
-        $listener->handle(new ServerLogOutput($server->id, 'Server registered with addr 1.2.3.4:2001'));
+        $this->listener->handle(new ServerLogOutput($server->id, 'Server registered with addr 1.2.3.4:2001'));
 
         $this->assertEquals(ServerStatus::Running, $server->fresh()->status);
 
@@ -154,8 +156,7 @@ class DetectServerEventsTest extends TestCase
             'status' => ServerStatus::Booting,
         ]);
 
-        $listener = app(DetectServerEvents::class);
-        $listener->handle(new ServerLogOutput($server->id, 'Addon Download started'));
+        $this->listener->handle(new ServerLogOutput($server->id, 'Addon Download started'));
 
         $this->assertEquals(ServerStatus::Booting, $server->fresh()->status);
 
@@ -163,19 +164,20 @@ class DetectServerEventsTest extends TestCase
     }
 
     // --- Crash Detection ---
+    // These tests mock GameManager, so the listener must be resolved AFTER
+    // the mock is registered (constructor injection captures the dependency).
 
     public function test_transitions_running_server_to_crashed_on_crash_detection_string(): void
     {
         Event::fake([ServerStatusChanged::class]);
         Bus::fake();
-        $this->mockGameManagerWithCrashString('Segmentation fault');
+        $listener = $this->makeCrashListener('Segmentation fault');
 
         $server = Server::factory()->create([
             'name' => 'Crash Test',
             'status' => ServerStatus::Running,
         ]);
 
-        $listener = app(DetectServerEvents::class);
         $listener->handle(new ServerLogOutput($server->id, 'Segmentation fault (core dumped)'));
 
         $this->assertEquals(ServerStatus::Crashed, $server->fresh()->status);
@@ -191,14 +193,13 @@ class DetectServerEventsTest extends TestCase
     {
         Event::fake([ServerStatusChanged::class]);
         Bus::fake();
-        $this->mockGameManagerWithCrashString('Segmentation fault');
+        $listener = $this->makeCrashListener('Segmentation fault');
 
         $server = Server::factory()->create([
             'name' => 'My Server',
             'status' => ServerStatus::Running,
         ]);
 
-        $listener = app(DetectServerEvents::class);
         $listener->handle(new ServerLogOutput($server->id, 'Segmentation fault (core dumped)'));
 
         Bus::assertDispatched(SendDiscordWebhookJob::class, function (SendDiscordWebhookJob $job) {
@@ -212,14 +213,13 @@ class DetectServerEventsTest extends TestCase
     {
         Event::fake([ServerStatusChanged::class]);
         Bus::fake();
-        $this->mockGameManagerWithCrashString('Segmentation fault');
+        $listener = $this->makeCrashListener('Segmentation fault');
 
         $server = Server::factory()->create([
             'status' => ServerStatus::Running,
             'auto_restart' => true,
         ]);
 
-        $listener = app(DetectServerEvents::class);
         $listener->handle(new ServerLogOutput($server->id, 'Segmentation fault (core dumped)'));
 
         $this->assertEquals(ServerStatus::Crashed, $server->fresh()->status);
@@ -234,14 +234,13 @@ class DetectServerEventsTest extends TestCase
     {
         Event::fake([ServerStatusChanged::class]);
         Bus::fake();
-        $this->mockGameManagerWithCrashString('Segmentation fault');
+        $listener = $this->makeCrashListener('Segmentation fault');
 
         $server = Server::factory()->create([
             'status' => ServerStatus::Running,
             'auto_restart' => false,
         ]);
 
-        $listener = app(DetectServerEvents::class);
         $listener->handle(new ServerLogOutput($server->id, 'Segmentation fault (core dumped)'));
 
         $this->assertEquals(ServerStatus::Crashed, $server->fresh()->status);
@@ -254,13 +253,12 @@ class DetectServerEventsTest extends TestCase
     {
         Event::fake([ServerStatusChanged::class]);
         Bus::fake();
-        $this->mockGameManagerWithCrashString('Segmentation fault');
+        $listener = $this->makeCrashListener('Segmentation fault');
 
         $server = Server::factory()->create([
             'status' => ServerStatus::Booting,
         ]);
 
-        $listener = app(DetectServerEvents::class);
         $listener->handle(new ServerLogOutput($server->id, 'Segmentation fault (core dumped)'));
 
         $this->assertEquals(ServerStatus::Crashed, $server->fresh()->status);
@@ -269,13 +267,12 @@ class DetectServerEventsTest extends TestCase
     public function test_crash_detection_does_not_affect_stopped_server(): void
     {
         Event::fake([ServerStatusChanged::class]);
-        $this->mockGameManagerWithCrashString('Segmentation fault');
+        $listener = $this->makeCrashListener('Segmentation fault');
 
         $server = Server::factory()->create([
             'status' => ServerStatus::Stopped,
         ]);
 
-        $listener = app(DetectServerEvents::class);
         $listener->handle(new ServerLogOutput($server->id, 'Segmentation fault (core dumped)'));
 
         $this->assertEquals(ServerStatus::Stopped, $server->fresh()->status);
@@ -287,13 +284,12 @@ class DetectServerEventsTest extends TestCase
     {
         Event::fake([ServerStatusChanged::class]);
         Bus::fake();
-        $this->mockGameManagerWithCrashString('Segmentation fault');
+        $listener = $this->makeCrashListener('Segmentation fault');
 
         $server = Server::factory()->create([
             'status' => ServerStatus::Crashed,
         ]);
 
-        $listener = app(DetectServerEvents::class);
         $listener->handle(new ServerLogOutput($server->id, 'Segmentation fault (core dumped)'));
 
         $this->assertEquals(ServerStatus::Crashed, $server->fresh()->status);
@@ -310,8 +306,7 @@ class DetectServerEventsTest extends TestCase
             'status' => ServerStatus::Running,
         ]);
 
-        $listener = app(DetectServerEvents::class);
-        $listener->handle(new ServerLogOutput($server->id, 'Segmentation fault (core dumped)'));
+        $this->listener->handle(new ServerLogOutput($server->id, 'Segmentation fault (core dumped)'));
 
         $this->assertEquals(ServerStatus::Running, $server->fresh()->status);
 
@@ -319,11 +314,12 @@ class DetectServerEventsTest extends TestCase
     }
 
     /**
-     * Mock the GameManager to return a handler with a specific crash detection string.
+     * Mock the GameManager with a crash detection string and return a fresh listener.
+     * Must resolve the listener AFTER registering the mock (constructor injection).
      */
-    private function mockGameManagerWithCrashString(string $crashString): void
+    private function makeCrashListener(string $crashString): DetectServerEvents
     {
-        $handler = Mockery::mock(GameHandler::class);
+        $handler = Mockery::mock(GameHandler::class.', '.DetectsServerState::class);
         $handler->shouldReceive('getModDownloadStartedString')->andReturnNull();
         $handler->shouldReceive('getModDownloadFinishedString')->andReturnNull();
         $handler->shouldReceive('getBootDetectionStrings')->andReturn([]);
@@ -332,5 +328,7 @@ class DetectServerEventsTest extends TestCase
         $manager = Mockery::mock(GameManager::class);
         $manager->shouldReceive('for')->andReturn($handler);
         $this->app->instance(GameManager::class, $manager);
+
+        return app(DetectServerEvents::class);
     }
 }

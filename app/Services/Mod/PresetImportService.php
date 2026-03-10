@@ -1,14 +1,13 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Mod;
 
 use App\Enums\GameType;
 use App\Enums\InstallationStatus;
 use App\Jobs\BatchDownloadModsJob;
-use App\Jobs\DownloadModJob;
 use App\Models\ModPreset;
-use App\Models\SteamAccount;
 use App\Models\WorkshopMod;
+use App\Services\Steam\SteamWorkshopService;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
 
@@ -69,7 +68,7 @@ class PresetImportService
         $workshopIds = $this->parseHtmlPreset($htmlContent);
         $name = $presetName ?? $this->parsePresetName($htmlContent) ?? 'Imported Preset '.now()->format('Y-m-d H:i');
 
-        $metadataMap = $this->fetchBulkMetadata($workshopIds->all());
+        $metadataMap = $this->steamWorkshopService->getMultipleModDetails($workshopIds->all());
 
         $preset = ModPreset::query()->create([
             'game_type' => GameType::Arma3,
@@ -107,42 +106,8 @@ class PresetImportService
 
         $preset->mods()->sync($modIds);
 
-        $this->dispatchBatchedDownloads($modsToDownload);
+        BatchDownloadModsJob::dispatchInBatches($modsToDownload);
 
         return $preset;
-    }
-
-    /**
-     * Fetch metadata for all workshop IDs in bulk from the Steam API.
-     *
-     * @param  list<int>  $workshopIds
-     * @return array<int, array{name: string|null, file_size: int|null}>
-     */
-    protected function fetchBulkMetadata(array $workshopIds): array
-    {
-        return $this->steamWorkshopService->getMultipleModDetails($workshopIds);
-    }
-
-    /**
-     * Dispatch download jobs for the given mods, batching them according to the configured batch size.
-     * Single-mod batches use DownloadModJob; multi-mod batches use BatchDownloadModsJob.
-     *
-     * @param  Collection<int, WorkshopMod>  $mods
-     */
-    public function dispatchBatchedDownloads(Collection $mods): void
-    {
-        if ($mods->isEmpty()) {
-            return;
-        }
-
-        $batchSize = SteamAccount::current()?->mod_download_batch_size ?? 5;
-
-        foreach ($mods->chunk($batchSize) as $batch) {
-            if ($batch->count() === 1) {
-                DownloadModJob::dispatch($batch->first());
-            } else {
-                BatchDownloadModsJob::dispatch($batch);
-            }
-        }
     }
 }

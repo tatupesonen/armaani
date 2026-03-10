@@ -3,9 +3,8 @@
 namespace App\Jobs;
 
 use App\Enums\ServerStatus;
-use App\Events\ServerStatusChanged;
 use App\Models\Server;
-use App\Services\ServerProcessService;
+use App\Services\Server\ServerProcessService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
@@ -22,21 +21,16 @@ class StopServerJob implements ShouldQueue
 
     public function handle(ServerProcessService $service): void
     {
-        $context = "[Server:{$this->server->id} '{$this->server->name}']";
-
-        Log::info("{$context} Stopping server via queued job");
+        Log::info("{$this->server->logContext()} Stopping server via queued job");
         $service->stopAllHeadlessClients($this->server);
         $service->stop($this->server);
 
-        $this->server->update(['status' => ServerStatus::Stopped]);
-        ServerStatusChanged::dispatch($this->server->id, ServerStatus::Stopped->value, $this->server->name);
-        Log::info("{$context} Server stopped successfully");
+        $this->server->transitionTo(ServerStatus::Stopped);
     }
 
     public function failed(?\Throwable $exception): void
     {
-        $this->server->update(['status' => ServerStatus::Stopped]);
-        ServerStatusChanged::dispatch($this->server->id, ServerStatus::Stopped->value, $this->server->name);
-        Log::error("[Server:{$this->server->id}] StopServerJob failed: {$exception?->getMessage()}");
+        $this->server->transitionTo(ServerStatus::Stopped);
+        Log::error("{$this->server->logContext()} StopServerJob failed: {$exception?->getMessage()}");
     }
 }

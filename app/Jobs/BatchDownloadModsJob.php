@@ -4,10 +4,12 @@ namespace App\Jobs;
 
 use App\Enums\InstallationStatus;
 use App\Events\ModDownloadOutput;
+use App\GameManager;
 use App\Jobs\Concerns\InteractsWithFileSystem;
+use App\Models\SteamAccount;
 use App\Models\WorkshopMod;
-use App\Services\SteamCmdService;
-use App\Services\SteamWorkshopService;
+use App\Services\Steam\SteamCmdService;
+use App\Services\Steam\SteamWorkshopService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Collection;
@@ -26,6 +28,29 @@ class BatchDownloadModsJob implements ShouldQueue
     public function __construct(public Collection $mods) {}
 
     /**
+     * Dispatch download jobs for a collection of mods, respecting the configured batch size.
+     * Single-mod batches use DownloadModJob; multi-mod batches use BatchDownloadModsJob.
+     *
+     * @param  Collection<int, WorkshopMod>  $mods
+     */
+    public static function dispatchInBatches(Collection $mods): void
+    {
+        if ($mods->isEmpty()) {
+            return;
+        }
+
+        $batchSize = SteamAccount::current()?->mod_download_batch_size ?? 5;
+
+        foreach ($mods->chunk($batchSize) as $batch) {
+            if ($batch->count() === 1) {
+                DownloadModJob::dispatch($batch->first());
+            } else {
+                static::dispatch($batch);
+            }
+        }
+    }
+
+    /**
      * Dynamic timeout: 1 hour per mod in the batch.
      */
     public function retryUntil(): \DateTimeInterface
@@ -38,7 +63,7 @@ class BatchDownloadModsJob implements ShouldQueue
         $modCount = $this->mods->count();
         Log::info("[BatchDownload] Starting batch download of {$modCount} mods");
 
-        $this->fetchAllMetadata($workshop);
+        $workshop->syncMetadataForMany($this->mods);
 
         foreach ($this->mods as $mod) {
             $mod->update([
@@ -52,8 +77,8 @@ class BatchDownloadModsJob implements ShouldQueue
         $installDir = config('arma.mods_base_path');
         $workshopIds = $this->mods->pluck('workshop_id')->all();
 
-        $gameType = $this->mods->first()->game_type;
-        $process = $steamCmd->startBatchDownloadMods($installDir, $workshopIds, $gameType);
+        $handler = app(GameManager::class)->driver($this->mods->first()->game_type->value);
+        $process = $steamCmd->startBatchDownloadMods($installDir, $workshopIds, $handler);
 
         ModDownloadOutput::dispatch(
             $this->mods->first()->id,
@@ -104,7 +129,7 @@ class BatchDownloadModsJob implements ShouldQueue
         }
 
         if ($result->successful()) {
-            $this->processSuccessfulBatch();
+            $this->processSuccessfulBatch($handler);
         } else {
             $this->processFailedBatch($result->errorOutput());
         }
@@ -121,44 +146,14 @@ class BatchDownloadModsJob implements ShouldQueue
     }
 
     /**
-     * Fetch name, expected file size, and last-updated timestamp from Steam API.
-     * Always fetches all mods to keep steam_updated_at current.
-     */
-    protected function fetchAllMetadata(SteamWorkshopService $workshop): void
-    {
-        $workshopIds = $this->mods->pluck('workshop_id')->all();
-        $detailsMap = $workshop->getMultipleModDetails($workshopIds);
-
-        foreach ($this->mods as $mod) {
-            $details = $detailsMap[$mod->workshop_id] ?? null;
-
-            if (! $details) {
-                continue;
-            }
-
-            $updates = array_filter([
-                'name' => $mod->name ?? $details['name'],
-                'file_size' => $mod->file_size ?? $details['file_size'],
-                'steam_updated_at' => isset($details['time_updated'])
-                    ? \Carbon\Carbon::createFromTimestamp($details['time_updated'])
-                    : null,
-            ]);
-
-            if (! empty($updates)) {
-                $mod->update($updates);
-            }
-        }
-    }
-
-    /**
      * Process all mods after a successful SteamCMD batch download.
      */
-    private function processSuccessfulBatch(): void
+    private function processSuccessfulBatch(\App\Contracts\GameHandler $handler): void
     {
         foreach ($this->mods as $mod) {
             $modPath = $mod->getInstallationPath();
 
-            if ($mod->game_type->requiresLowercaseConversion()) {
+            if ($handler->requiresLowercaseConversion()) {
                 $this->convertToLowercase($modPath);
             }
             $actualSize = $this->getDirectorySize($modPath);

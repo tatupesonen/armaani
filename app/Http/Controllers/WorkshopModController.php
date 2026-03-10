@@ -9,10 +9,10 @@ use App\Http\Requests\WorkshopMod\UpdateSelectedModsRequest;
 use App\Jobs\BatchDownloadModsJob;
 use App\Jobs\DownloadModJob;
 use App\Models\ReforgerMod;
-use App\Models\SteamAccount;
 use App\Models\WorkshopMod;
-use App\Services\SteamWorkshopService;
+use App\Services\Steam\SteamWorkshopService;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
@@ -44,6 +44,7 @@ class WorkshopModController extends Controller
             $mod->setAttribute('is_outdated', $mod->isOutdated());
         });
 
+        /** @var object{count: int|string, total_size: int|string} $installedStats */
         $installedStats = WorkshopMod::query()
             ->where('installation_status', InstallationStatus::Installed)
             ->selectRaw('COUNT(*) as count, COALESCE(SUM(file_size), 0) as total_size')
@@ -81,7 +82,7 @@ class WorkshopModController extends Controller
             DownloadModJob::dispatch($mod);
         }
 
-        Log::info('User '.auth()->id().' ('.auth()->user()->name.") added mod: {$mod->workshop_id}");
+        Log::info(auth_context()." added mod: {$mod->workshop_id}");
 
         return back()->with('success', "Mod '{$mod->workshop_id}' queued for download.");
     }
@@ -95,7 +96,7 @@ class WorkshopModController extends Controller
 
         DownloadModJob::dispatch($workshopMod);
 
-        Log::info('User '.auth()->id().' ('.auth()->user()->name.") retried mod: {$workshopMod->workshop_id}");
+        Log::info(auth_context()." retried mod: {$workshopMod->workshop_id}");
 
         return back()->with('success', 'Mod download retried.');
     }
@@ -110,22 +111,7 @@ class WorkshopModController extends Controller
             return back()->with('info', 'No failed mods to retry.');
         }
 
-        foreach ($failedMods as $mod) {
-            $mod->update([
-                'installation_status' => InstallationStatus::Queued,
-                'progress_pct' => 0,
-            ]);
-        }
-
-        $batchSize = SteamAccount::current()?->mod_download_batch_size ?? 5;
-
-        foreach ($failedMods->chunk($batchSize) as $batch) {
-            if ($batch->count() === 1) {
-                DownloadModJob::dispatch($batch->first());
-            } else {
-                BatchDownloadModsJob::dispatch($batch);
-            }
-        }
+        $this->queueModsForDownload($failedMods);
 
         return back()->with('success', "{$failedMods->count()} failed mods queued for retry.");
     }
@@ -136,7 +122,7 @@ class WorkshopModController extends Controller
 
         $path = $workshopMod->getInstallationPath();
 
-        Log::info('User '.auth()->id().' ('.auth()->user()->name.") deleted mod: {$workshopMod->name} ({$workshopMod->workshop_id})");
+        Log::info(auth_context()." deleted mod: {$workshopMod->name} ({$workshopMod->workshop_id})");
 
         $workshopMod->delete();
 
@@ -160,22 +146,7 @@ class WorkshopModController extends Controller
             return back()->with('info', 'No mods available for update.');
         }
 
-        foreach ($mods as $mod) {
-            $mod->update([
-                'installation_status' => InstallationStatus::Queued,
-                'progress_pct' => 0,
-            ]);
-        }
-
-        $batchSize = SteamAccount::current()?->mod_download_batch_size ?? 5;
-
-        foreach ($mods->chunk($batchSize) as $batch) {
-            if ($batch->count() === 1) {
-                DownloadModJob::dispatch($batch->first());
-            } else {
-                BatchDownloadModsJob::dispatch($batch);
-            }
-        }
+        $this->queueModsForDownload($mods);
 
         return back()->with('success', "{$mods->count()} mods queued for update.");
     }
@@ -219,6 +190,18 @@ class WorkshopModController extends Controller
             return back()->with('info', 'No outdated mods found.');
         }
 
+        $this->queueModsForDownload($mods);
+
+        return back()->with('success', "{$mods->count()} outdated mods queued for update.");
+    }
+
+    /**
+     * Mark mods as queued and dispatch batch download jobs.
+     *
+     * @param  Collection<int, WorkshopMod>  $mods
+     */
+    private function queueModsForDownload(Collection $mods): void
+    {
         foreach ($mods as $mod) {
             $mod->update([
                 'installation_status' => InstallationStatus::Queued,
@@ -226,16 +209,6 @@ class WorkshopModController extends Controller
             ]);
         }
 
-        $batchSize = SteamAccount::current()?->mod_download_batch_size ?? 5;
-
-        foreach ($mods->chunk($batchSize) as $batch) {
-            if ($batch->count() === 1) {
-                DownloadModJob::dispatch($batch->first());
-            } else {
-                BatchDownloadModsJob::dispatch($batch);
-            }
-        }
-
-        return back()->with('success', "{$mods->count()} outdated mods queued for update.");
+        BatchDownloadModsJob::dispatchInBatches($mods);
     }
 }

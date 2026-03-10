@@ -7,8 +7,8 @@ use App\Events\ModDownloadOutput;
 use App\Jobs\DownloadModJob;
 use App\Models\SteamAccount;
 use App\Models\WorkshopMod;
-use App\Services\SteamCmdService;
-use App\Services\SteamWorkshopService;
+use App\Services\Steam\SteamCmdService;
+use App\Services\Steam\SteamWorkshopService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Process\InvokedProcess;
 use Illuminate\Support\Facades\Event;
@@ -44,12 +44,12 @@ class DownloadModJobTest extends TestCase
     }
 
     /**
-     * Create a SteamWorkshopService mock that allows getModDetails calls.
+     * Create a SteamWorkshopService mock that allows syncMetadata calls.
      */
-    private function mockWorkshopService(?array $returnValue = null): \Mockery\MockInterface
+    private function mockWorkshopService(): \Mockery\MockInterface
     {
         $mock = Mockery::mock(SteamWorkshopService::class);
-        $mock->shouldReceive('getModDetails')->andReturn($returnValue);
+        $mock->shouldReceive('syncMetadata')->andReturnNull();
 
         return $mock;
     }
@@ -121,11 +121,9 @@ class DownloadModJobTest extends TestCase
         $steamCmd->shouldReceive('startDownloadMod')->once()->andReturn($this->makeInvokedProcess(true));
 
         $workshop = Mockery::mock(SteamWorkshopService::class);
-        $workshop->shouldReceive('getModDetails')->once()->andReturn([
-            'name' => 'Fetched Mod Name',
-            'file_size' => 75000000,
-            'time_updated' => 1700000000,
-        ]);
+        $workshop->shouldReceive('syncMetadata')->once()->andReturnUsing(function ($mod): void {
+            $mod->update(['name' => 'Fetched Mod Name', 'file_size' => 75000000]);
+        });
 
         $this->app->instance(SteamCmdService::class, $steamCmd);
         $this->app->instance(SteamWorkshopService::class, $workshop);
@@ -153,11 +151,9 @@ class DownloadModJobTest extends TestCase
         $steamCmd->shouldReceive('startDownloadMod')->once()->andReturn($this->makeInvokedProcess(true));
 
         $workshop = Mockery::mock(SteamWorkshopService::class);
-        $workshop->shouldReceive('getModDetails')->once()->andReturn([
-            'name' => 'Test Mod',
-            'file_size' => 50000000,
-            'time_updated' => 1700000000,
-        ]);
+        $workshop->shouldReceive('syncMetadata')->once()->andReturnUsing(function ($mod): void {
+            $mod->update(['name' => 'Test Mod', 'file_size' => 50000000, 'steam_updated_at' => \Carbon\Carbon::createFromTimestamp(1700000000)]);
+        });
 
         $this->app->instance(SteamCmdService::class, $steamCmd);
         $this->app->instance(SteamWorkshopService::class, $workshop);
@@ -184,11 +180,9 @@ class DownloadModJobTest extends TestCase
         $steamCmd->shouldReceive('startDownloadMod')->once()->andReturn($this->makeInvokedProcess(true));
 
         $workshop = Mockery::mock(SteamWorkshopService::class);
-        $workshop->shouldReceive('getModDetails')->once()->andReturn([
-            'name' => 'Already Named',
-            'file_size' => 30000000,
-            'time_updated' => 1700000000,
-        ]);
+        $workshop->shouldReceive('syncMetadata')->once()->andReturnUsing(function ($mod): void {
+            $mod->update(['steam_updated_at' => \Carbon\Carbon::createFromTimestamp(1700000000)]);
+        });
 
         $this->app->instance(SteamCmdService::class, $steamCmd);
         $this->app->instance(SteamWorkshopService::class, $workshop);

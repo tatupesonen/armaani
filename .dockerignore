@@ -18,6 +18,7 @@ resources/js/routes
 # Storage (volume-mounted at runtime — framework dirs needed during build)
 storage/arma
 storage/caddy
+storage/framework/twig
 storage/logs
 
 # Local environment

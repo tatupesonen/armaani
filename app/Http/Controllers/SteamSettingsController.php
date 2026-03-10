@@ -8,9 +8,9 @@ use App\Http\Requests\SteamSettings\SaveDiscordWebhookRequest;
 use App\Http\Requests\SteamSettings\SaveSettingsRequest;
 use App\Models\AppSetting;
 use App\Models\SteamAccount;
-use App\Services\DiscordWebhookService;
-use App\Services\SteamCmdService;
-use App\Services\SteamWorkshopService;
+use App\Services\Discord\DiscordWebhookService;
+use App\Services\Steam\SteamCmdService;
+use App\Services\Steam\SteamWorkshopService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
@@ -57,7 +57,7 @@ class SteamSettingsController extends Controller
             SteamAccount::query()->create($validated);
         }
 
-        Log::info('User '.auth()->id().' ('.auth()->user()->name.') updated Steam credentials');
+        Log::info(auth_context().' updated Steam credentials');
 
         return back()->with('success', 'Steam credentials saved.');
     }
@@ -75,7 +75,7 @@ class SteamSettingsController extends Controller
             $account->update(['steam_api_key' => $validated['steam_api_key']]);
         }
 
-        Log::info('User '.auth()->id().' ('.auth()->user()->name.') updated Steam API key');
+        Log::info(auth_context().' updated Steam API key');
 
         return back()->with('success', 'Steam API key saved.');
     }

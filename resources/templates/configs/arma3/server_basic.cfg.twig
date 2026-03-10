@@ -1,0 +1,23 @@
+// BASIC NETWORK CONFIGURATION
+MaxMsgSend = {{ max_msg_send }};
+MaxSizeGuaranteed = {{ max_size_guaranteed }};
+MaxSizeNonguaranteed = {{ max_size_nonguaranteed }};
+MinBandwidth = {{ min_bandwidth }};
+MaxBandwidth = {{ max_bandwidth }};
+MinErrorToSend = {{ min_error_to_send|format_decimal }};
+MinErrorToSendNear = {{ min_error_to_send_near|format_decimal }};
+MaxCustomFileSize = {{ max_custom_file_size }};
+
+class sockets {
+    maxPacketSize = {{ max_packet_size }};
+};
+{% if view_distance > 0 %}
+
+// SERVER VIEW DISTANCE
+viewDistance = {{ view_distance }};
+{% endif %}
+{% if terrain_grid > 0 %}
+
+// TERRAIN GRID
+terrainGrid = {{ terrain_grid|format_decimal }};
+{% endif %}

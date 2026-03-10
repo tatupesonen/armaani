@@ -2,7 +2,7 @@
 
 namespace App\Jobs;
 
-use App\Services\DiscordWebhookService;
+use App\Services\Discord\DiscordWebhookService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 

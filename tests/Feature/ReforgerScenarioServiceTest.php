@@ -6,7 +6,7 @@ use App\Models\GameInstall;
 use App\Models\ReforgerScenario;
 use App\Models\Server;
 use App\Models\User;
-use App\Services\ReforgerScenarioService;
+use App\Services\Mod\ReforgerScenarioService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 

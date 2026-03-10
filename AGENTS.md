@@ -16,6 +16,7 @@ This application is a Laravel application and its main Laravel ecosystems packag
 - laravel/prompts (PROMPTS) - v0
 - laravel/reverb (REVERB) - v1
 - laravel/wayfinder (WAYFINDER) - v0
+- larastan/larastan (LARASTAN) - v3
 - laravel/boost (BOOST) - v2
 - laravel/mcp (MCP) - v0
 - laravel/pail (PAIL) - v1
@@ -23,6 +24,7 @@ This application is a Laravel application and its main Laravel ecosystems packag
 - laravel/sail (SAIL) - v1
 - phpunit/phpunit (PHPUNIT) - v11
 - @inertiajs/react (INERTIA_REACT) - v2
+- laravel-echo (ECHO) - v2
 - react (REACT) - v19
 - tailwindcss (TAILWINDCSS) - v4
 - @laravel/vite-plugin-wayfinder (WAYFINDER_VITE) - v0
@@ -302,6 +304,11 @@ Wayfinder generates TypeScript functions for Laravel routes. Import from `@/acti
 ## Project Overview
 
 Armaani is a web-based game server manager built with Laravel 12, Inertia v2, React 19, and Tailwind CSS v4. It supports Arma 3, Arma Reforger, and DayZ (scaffolded). It allows users to install, configure, and manage multiple server instances (including starting/stopping/restarting processes), download Steam Workshop mods via SteamCMD, organize mods into presets, import Arma 3 Launcher HTML preset files, and assign presets to server instances. Game-specific logic is handled by the GameHandler pattern (Manager pattern). The application supports dynamic headless client management (Arma 3), server difficulty settings, and profile backup/restore. It ships as a single Docker container with SteamCMD bundled inside.
+
+## Static Analysis
+
+- After larger refactors (moving files, renaming classes, changing namespaces, modifying interfaces), run Larastan to catch type errors and missing references: `vendor/bin/phpstan analyse --memory-limit=512M`
+- Fix any errors Larastan reports before considering the refactor complete.
 
 ## Architecture
 

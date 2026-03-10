@@ -2,10 +2,16 @@
 
 namespace Tests\Feature\GameHandlers;
 
+use App\Contracts\DetectsServerState;
+use App\Contracts\ManagesModAssets;
+use App\Contracts\SupportsBackups;
+use App\Contracts\SupportsHeadlessClients;
+use App\Contracts\SupportsMissions;
 use App\Enums\GameType;
 use App\GameHandlers\ReforgerHandler;
 use App\Models\ModPreset;
 use App\Models\ReforgerMod;
+use App\Models\Server;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Tests\Concerns\CreatesGameScenarios;
@@ -34,7 +40,7 @@ class ReforgerHandlerTest extends TestCase
             'arma.games_base_path' => $this->testGamesBasePath,
         ]);
 
-        $this->handler = new ReforgerHandler;
+        $this->handler = app(ReforgerHandler::class);
     }
 
     protected function tearDown(): void
@@ -73,6 +79,11 @@ class ReforgerHandlerTest extends TestCase
         $this->assertEquals($expected, $this->handler->getServerLogPath($server));
     }
 
+    public function test_implements_detects_server_state(): void
+    {
+        $this->assertInstanceOf(DetectsServerState::class, $this->handler);
+    }
+
     public function test_boot_detection_string(): void
     {
         $this->assertSame(['Server registered with addr'], $this->handler->getBootDetectionStrings());
@@ -88,30 +99,24 @@ class ReforgerHandlerTest extends TestCase
         $this->assertSame('Required addons are ready to use.', $this->handler->getModDownloadFinishedString());
     }
 
-    public function test_does_not_support_headless_clients(): void
+    public function test_does_not_implement_supports_headless_clients(): void
     {
-        $this->assertFalse($this->handler->supportsHeadlessClients());
+        $this->assertNotInstanceOf(SupportsHeadlessClients::class, $this->handler);
     }
 
-    public function test_build_headless_client_command_returns_null(): void
+    public function test_does_not_implement_supports_backups(): void
     {
-        $server = $this->createReforgerServer();
-
-        $this->assertNull($this->handler->buildHeadlessClientCommand($server, 0));
+        $this->assertNotInstanceOf(SupportsBackups::class, $this->handler);
     }
 
-    public function test_get_backup_file_path_returns_null(): void
+    public function test_does_not_implement_manages_mod_assets(): void
     {
-        $server = $this->createReforgerServer();
-
-        $this->assertNull($this->handler->getBackupFilePath($server));
+        $this->assertNotInstanceOf(ManagesModAssets::class, $this->handler);
     }
 
-    public function test_get_backup_download_filename(): void
+    public function test_does_not_implement_supports_missions(): void
     {
-        $server = $this->createReforgerServer();
-
-        $this->assertEquals('reforger_'.$server->id.'_backup', $this->handler->getBackupDownloadFilename($server));
+        $this->assertNotInstanceOf(SupportsMissions::class, $this->handler);
     }
 
     public function test_build_launch_command_includes_config_and_flags(): void
@@ -161,15 +166,7 @@ class ReforgerHandlerTest extends TestCase
             'max_players' => 64,
         ]);
 
-        $profilesPath = $server->getProfilesPath();
-        @mkdir($profilesPath, 0755, true);
-
-        $this->handler->generateConfigFiles($server);
-
-        $configPath = $profilesPath.'/REFORGER_'.$server->id.'.json';
-        $this->assertFileExists($configPath);
-
-        $config = json_decode(file_get_contents($configPath), true);
+        $config = $this->generateAndReadConfig($server);
         $this->assertEquals('', $config['bindAddress']);
         $this->assertEquals($server->port, $config['bindPort']);
         $this->assertEquals('', $config['publicAddress']);
@@ -199,13 +196,7 @@ class ReforgerHandlerTest extends TestCase
         $server->reforgerSettings()->update(['cross_platform' => true]);
         $server->refresh();
 
-        $profilesPath = $server->getProfilesPath();
-        @mkdir($profilesPath, 0755, true);
-
-        $this->handler->generateConfigFiles($server);
-
-        $configPath = $profilesPath.'/REFORGER_'.$server->id.'.json';
-        $config = json_decode(file_get_contents($configPath), true);
+        $config = $this->generateAndReadConfig($server);
         $this->assertTrue($config['game']['crossPlatform']);
     }
 
@@ -213,13 +204,7 @@ class ReforgerHandlerTest extends TestCase
     {
         $server = $this->createReforgerServer();
 
-        $profilesPath = $server->getProfilesPath();
-        @mkdir($profilesPath, 0755, true);
-
-        $this->handler->generateConfigFiles($server);
-
-        $configPath = $profilesPath.'/REFORGER_'.$server->id.'.json';
-        $config = json_decode(file_get_contents($configPath), true);
+        $config = $this->generateAndReadConfig($server);
         $this->assertFalse($config['game']['crossPlatform']);
     }
 
@@ -229,13 +214,7 @@ class ReforgerHandlerTest extends TestCase
         $server->reforgerSettings()->update(['third_person_view_enabled' => false]);
         $server->refresh();
 
-        $profilesPath = $server->getProfilesPath();
-        @mkdir($profilesPath, 0755, true);
-
-        $this->handler->generateConfigFiles($server);
-
-        $configPath = $profilesPath.'/REFORGER_'.$server->id.'.json';
-        $config = json_decode(file_get_contents($configPath), true);
+        $config = $this->generateAndReadConfig($server);
         $this->assertTrue($config['game']['gameProperties']['disableThirdPerson']);
     }
 
@@ -252,13 +231,7 @@ class ReforgerHandlerTest extends TestCase
         $server->update(['active_preset_id' => $preset->id]);
         $server->load('activePreset.reforgerMods');
 
-        $profilesPath = $server->getProfilesPath();
-        @mkdir($profilesPath, 0755, true);
-
-        $this->handler->generateConfigFiles($server);
-
-        $configPath = $profilesPath.'/REFORGER_'.$server->id.'.json';
-        $config = json_decode(file_get_contents($configPath), true);
+        $config = $this->generateAndReadConfig($server);
 
         $this->assertCount(2, $config['game']['mods']);
         $this->assertEquals('AAAA1111BBBB2222', $config['game']['mods'][0]['modId']);
@@ -273,13 +246,7 @@ class ReforgerHandlerTest extends TestCase
         $server->update(['active_preset_id' => null]);
         $server->refresh();
 
-        $profilesPath = $server->getProfilesPath();
-        @mkdir($profilesPath, 0755, true);
-
-        $this->handler->generateConfigFiles($server);
-
-        $configPath = $profilesPath.'/REFORGER_'.$server->id.'.json';
-        $config = json_decode(file_get_contents($configPath), true);
+        $config = $this->generateAndReadConfig($server);
 
         $this->assertEmpty($config['game']['mods']);
     }
@@ -292,34 +259,33 @@ class ReforgerHandlerTest extends TestCase
         $this->assertContains('string', $rules['scenario_id']);
     }
 
-    public function test_symlink_mods_is_noop(): void
+    /**
+     * Generate config files for a server and return the parsed JSON config.
+     *
+     * @return array<string, mixed>
+     */
+    private function generateAndReadConfig(Server $server): array
     {
-        $server = $this->createReforgerServer();
+        $profilesPath = $server->getProfilesPath();
+        @mkdir($profilesPath, 0755, true);
 
-        // Should not throw or create any symlinks
-        $this->handler->symlinkMods($server);
+        $this->handler->generateConfigFiles($server);
 
-        $gameInstallPath = $server->gameInstall->getInstallationPath();
-        $this->assertDirectoryDoesNotExist($gameInstallPath.'/@');
+        $configPath = $profilesPath.'/REFORGER_'.$server->id.'.json';
+        $this->assertFileExists($configPath);
+
+        return json_decode(file_get_contents($configPath), true);
     }
 
-    public function test_symlink_missions_is_noop(): void
+    public function test_create_related_settings_creates_reforger_settings(): void
     {
         $server = $this->createReforgerServer();
 
-        $this->handler->symlinkMissions($server);
+        // Delete existing settings created by factory
+        $server->reforgerSettings()->delete();
 
-        $mpmissionsPath = $server->gameInstall->getInstallationPath().'/mpmissions';
-        $this->assertDirectoryDoesNotExist($mpmissionsPath);
-    }
+        $this->handler->createRelatedSettings($server);
 
-    public function test_copy_bikeys_is_noop(): void
-    {
-        $server = $this->createReforgerServer();
-
-        $this->handler->copyBiKeys($server);
-
-        $keysPath = $server->gameInstall->getInstallationPath().'/keys';
-        $this->assertDirectoryDoesNotExist($keysPath);
+        $this->assertNotNull($server->fresh()->reforgerSettings);
     }
 }

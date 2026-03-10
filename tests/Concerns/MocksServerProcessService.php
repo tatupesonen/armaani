@@ -3,7 +3,7 @@
 namespace Tests\Concerns;
 
 use App\Enums\ServerStatus;
-use App\Services\ServerProcessService;
+use App\Services\Server\ServerProcessService;
 use Mockery;
 
 trait MocksServerProcessService

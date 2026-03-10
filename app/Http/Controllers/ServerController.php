@@ -2,23 +2,22 @@
 
 namespace App\Http\Controllers;
 
+use App\Contracts\SupportsBackups;
+use App\Contracts\SupportsHeadlessClients;
+use App\Contracts\SupportsMissions;
 use App\Enums\GameType;
+use App\Enums\InstallationStatus;
 use App\Enums\ServerStatus;
-use App\Events\ServerStatusChanged;
 use App\GameManager;
 use App\Http\Requests\Server\StoreServerRequest;
 use App\Http\Requests\Server\UpdateServerRequest;
 use App\Jobs\StartServerJob;
 use App\Jobs\StopServerJob;
-use App\Models\DayZSettings;
-use App\Models\DifficultySettings;
 use App\Models\GameInstall;
 use App\Models\ModPreset;
-use App\Models\NetworkSettings;
-use App\Models\ReforgerSettings;
 use App\Models\Server;
-use App\Services\ReforgerScenarioService;
-use App\Services\ServerProcessService;
+use App\Services\Mod\ReforgerScenarioService;
+use App\Services\Server\ServerProcessService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Bus;
@@ -34,14 +33,13 @@ class ServerController extends Controller
 
     public function index(): Response
     {
-
         $servers = Server::query()
             ->with(['activePreset', 'gameInstall', 'difficultySettings', 'networkSettings', 'reforgerSettings', 'dayzSettings', 'backups'])
             ->orderBy('name')
             ->get()
             ->each(function (Server $server): void {
                 $server->makeVisible(['password', 'admin_password']);
-                $server->setAttribute('supports_backups', $this->gameManager->for($server)->getBackupFilePath($server) !== null);
+                $server->setAttribute('supports_backups', $this->gameManager->for($server) instanceof SupportsBackups);
                 $server->setAttribute('profiles_path', $server->getProfilesPath());
             });
 
@@ -49,18 +47,22 @@ class ServerController extends Controller
             'servers' => $servers,
             'presets' => ModPreset::query()->orderBy('name')->get(),
             'gameInstalls' => GameInstall::query()
-                ->whereIn('installation_status', ['installed', 'installing'])
+                ->whereIn('installation_status', [InstallationStatus::Installed, InstallationStatus::Installing])
                 ->orderBy('name')
                 ->get(),
-            'gameTypes' => collect(GameType::cases())->map(fn (GameType $gt) => [
-                'value' => $gt->value,
-                'label' => $gt->label(),
-                'defaultPort' => $gt->defaultPort(),
-                'defaultQueryPort' => $gt->defaultQueryPort(),
-                'supportsHeadlessClients' => $gt->supportsHeadlessClients(),
-                'supportsWorkshopMods' => $gt->supportsWorkshopMods(),
-                'supportsMissionUpload' => $gt->supportsMissionUpload(),
-            ]),
+            'gameTypes' => collect(GameType::cases())->map(function (GameType $gt) {
+                $handler = $this->gameManager->driver($gt->value);
+
+                return [
+                    'value' => $gt->value,
+                    'label' => $gt->label(),
+                    'defaultPort' => $handler->defaultPort(),
+                    'defaultQueryPort' => $handler->defaultQueryPort(),
+                    'supportsHeadlessClients' => $handler instanceof SupportsHeadlessClients,
+                    'supportsWorkshopMods' => $handler->supportsWorkshopMods(),
+                    'supportsMissionUpload' => $handler instanceof SupportsMissions,
+                ];
+            }),
         ]);
     }
 
@@ -71,70 +73,25 @@ class ServerController extends Controller
 
         $server = Server::query()->create($validated);
 
-        if ($gameType === GameType::Arma3) {
-            DifficultySettings::query()->create(['server_id' => $server->id]);
-            NetworkSettings::query()->create(['server_id' => $server->id]);
-        }
+        $handler = $this->gameManager->driver($gameType->value);
+        $handler->createRelatedSettings($server);
 
-        if ($gameType === GameType::ArmaReforger) {
-            ReforgerSettings::query()->create(['server_id' => $server->id]);
-        }
-
-        if ($gameType === GameType::DayZ) {
-            DayZSettings::query()->create(['server_id' => $server->id]);
-        }
-
-        Log::info('User '.auth()->id().' ('.auth()->user()->name.") created server: {$server->name}");
+        Log::info(auth_context()." created server: {$server->name}");
 
         return back()->with('success', "Server '{$server->name}' created.");
     }
 
     public function update(UpdateServerRequest $request, Server $server): RedirectResponse
     {
-        $gameType = $server->game_type;
         $validated = $request->validated();
 
         $serverFields = collect($validated)->only($server->getFillable())->toArray();
         $server->update($serverFields);
 
-        if ($gameType === GameType::Arma3) {
-            $difficultyFields = collect($validated)->only(
-                (new DifficultySettings)->getFillable()
-            )->except('server_id')->toArray();
+        $handler = $this->gameManager->for($server);
+        $handler->updateRelatedSettings($server, $validated);
 
-            $networkFields = collect($validated)->only(
-                (new NetworkSettings)->getFillable()
-            )->except('server_id')->toArray();
-
-            if (! empty($difficultyFields)) {
-                $server->difficultySettings()->updateOrCreate(
-                    ['server_id' => $server->id],
-                    $difficultyFields,
-                );
-            }
-
-            if (! empty($networkFields)) {
-                $server->networkSettings()->updateOrCreate(
-                    ['server_id' => $server->id],
-                    $networkFields,
-                );
-            }
-        }
-
-        if ($gameType === GameType::ArmaReforger) {
-            $reforgerFields = collect($validated)->only(
-                (new ReforgerSettings)->getFillable()
-            )->except('server_id')->toArray();
-
-            if (! empty($reforgerFields)) {
-                $server->reforgerSettings()->updateOrCreate(
-                    ['server_id' => $server->id],
-                    $reforgerFields,
-                );
-            }
-        }
-
-        Log::info('User '.auth()->id().' ('.auth()->user()->name.") updated server: {$server->name}");
+        Log::info(auth_context()." updated server: {$server->name}");
 
         return back()->with('success', "Server '{$server->name}' updated.");
     }
@@ -145,7 +102,7 @@ class ServerController extends Controller
             return back()->with('error', 'Cannot delete a running server. Stop it first.');
         }
 
-        Log::info('User '.auth()->id().' ('.auth()->user()->name.") deleted server: {$server->name}");
+        Log::info(auth_context()." deleted server: {$server->name}");
 
         $server->delete();
 
@@ -154,50 +111,38 @@ class ServerController extends Controller
 
     public function start(Server $server): RedirectResponse
     {
-        $server->update(['status' => ServerStatus::Starting]);
-        $this->broadcastStatusChange($server, ServerStatus::Starting);
+        $server->transitionTo(ServerStatus::Starting);
 
         StartServerJob::dispatch($server);
 
-        Log::info('User '.auth()->id().' ('.auth()->user()->name.") started server: {$server->name}");
+        Log::info(auth_context()." started server: {$server->name}");
 
         return back();
     }
 
     public function stop(Server $server): RedirectResponse
     {
-        $server->update(['status' => ServerStatus::Stopping]);
-        $this->broadcastStatusChange($server, ServerStatus::Stopping);
+        $server->transitionTo(ServerStatus::Stopping);
 
         StopServerJob::dispatch($server);
 
-        Log::info('User '.auth()->id().' ('.auth()->user()->name.") stopped server: {$server->name}");
+        Log::info(auth_context()." stopped server: {$server->name}");
 
         return back();
     }
 
     public function restart(Server $server): RedirectResponse
     {
-        $server->update(['status' => ServerStatus::Stopping]);
-        $this->broadcastStatusChange($server, ServerStatus::Stopping);
+        $server->transitionTo(ServerStatus::Stopping);
 
         Bus::chain([
             new StopServerJob($server),
             new StartServerJob($server),
         ])->dispatch();
 
-        Log::info('User '.auth()->id().' ('.auth()->user()->name.") restarted server: {$server->name}");
+        Log::info(auth_context()." restarted server: {$server->name}");
 
         return back();
-    }
-
-    private function broadcastStatusChange(Server $server, ServerStatus $status): void
-    {
-        try {
-            event(new ServerStatusChanged($server->id, $status->value, $server->name));
-        } catch (\Illuminate\Broadcasting\BroadcastException $e) {
-            Log::warning("Failed to broadcast server status change: {$e->getMessage()}");
-        }
     }
 
     public function addHeadlessClient(Server $server, ServerProcessService $processService): RedirectResponse

@@ -4,11 +4,18 @@ namespace App\Models;
 
 use App\Enums\GameType;
 use App\Enums\InstallationStatus;
+use App\GameManager;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
+/**
+ * @property GameType $game_type
+ * @property InstallationStatus $installation_status
+ * @property \Carbon\Carbon|null $steam_updated_at
+ * @property \Carbon\Carbon|null $installed_at
+ */
 class WorkshopMod extends Model
 {
     /** @use HasFactory<\Database\Factories\WorkshopModFactory> */
@@ -41,6 +48,7 @@ class WorkshopMod extends Model
         ];
     }
 
+    /** @return BelongsToMany<ModPreset, $this> */
     public function presets(): BelongsToMany
     {
         return $this->belongsToMany(ModPreset::class, 'mod_preset_workshop_mod');
@@ -83,6 +91,8 @@ class WorkshopMod extends Model
      */
     public function getInstallationPath(): string
     {
-        return config('arma.mods_base_path').'/steamapps/workshop/content/'.$this->game_type->gameId().'/'.$this->workshop_id;
+        $handler = app(GameManager::class)->driver($this->game_type->value);
+
+        return config('arma.mods_base_path').'/steamapps/workshop/content/'.$handler->gameId().'/'.$this->workshop_id;
     }
 }

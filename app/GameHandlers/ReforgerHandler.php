@@ -2,15 +2,59 @@
 
 namespace App\GameHandlers;
 
+use App\Attributes\HandlesGame;
+use App\Contracts\DetectsServerState;
 use App\Contracts\GameHandler;
 use App\Enums\GameType;
+use App\Models\ReforgerSettings;
 use App\Models\Server;
+use App\Services\Renderer\JsonConfigRenderer;
 
-class ReforgerHandler implements GameHandler
+#[HandlesGame(GameType::ArmaReforger)]
+final class ReforgerHandler implements DetectsServerState, GameHandler
 {
+    public function __construct(
+        protected JsonConfigRenderer $configRenderer,
+    ) {}
+
     public function gameType(): GameType
     {
         return GameType::ArmaReforger;
+    }
+
+    public function serverAppId(): int
+    {
+        return 1874900;
+    }
+
+    public function gameId(): int
+    {
+        return 1874900;
+    }
+
+    public function defaultPort(): int
+    {
+        return 2001;
+    }
+
+    public function defaultQueryPort(): int
+    {
+        return 17777;
+    }
+
+    public function branches(): array
+    {
+        return ['public'];
+    }
+
+    public function supportsWorkshopMods(): bool
+    {
+        return false;
+    }
+
+    public function requiresLowercaseConversion(): bool
+    {
+        return false;
     }
 
     public function buildLaunchCommand(Server $server): array
@@ -41,20 +85,17 @@ class ReforgerHandler implements GameHandler
     {
         $settings = $server->reforgerSettings;
 
-        $mods = [];
         $preset = $server->activePreset;
 
-        if ($preset) {
-            foreach ($preset->reforgerMods as $mod) {
-                $mods[] = [
-                    'modId' => $mod->mod_id,
-                    'name' => $mod->name,
-                ];
-            }
-        }
+        $mods = $preset
+            ? $preset->reforgerMods->map(fn ($mod) => [
+                'modId' => $mod->mod_id,
+                'name' => $mod->name,
+            ])->all()
+            : [];
 
-        $thirdPersonEnabled = (bool) ($settings?->third_person_view_enabled ?? true);
-        $crossPlatform = (bool) ($settings?->cross_platform ?? false);
+        $thirdPersonEnabled = $settings?->third_person_view_enabled ?? true;
+        $crossPlatform = $settings?->cross_platform ?? false;
 
         $config = [
             'bindAddress' => '',
@@ -75,7 +116,7 @@ class ReforgerHandler implements GameHandler
                     'networkViewDistance' => 1000,
                     'disableThirdPerson' => ! $thirdPersonEnabled,
                     'fastValidation' => true,
-                    'battlEye' => (bool) $server->battle_eye,
+                    'battlEye' => $server->battle_eye,
                     'VONDisableUI' => true,
                     'VONDisableDirectSpeechUI' => true,
                 ],
@@ -91,7 +132,7 @@ class ReforgerHandler implements GameHandler
 
         file_put_contents(
             $configPath,
-            json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)."\n"
+            $this->configRenderer->render('reforger/config.json', $config)
         );
     }
 
@@ -109,6 +150,8 @@ class ReforgerHandler implements GameHandler
     {
         return $server->getProfilesPath().'/server.log';
     }
+
+    // --- DetectsServerState ---
 
     public function getBootDetectionStrings(): array
     {
@@ -130,40 +173,7 @@ class ReforgerHandler implements GameHandler
         return [];
     }
 
-    public function symlinkMods(Server $server): void
-    {
-        // No-op: Reforger downloads its own mods at server startup
-    }
-
-    public function symlinkMissions(Server $server): void
-    {
-        // No-op: Reforger uses scenarios, not PBO mission files
-    }
-
-    public function copyBiKeys(Server $server): void
-    {
-        // No-op: Reforger doesn't use BiKey files
-    }
-
-    public function supportsHeadlessClients(): bool
-    {
-        return false;
-    }
-
-    public function buildHeadlessClientCommand(Server $server, int $index): ?array
-    {
-        return null;
-    }
-
-    public function getBackupFilePath(Server $server): ?string
-    {
-        return null;
-    }
-
-    public function getBackupDownloadFilename(Server $server): string
-    {
-        return 'reforger_'.$server->id.'_backup';
-    }
+    // --- Validation ---
 
     public function serverValidationRules(): array
     {
@@ -178,5 +188,26 @@ class ReforgerHandler implements GameHandler
             'max_fps' => ['integer', 'min:10', 'max:240'],
             'cross_platform' => ['boolean'],
         ];
+    }
+
+    // --- Related Settings ---
+
+    public function createRelatedSettings(Server $server): void
+    {
+        ReforgerSettings::query()->create(['server_id' => $server->id]);
+    }
+
+    public function updateRelatedSettings(Server $server, array $validated): void
+    {
+        $reforgerFields = collect($validated)->only(
+            (new ReforgerSettings)->getFillable()
+        )->except('server_id')->toArray();
+
+        if (! empty($reforgerFields)) {
+            $server->reforgerSettings()->updateOrCreate(
+                ['server_id' => $server->id],
+                $reforgerFields,
+            );
+        }
     }
 }

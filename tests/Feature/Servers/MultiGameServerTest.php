@@ -10,8 +10,8 @@ use App\GameManager;
 use App\Models\ModPreset;
 use App\Models\Server;
 use App\Models\WorkshopMod;
-use App\Services\ServerBackupService;
-use App\Services\ServerProcessService;
+use App\Services\Server\ServerBackupService;
+use App\Services\Server\ServerProcessService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\CreatesGameScenarios;
 use Tests\TestCase;
@@ -107,37 +107,43 @@ class MultiGameServerTest extends TestCase
     // 4. GameType enum methods
     // ---------------------------------------------------------------
 
-    public function test_arma3_game_type_properties(): void
+    public function test_arma3_handler_game_properties(): void
     {
-        $type = GameType::Arma3;
+        $handler = app(GameManager::class)->driver(GameType::Arma3->value);
 
-        $this->assertSame(233780, $type->serverAppId());
-        $this->assertSame(107410, $type->gameId());
-        $this->assertSame(2302, $type->defaultPort());
-        $this->assertSame(2303, $type->defaultQueryPort());
-        $this->assertSame(['public', 'contact', 'creatordlc', 'profiling', 'performance', 'legacy'], $type->branches());
+        $this->assertSame(233780, $handler->serverAppId());
+        $this->assertSame(107410, $handler->gameId());
+        $this->assertSame(2302, $handler->defaultPort());
+        $this->assertSame(2303, $handler->defaultQueryPort());
+        $this->assertSame(['public', 'contact', 'creatordlc', 'profiling', 'performance', 'legacy'], $handler->branches());
+        $this->assertTrue($handler->supportsWorkshopMods());
+        $this->assertTrue($handler->requiresLowercaseConversion());
     }
 
-    public function test_reforger_game_type_properties(): void
+    public function test_reforger_handler_game_properties(): void
     {
-        $type = GameType::ArmaReforger;
+        $handler = app(GameManager::class)->driver(GameType::ArmaReforger->value);
 
-        $this->assertSame(1874900, $type->serverAppId());
-        $this->assertSame(1874900, $type->gameId());
-        $this->assertSame(2001, $type->defaultPort());
-        $this->assertSame(17777, $type->defaultQueryPort());
-        $this->assertSame(['public'], $type->branches());
+        $this->assertSame(1874900, $handler->serverAppId());
+        $this->assertSame(1874900, $handler->gameId());
+        $this->assertSame(2001, $handler->defaultPort());
+        $this->assertSame(17777, $handler->defaultQueryPort());
+        $this->assertSame(['public'], $handler->branches());
+        $this->assertFalse($handler->supportsWorkshopMods());
+        $this->assertFalse($handler->requiresLowercaseConversion());
     }
 
-    public function test_dayz_game_type_properties(): void
+    public function test_dayz_handler_game_properties(): void
     {
-        $type = GameType::DayZ;
+        $handler = app(GameManager::class)->driver(GameType::DayZ->value);
 
-        $this->assertSame(223350, $type->serverAppId());
-        $this->assertSame(221100, $type->gameId());
-        $this->assertSame(2302, $type->defaultPort());
-        $this->assertSame(27016, $type->defaultQueryPort());
-        $this->assertSame(['public', 'experimental'], $type->branches());
+        $this->assertSame(223350, $handler->serverAppId());
+        $this->assertSame(221100, $handler->gameId());
+        $this->assertSame(2302, $handler->defaultPort());
+        $this->assertSame(27016, $handler->defaultQueryPort());
+        $this->assertSame(['public', 'experimental'], $handler->branches());
+        $this->assertTrue($handler->supportsWorkshopMods());
+        $this->assertTrue($handler->requiresLowercaseConversion());
     }
 
     // ---------------------------------------------------------------

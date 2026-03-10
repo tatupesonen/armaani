@@ -4,10 +4,11 @@ namespace App\Jobs;
 
 use App\Enums\InstallationStatus;
 use App\Events\ModDownloadOutput;
+use App\GameManager;
 use App\Jobs\Concerns\InteractsWithFileSystem;
 use App\Models\WorkshopMod;
-use App\Services\SteamCmdService;
-use App\Services\SteamWorkshopService;
+use App\Services\Steam\SteamCmdService;
+use App\Services\Steam\SteamWorkshopService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
@@ -29,7 +30,7 @@ class DownloadModJob implements ShouldQueue
 
         Log::info("{$context} Starting download");
 
-        $this->fetchMetadata($workshop);
+        $workshop->syncMetadata($this->mod);
 
         $this->mod->update([
             'installation_status' => InstallationStatus::Installing,
@@ -40,7 +41,9 @@ class DownloadModJob implements ShouldQueue
         $modPath = $this->mod->getInstallationPath();
         $expectedSize = $this->mod->file_size;
 
-        $process = $steamCmd->startDownloadMod($installDir, $this->mod->workshop_id, $this->mod->game_type);
+        $handler = app(GameManager::class)->driver($this->mod->game_type->value);
+
+        $process = $steamCmd->startDownloadMod($installDir, $this->mod->workshop_id, $handler);
 
         ModDownloadOutput::dispatch($this->mod->id, 0, 'Starting SteamCMD download...');
 
@@ -79,7 +82,7 @@ class DownloadModJob implements ShouldQueue
         }
 
         if ($result->successful()) {
-            if ($this->mod->game_type->requiresLowercaseConversion()) {
+            if ($handler->requiresLowercaseConversion()) {
                 $this->convertToLowercase($modPath);
             }
 
@@ -109,31 +112,5 @@ class DownloadModJob implements ShouldQueue
     {
         Log::error("[Mod:{$this->mod->id} '{$this->mod->workshop_id}'] Job failed: {$exception?->getMessage()}");
         $this->mod->update(['installation_status' => InstallationStatus::Failed]);
-    }
-
-    /**
-     * Fetch name, expected file size, and last-updated timestamp from Steam API.
-     * Always fetches to keep steam_updated_at current, but only overwrites
-     * name/file_size if they were missing.
-     */
-    protected function fetchMetadata(SteamWorkshopService $workshop): void
-    {
-        $details = $workshop->getModDetails($this->mod->workshop_id);
-
-        if (! $details) {
-            return;
-        }
-
-        $updates = array_filter([
-            'name' => $this->mod->name ?? $details['name'],
-            'file_size' => $this->mod->file_size ?? $details['file_size'],
-            'steam_updated_at' => isset($details['time_updated'])
-                ? \Carbon\Carbon::createFromTimestamp($details['time_updated'])
-                : null,
-        ]);
-
-        if (! empty($updates)) {
-            $this->mod->update($updates);
-        }
     }
 }

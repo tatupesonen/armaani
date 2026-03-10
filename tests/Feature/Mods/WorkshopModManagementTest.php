@@ -9,7 +9,7 @@ use App\Models\ModPreset;
 use App\Models\SteamAccount;
 use App\Models\User;
 use App\Models\WorkshopMod;
-use App\Services\SteamWorkshopService;
+use App\Services\Steam\SteamWorkshopService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Queue;

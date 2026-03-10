@@ -190,6 +190,29 @@ class MissionManagementTest extends TestCase
             ->assertNotFound();
     }
 
+    public function test_download_rejects_path_traversal(): void
+    {
+        mkdir($this->missionsPath, 0755, true);
+        file_put_contents($this->missionsPath.'/legit.pbo', 'content');
+
+        $this->actingAs($this->user)
+            ->get(route('missions.download', '../../../etc/passwd'))
+            ->assertNotFound();
+    }
+
+    public function test_delete_rejects_path_traversal(): void
+    {
+        mkdir($this->missionsPath, 0755, true);
+        $outsideFile = sys_get_temp_dir().'/armaani_traversal_test_'.uniqid();
+        file_put_contents($outsideFile, 'should not be deleted');
+
+        $this->actingAs($this->user)
+            ->delete(route('missions.destroy', '../'.basename($outsideFile)));
+
+        $this->assertFileExists($outsideFile);
+        unlink($outsideFile);
+    }
+
     // ---------------------------------------------------------------
     // Destroy
     // ---------------------------------------------------------------

@@ -6,7 +6,7 @@ use App\Enums\ServerStatus;
 use App\Events\ServerStatusChanged;
 use App\Jobs\StartServerJob;
 use App\Models\Server;
-use App\Services\ServerProcessService;
+use App\Services\Server\ServerProcessService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Mockery;

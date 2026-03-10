@@ -4,9 +4,10 @@ namespace App\Jobs;
 
 use App\Enums\InstallationStatus;
 use App\Events\GameInstallOutput;
+use App\GameManager;
 use App\Jobs\Concerns\InteractsWithFileSystem;
 use App\Models\GameInstall;
-use App\Services\SteamCmdService;
+use App\Services\Steam\SteamCmdService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
@@ -41,10 +42,12 @@ class InstallServerJob implements ShouldQueue
 
         $lastProgressUpdate = 0;
 
+        $handler = app(GameManager::class)->driver($this->gameInstall->game_type->value);
+
         $result = $steamCmd->installServer(
             $installDir,
             $this->gameInstall->branch,
-            gameType: $this->gameInstall->game_type,
+            handler: $handler,
             onOutput: function (string $line) use (&$lastProgressUpdate, $context): void {
                 Log::info("{$context} {$line}");
 
@@ -75,7 +78,7 @@ class InstallServerJob implements ShouldQueue
 
         if ($result->successful()) {
             $diskSize = $this->getDirectorySize($installDir);
-            $buildId = $this->parseBuildId($installDir);
+            $buildId = $this->parseBuildId($installDir, $handler);
 
             $this->gameInstall->update([
                 'installation_status' => InstallationStatus::Installed,
@@ -85,13 +88,13 @@ class InstallServerJob implements ShouldQueue
                 'installed_at' => now(),
             ]);
 
-            Log::info("Game install '{$this->gameInstall->name}' completed successfully (disk: {$diskSize} bytes, build: {$buildId})");
+            Log::info("{$context} Completed successfully (disk: {$diskSize} bytes, build: {$buildId})");
 
             GameInstallOutput::dispatch($this->gameInstall->id, 100, 'Installation completed successfully.');
         } else {
             $this->gameInstall->update(['installation_status' => InstallationStatus::Failed]);
 
-            Log::error("Game installation failed for '{$this->gameInstall->name}': {$result->errorOutput()}");
+            Log::error("{$context} Installation failed: {$result->errorOutput()}");
 
             GameInstallOutput::dispatch($this->gameInstall->id, 0, 'Installation failed: '.$result->errorOutput());
 
@@ -102,9 +105,9 @@ class InstallServerJob implements ShouldQueue
     /**
      * Parse the build ID from the SteamCMD appmanifest ACF file.
      */
-    protected function parseBuildId(string $installDir): ?string
+    protected function parseBuildId(string $installDir, \App\Contracts\GameHandler $handler): ?string
     {
-        $manifestPath = $installDir.'/steamapps/appmanifest_'.$this->gameInstall->game_type->serverAppId().'.acf';
+        $manifestPath = $installDir.'/steamapps/appmanifest_'.$handler->serverAppId().'.acf';
 
         if (! file_exists($manifestPath)) {
             Log::warning("[GameInstall:{$this->gameInstall->id}] Appmanifest not found at {$manifestPath}");
