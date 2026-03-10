@@ -292,8 +292,8 @@ class ServerProcessService
 
     protected function startHeadlessClient(Server $server, int $index): void
     {
-        /** @var SupportsHeadlessClients $handler */
         $handler = $this->gameManager->for($server);
+        assert($handler instanceof SupportsHeadlessClients);
 
         $context = "{$server->logContext()} HC:{$index}";
         $binaryDir = $server->gameInstall->getInstallationPath();

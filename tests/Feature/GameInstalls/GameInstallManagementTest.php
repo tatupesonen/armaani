@@ -5,6 +5,7 @@ namespace Tests\Feature\GameInstalls;
 use App\Enums\InstallationStatus;
 use App\Jobs\InstallServerJob;
 use App\Models\GameInstall;
+use App\Models\Server;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
@@ -148,5 +149,42 @@ class GameInstallManagementTest extends TestCase
 
         $this->assertDatabaseMissing('game_installs', ['id' => $install->id]);
         $this->assertDirectoryDoesNotExist($path);
+    }
+
+    public function test_cannot_delete_game_install_that_is_queued(): void
+    {
+        $install = GameInstall::factory()->create(['installation_status' => InstallationStatus::Queued]);
+
+        $this->actingAs($this->user)
+            ->delete(route('game-installs.destroy', $install))
+            ->assertRedirect()
+            ->assertSessionHas('error');
+
+        $this->assertDatabaseHas('game_installs', ['id' => $install->id]);
+    }
+
+    public function test_cannot_delete_game_install_that_is_installing(): void
+    {
+        $install = GameInstall::factory()->create(['installation_status' => InstallationStatus::Installing]);
+
+        $this->actingAs($this->user)
+            ->delete(route('game-installs.destroy', $install))
+            ->assertRedirect()
+            ->assertSessionHas('error');
+
+        $this->assertDatabaseHas('game_installs', ['id' => $install->id]);
+    }
+
+    public function test_cannot_delete_game_install_assigned_to_servers(): void
+    {
+        $install = GameInstall::factory()->installed()->create();
+        Server::factory()->create(['game_install_id' => $install->id]);
+
+        $this->actingAs($this->user)
+            ->delete(route('game-installs.destroy', $install))
+            ->assertRedirect()
+            ->assertSessionHas('error');
+
+        $this->assertDatabaseHas('game_installs', ['id' => $install->id]);
     }
 }

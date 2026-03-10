@@ -242,6 +242,38 @@ class ServerManagementTest extends TestCase
             ->assertSessionHasErrors(['query_port']);
     }
 
+    public function test_create_server_rejects_port_matching_existing_query_port(): void
+    {
+        Server::factory()->create(['port' => 2302, 'query_port' => 2303]);
+
+        $this->actingAs($this->user)
+            ->post(route('servers.store'), [
+                'game_type' => 'arma3',
+                'name' => 'Cross Conflict Server',
+                'port' => 2303,
+                'query_port' => 2350,
+                'max_players' => 32,
+                'game_install_id' => $this->gameInstall->id,
+            ])
+            ->assertSessionHasErrors(['port']);
+    }
+
+    public function test_create_server_rejects_query_port_matching_existing_port(): void
+    {
+        Server::factory()->create(['port' => 2302, 'query_port' => 2303]);
+
+        $this->actingAs($this->user)
+            ->post(route('servers.store'), [
+                'game_type' => 'arma3',
+                'name' => 'Cross Conflict Server',
+                'port' => 2350,
+                'query_port' => 2302,
+                'max_players' => 32,
+                'game_install_id' => $this->gameInstall->id,
+            ])
+            ->assertSessionHasErrors(['query_port']);
+    }
+
     public function test_create_server_with_preset(): void
     {
         $preset = ModPreset::factory()->create();

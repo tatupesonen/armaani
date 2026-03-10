@@ -30,6 +30,9 @@ jobs:
       - name: Run Pint
         run: composer lint
 
+      - name: Run Larastan
+        run: vendor/bin/phpstan analyse --no-progress --memory-limit=512M
+
       - name: Format Frontend
         run: npm run format
 
