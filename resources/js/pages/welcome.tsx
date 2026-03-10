@@ -1,43 +1,34 @@
-import AppLogoColor from '@/components/app-logo-color';
-import AppLogoIcon from '@/components/app-logo-icon';
-import { Badge } from '@/components/ui/badge';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { dashboard, login } from '@/routes';
 import {
-    ServerIcon,
-    DownloadIcon,
-    LayersIcon,
-    PlayIcon,
+    ArrowRightIcon,
     Box,
     Check,
-    ShieldIcon,
-    UsersIcon,
-    FolderIcon,
-    MonitorIcon,
-    ArrowRightIcon,
+    DownloadIcon,
     ExternalLink,
+    FolderIcon,
     Github,
-    Sparkle,
+    LayersIcon,
     Loader2,
+    MonitorIcon,
     Pause,
-    RefreshCw,
     Play,
+    PlayIcon,
+    RefreshCw,
+    ServerIcon,
+    ShieldIcon,
+    Sparkle,
+    UsersIcon,
 } from 'lucide-react';
-import {
-    type ComponentType,
-    type SVGAttributes,
-    useEffect,
-    useRef,
-    useState,
-} from 'react';
+import type { ComponentType, SVGAttributes } from 'react';
+import { useEffect, useRef, useState } from 'react';
+
+import AppLogoColor from '@/components/app-logo-color';
+import { Badge } from '@/components/ui/badge';
+import { dashboard, login } from '@/routes';
 
 const GITHUB_URL = 'https://github.com/tatupesonen/Armaani';
 
-export default function Welcome({
-    canRegister = true,
-}: {
-    canRegister?: boolean;
-}) {
+export default function Welcome() {
     const { auth } = usePage().props;
     const [scrolled, setScrolled] = useState(false);
 
