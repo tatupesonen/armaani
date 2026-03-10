@@ -1,4 +1,4 @@
-import { Head, Link, router } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { FileUp, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useRef, useState } from 'react';
 import Heading from '@/components/heading';
@@ -24,7 +24,6 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import AppLayout from '@/layouts/app-layout';
-import { gameTypeLabel } from '@/lib/utils';
 import {
     index as presetsIndex,
     create,
@@ -43,6 +42,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 export default function PresetsIndex({ presets }: Props) {
+    const { gameTypeLabels } = usePage().props;
     const [deletingPresetId, setDeletingPresetId] = useState<number | null>(
         null,
     );
@@ -122,19 +122,14 @@ export default function PresetsIndex({ presets }: Props) {
                                             {preset.name}
                                         </span>
                                         <Badge variant="outline">
-                                            {gameTypeLabel(preset.game_type)}
+                                            {gameTypeLabels[preset.game_type] ??
+                                                preset.game_type}
                                         </Badge>
                                     </div>
                                     <p className="mt-0.5 text-sm text-muted-foreground">
-                                        {(preset.mods_count ?? 0) > 0 &&
-                                            `${preset.mods_count} workshop mod(s)`}
-                                        {(preset.reforger_mods_count ?? 0) >
-                                            0 &&
-                                            `${preset.reforger_mods_count} reforger mod(s)`}
-                                        {(preset.mods_count ?? 0) === 0 &&
-                                            (preset.reforger_mods_count ??
-                                                0) === 0 &&
-                                            'No mods'}
+                                        {(preset.total_mod_count ?? 0) > 0
+                                            ? `${preset.total_mod_count} mod(s)`
+                                            : 'No mods'}
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-1">

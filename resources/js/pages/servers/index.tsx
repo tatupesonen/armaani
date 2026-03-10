@@ -19,23 +19,19 @@ import { Button } from '@/components/ui/button';
 import echo from '@/echo';
 import AppLayout from '@/layouts/app-layout';
 import { index as serversIndex, destroy } from '@/routes/servers';
-import type { BreadcrumbItem, GameInstall, ModPreset, Server } from '@/types';
-
-type GameTypeOption = {
-    value: string;
-    label: string;
-    defaultPort: number;
-    defaultQueryPort: number;
-    supportsHeadlessClients: boolean;
-    supportsWorkshopMods: boolean;
-    supportsMissionUpload: boolean;
-};
+import type {
+    BreadcrumbItem,
+    GameInstall,
+    ModPreset,
+    Server,
+    ServerGameTypeOption,
+} from '@/types';
 
 type Props = {
     servers: Server[];
     presets: ModPreset[];
     gameInstalls: GameInstall[];
-    gameTypes: GameTypeOption[];
+    gameTypes: ServerGameTypeOption[];
 };
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -104,15 +100,25 @@ export default function ServersIndex({
                     </Alert>
                 ) : (
                     <div className="space-y-4">
-                        {servers.map((server) => (
-                            <ServerCard
-                                key={server.id}
-                                server={server}
-                                presets={presets}
-                                gameInstalls={gameInstalls}
-                                onDelete={(id) => setDeletingServerId(id)}
-                            />
-                        ))}
+                        {servers.map((server) => {
+                            const gt = gameTypes.find(
+                                (g) => g.value === server.game_type,
+                            );
+
+                            return (
+                                <ServerCard
+                                    key={server.id}
+                                    server={server}
+                                    presets={presets}
+                                    gameInstalls={gameInstalls}
+                                    settingsSchema={gt?.settingsSchema ?? []}
+                                    supportsHeadlessClients={
+                                        gt?.supportsHeadlessClients ?? false
+                                    }
+                                    onDelete={(id) => setDeletingServerId(id)}
+                                />
+                            );
+                        })}
                     </div>
                 )}
             </div>

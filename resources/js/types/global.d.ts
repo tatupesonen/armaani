@@ -14,6 +14,7 @@ declare module '@inertiajs/core' {
             appVersion: string;
             auth: Auth;
             sidebarOpen: boolean;
+            gameTypeLabels: Record<string, string>;
             [key: string]: unknown;
         };
     }

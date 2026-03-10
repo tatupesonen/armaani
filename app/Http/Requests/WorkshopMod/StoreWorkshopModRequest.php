@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\WorkshopMod;
 
-use App\Enums\GameType;
+use App\GameManager;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -18,7 +18,7 @@ class StoreWorkshopModRequest extends FormRequest
     {
         return [
             'workshop_id' => ['required', 'integer', 'min:1'],
-            'game_type' => ['nullable', Rule::enum(GameType::class)],
+            'game_type' => ['nullable', Rule::in(app(GameManager::class)->availableTypes())],
         ];
     }
 }

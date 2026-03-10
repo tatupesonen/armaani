@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Enums\GameType;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -10,7 +9,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * @property GameType $game_type
+ * @property string $game_type
+ *
+ * Dynamic relationships registered by GameServiceProvider via resolveRelationUsing:
+ *
+ * @method \Illuminate\Database\Eloquent\Relations\BelongsToMany reforgerMods()
+ *
+ * @property \Illuminate\Database\Eloquent\Collection<int, \App\Models\ReforgerMod> $reforgerMods
  */
 class ModPreset extends Model
 {
@@ -22,26 +27,10 @@ class ModPreset extends Model
         'name',
     ];
 
-    /**
-     * @return array<string, string>
-     */
-    protected function casts(): array
-    {
-        return [
-            'game_type' => GameType::class,
-        ];
-    }
-
     /** @return BelongsToMany<WorkshopMod, $this> */
     public function mods(): BelongsToMany
     {
         return $this->belongsToMany(WorkshopMod::class, 'mod_preset_workshop_mod');
-    }
-
-    /** @return BelongsToMany<ReforgerMod, $this> */
-    public function reforgerMods(): BelongsToMany
-    {
-        return $this->belongsToMany(ReforgerMod::class, 'mod_preset_reforger_mod');
     }
 
     /** @return HasMany<Server, $this> */
@@ -53,7 +42,7 @@ class ModPreset extends Model
     /**
      * @param  Builder<ModPreset>  $query
      */
-    public function scopeForGame(Builder $query, GameType $gameType): Builder
+    public function scopeForGame(Builder $query, string $gameType): Builder
     {
         return $query->where('game_type', $gameType);
     }

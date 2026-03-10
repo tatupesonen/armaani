@@ -4,7 +4,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\GameInstallController;
 use App\Http\Controllers\MissionController;
 use App\Http\Controllers\ModPresetController;
-use App\Http\Controllers\ReforgerModController;
+use App\Http\Controllers\RegisteredModController;
 use App\Http\Controllers\ServerBackupController;
 use App\Http\Controllers\ServerController;
 use App\Http\Controllers\SteamSettingsController;
@@ -39,8 +39,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('servers/{server}/launch-command', [ServerController::class, 'launchCommand'])->name('servers.launch-command');
     Route::get('servers/{server}/log', [ServerController::class, 'serverLog'])->name('servers.log');
     Route::get('servers/{server}/status', [ServerController::class, 'status'])->name('servers.status');
-    Route::get('servers/{server}/reforger-scenarios', [ServerController::class, 'reforgerScenarios'])->name('servers.reforger-scenarios');
-    Route::post('servers/{server}/reforger-scenarios/reload', [ServerController::class, 'reloadReforgerScenarios'])->name('servers.reforger-scenarios.reload');
+    Route::get('servers/{server}/scenarios', [ServerController::class, 'scenarios'])->name('servers.scenarios');
+    Route::post('servers/{server}/scenarios/reload', [ServerController::class, 'reloadScenarios'])->name('servers.scenarios.reload');
 
     // Server Backups
     Route::post('servers/{server}/backups', [ServerBackupController::class, 'store'])->name('servers.backups.store');
@@ -59,9 +59,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('mods/check-for-updates', [WorkshopModController::class, 'checkForUpdates'])->name('mods.check-for-updates');
     Route::post('mods/update-all-outdated', [WorkshopModController::class, 'updateAllOutdated'])->name('mods.update-all-outdated');
 
-    // Reforger Mods
-    Route::post('reforger-mods', [ReforgerModController::class, 'store'])->name('reforger-mods.store');
-    Route::delete('reforger-mods/{reforgerMod}', [ReforgerModController::class, 'destroy'])->name('reforger-mods.destroy');
+    // Registered Mods (game-generic — e.g., Reforger GUID mods)
+    Route::post('registered-mods/{gameType}', [RegisteredModController::class, 'store'])->name('registered-mods.store');
+    Route::delete('registered-mods/{gameType}/{modId}', [RegisteredModController::class, 'destroy'])->name('registered-mods.destroy');
 
     // Missions
     Route::get('missions', [MissionController::class, 'index'])->name('missions.index');

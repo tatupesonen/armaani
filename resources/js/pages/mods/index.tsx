@@ -60,10 +60,15 @@ import {
     updateAllOutdated,
 } from '@/routes/mods';
 import {
-    store as storeReforgerMod,
-    destroy as destroyReforgerMod,
-} from '@/routes/reforger-mods';
-import type { BreadcrumbItem, ReforgerMod, WorkshopMod } from '@/types';
+    store as storeRegisteredMod,
+    destroy as destroyRegisteredMod,
+} from '@/routes/registered-mods';
+import type {
+    BreadcrumbItem,
+    GameModSections,
+    RegisteredMod,
+    WorkshopMod,
+} from '@/types';
 
 type Filters = {
     search?: string;
@@ -78,7 +83,8 @@ type InstalledStats = {
 
 type Props = {
     mods: WorkshopMod[];
-    reforgerMods: ReforgerMod[];
+    registeredMods: Record<string, RegisteredMod[]>;
+    modSections: GameModSections[];
     filters: Filters;
     installedStats: InstalledStats;
 };
@@ -142,20 +148,63 @@ function SortableHeader({
     );
 }
 
+/**
+ * Build the list of game types that support workshop mods,
+ * derived from the modSections prop (handler-driven).
+ */
+function getWorkshopGameTypes(
+    modSections: GameModSections[],
+): { value: string; label: string }[] {
+    return modSections
+        .filter((gs) => gs.sections.some((s) => s.type === 'workshop'))
+        .map((gs) => ({ value: gs.gameType, label: gs.gameLabel }));
+}
+
+/**
+ * Build the list of registered mod tabs from all game handlers.
+ * Each entry represents a game type that uses registered (non-workshop) mods.
+ */
+function getRegisteredModTabs(
+    modSections: GameModSections[],
+): { gameType: string; gameLabel: string; sectionLabel: string }[] {
+    const tabs: {
+        gameType: string;
+        gameLabel: string;
+        sectionLabel: string;
+    }[] = [];
+    for (const gs of modSections) {
+        for (const section of gs.sections) {
+            if (section.type === 'registered') {
+                tabs.push({
+                    gameType: gs.gameType,
+                    gameLabel: gs.gameLabel,
+                    sectionLabel: section.label,
+                });
+            }
+        }
+    }
+    return tabs;
+}
+
 export default function ModsIndex({
     mods,
-    reforgerMods,
+    registeredMods,
+    modSections,
     filters,
     installedStats,
 }: Props) {
     const [showAddModal, setShowAddModal] = useState(false);
     const [deletingModId, setDeletingModId] = useState<number | null>(null);
-    const [deletingReforgerModId, setDeletingReforgerModId] = useState<
-        number | null
-    >(null);
+    const [deletingRegisteredMod, setDeletingRegisteredMod] = useState<{
+        gameType: string;
+        modId: number;
+    } | null>(null);
     const [selectedMods, setSelectedMods] = useState<number[]>([]);
     const [search, setSearch] = useState(filters.search ?? '');
     const [expandedModLogs, setExpandedModLogs] = useState<number[]>([]);
+
+    const workshopGameTypes = getWorkshopGameTypes(modSections);
+    const registeredModTabs = getRegisteredModTabs(modSections);
 
     const hasPending = mods.some(
         (m) =>
@@ -197,12 +246,7 @@ export default function ModsIndex({
 
     const addForm = useForm({
         workshop_id: '',
-        game_type: 'arma3',
-    });
-
-    const reforgerAddForm = useForm({
-        mod_id: '',
-        name: '',
+        game_type: workshopGameTypes[0]?.value ?? '',
     });
 
     function submitAdd(e: React.FormEvent) {
@@ -213,14 +257,6 @@ export default function ModsIndex({
                 setShowAddModal(false);
                 addForm.reset();
             },
-        });
-    }
-
-    function submitReforgerAdd(e: React.FormEvent) {
-        e.preventDefault();
-        reforgerAddForm.post(storeReforgerMod.url(), {
-            preserveScroll: true,
-            onSuccess: () => reforgerAddForm.reset(),
         });
     }
 
@@ -241,12 +277,18 @@ export default function ModsIndex({
         });
     }
 
-    function handleDeleteReforgerMod() {
-        if (deletingReforgerModId === null) return;
-        router.delete(destroyReforgerMod.url(deletingReforgerModId), {
-            preserveScroll: true,
-            onSuccess: () => setDeletingReforgerModId(null),
-        });
+    function handleDeleteRegisteredMod() {
+        if (!deletingRegisteredMod) return;
+        router.delete(
+            destroyRegisteredMod.url({
+                gameType: deletingRegisteredMod.gameType,
+                modId: deletingRegisteredMod.modId,
+            }),
+            {
+                preserveScroll: true,
+                onSuccess: () => setDeletingRegisteredMod(null),
+            },
+        );
     }
 
     function toggleSelectMod(modId: number) {
@@ -300,9 +342,15 @@ export default function ModsIndex({
                         <TabsTrigger value="workshop">
                             Workshop ({mods.length})
                         </TabsTrigger>
-                        <TabsTrigger value="reforger">
-                            Reforger ({reforgerMods.length})
-                        </TabsTrigger>
+                        {registeredModTabs.map((tab) => (
+                            <TabsTrigger
+                                key={tab.gameType}
+                                value={`registered-${tab.gameType}`}
+                            >
+                                {tab.sectionLabel} (
+                                {registeredMods[tab.gameType]?.length ?? 0})
+                            </TabsTrigger>
+                        ))}
                     </TabsList>
 
                     <TabsContent value="workshop" className="space-y-4">
@@ -491,113 +539,21 @@ export default function ModsIndex({
                         )}
                     </TabsContent>
 
-                    <TabsContent value="reforger" className="space-y-4">
-                        {/* Reforger Add Form */}
-                        <form
-                            onSubmit={submitReforgerAdd}
-                            className="flex max-w-2xl items-end gap-4"
-                        >
-                            <div className="flex-1 space-y-1">
-                                <Label>Mod ID</Label>
-                                <Input
-                                    value={reforgerAddForm.data.mod_id}
-                                    onChange={(e) =>
-                                        reforgerAddForm.setData(
-                                            'mod_id',
-                                            e.target.value,
-                                        )
-                                    }
-                                    placeholder="e.g. 591AF5BDA9F7CE8B"
-                                    required
-                                />
-                                {reforgerAddForm.errors.mod_id && (
-                                    <p className="text-sm text-destructive">
-                                        {reforgerAddForm.errors.mod_id}
-                                    </p>
-                                )}
-                            </div>
-                            <div className="flex-1 space-y-1">
-                                <Label>Name</Label>
-                                <Input
-                                    value={reforgerAddForm.data.name}
-                                    onChange={(e) =>
-                                        reforgerAddForm.setData(
-                                            'name',
-                                            e.target.value,
-                                        )
-                                    }
-                                    placeholder="e.g. My Reforger Mod"
-                                    required
-                                />
-                                {reforgerAddForm.errors.name && (
-                                    <p className="text-sm text-destructive">
-                                        {reforgerAddForm.errors.name}
-                                    </p>
-                                )}
-                            </div>
-                            <Button
-                                type="submit"
-                                disabled={reforgerAddForm.processing}
-                            >
-                                <Plus className="mr-2 size-4" />
-                                Add Mod
-                            </Button>
-                        </form>
-
-                        {reforgerMods.length === 0 ? (
-                            <Alert>
-                                <AlertDescription>
-                                    No Reforger mods registered. Add them using
-                                    the form above.
-                                </AlertDescription>
-                            </Alert>
-                        ) : (
-                            <div className="overflow-hidden rounded-lg border">
-                                <table className="w-full text-sm">
-                                    <thead>
-                                        <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground">
-                                            <th className="px-4 py-3">
-                                                Mod ID
-                                            </th>
-                                            <th className="px-4 py-3">Name</th>
-                                            <th className="px-4 py-3">
-                                                Actions
-                                            </th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {reforgerMods.map((mod) => (
-                                            <tr
-                                                key={mod.id}
-                                                className="border-b last:border-0"
-                                            >
-                                                <td className="px-4 py-3 font-mono text-xs">
-                                                    {mod.mod_id}
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    {mod.name}
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    <Button
-                                                        size="sm"
-                                                        variant="destructive"
-                                                        onClick={() =>
-                                                            setDeletingReforgerModId(
-                                                                mod.id,
-                                                            )
-                                                        }
-                                                    >
-                                                        <Trash2 className="mr-2 size-4" />
-                                                        Delete
-                                                    </Button>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-                    </TabsContent>
+                    {/* Dynamic registered mod tabs */}
+                    {registeredModTabs.map((tab) => (
+                        <RegisteredModTab
+                            key={tab.gameType}
+                            gameType={tab.gameType}
+                            sectionLabel={tab.sectionLabel}
+                            mods={registeredMods[tab.gameType] ?? []}
+                            onDelete={(modId) =>
+                                setDeletingRegisteredMod({
+                                    gameType: tab.gameType,
+                                    modId,
+                                })
+                            }
+                        />
+                    ))}
                 </Tabs>
             </div>
 
@@ -631,25 +587,31 @@ export default function ModsIndex({
                                 </p>
                             )}
                         </div>
-                        <div className="space-y-2">
-                            <Label>Game</Label>
-                            <Select
-                                value={addForm.data.game_type}
-                                onValueChange={(v) =>
-                                    addForm.setData('game_type', v)
-                                }
-                            >
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="arma3">
-                                        Arma 3
-                                    </SelectItem>
-                                    <SelectItem value="dayz">DayZ</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
+                        {workshopGameTypes.length > 1 && (
+                            <div className="space-y-2">
+                                <Label>Game</Label>
+                                <Select
+                                    value={addForm.data.game_type}
+                                    onValueChange={(v) =>
+                                        addForm.setData('game_type', v)
+                                    }
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {workshopGameTypes.map((gt) => (
+                                            <SelectItem
+                                                key={gt.value}
+                                                value={gt.value}
+                                            >
+                                                {gt.label}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
                         <DialogFooter>
                             <Button
                                 type="button"
@@ -692,23 +654,23 @@ export default function ModsIndex({
                 </AlertDialogContent>
             </AlertDialog>
 
-            {/* Delete Reforger Mod Confirmation */}
+            {/* Delete Registered Mod Confirmation */}
             <AlertDialog
-                open={deletingReforgerModId !== null}
-                onOpenChange={(open) => !open && setDeletingReforgerModId(null)}
+                open={deletingRegisteredMod !== null}
+                onOpenChange={(open) => !open && setDeletingRegisteredMod(null)}
             >
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Delete Reforger Mod</AlertDialogTitle>
+                        <AlertDialogTitle>Delete Mod</AlertDialogTitle>
                         <AlertDialogDescription>
-                            This will remove the Reforger mod and detach it from
-                            all presets.
+                            This will remove the mod and detach it from all
+                            presets.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                         <AlertDialogAction
-                            onClick={handleDeleteReforgerMod}
+                            onClick={handleDeleteRegisteredMod}
                             variant="destructive"
                         >
                             Delete
@@ -717,6 +679,129 @@ export default function ModsIndex({
                 </AlertDialogContent>
             </AlertDialog>
         </AppLayout>
+    );
+}
+
+/**
+ * Generic registered mod tab — renders an add form + table for any game type
+ * that declares a 'registered' mod section in its handler.
+ */
+function RegisteredModTab({
+    gameType,
+    sectionLabel,
+    mods,
+    onDelete,
+}: {
+    gameType: string;
+    sectionLabel: string;
+    mods: RegisteredMod[];
+    onDelete: (modId: number) => void;
+}) {
+    const addForm = useForm({
+        mod_id: '',
+        name: '',
+    });
+
+    function submitAdd(e: React.FormEvent) {
+        e.preventDefault();
+        addForm.post(storeRegisteredMod.url(gameType), {
+            preserveScroll: true,
+            onSuccess: () => addForm.reset(),
+        });
+    }
+
+    return (
+        <TabsContent value={`registered-${gameType}`} className="space-y-4">
+            {/* Add Form */}
+            <form
+                onSubmit={submitAdd}
+                className="flex max-w-2xl items-end gap-4"
+            >
+                <div className="flex-1 space-y-1">
+                    <Label>Mod ID</Label>
+                    <Input
+                        value={addForm.data.mod_id}
+                        onChange={(e) =>
+                            addForm.setData('mod_id', e.target.value)
+                        }
+                        placeholder="e.g. 591AF5BDA9F7CE8B"
+                        required
+                    />
+                    {addForm.errors.mod_id && (
+                        <p className="text-sm text-destructive">
+                            {addForm.errors.mod_id}
+                        </p>
+                    )}
+                </div>
+                <div className="flex-1 space-y-1">
+                    <Label>Name</Label>
+                    <Input
+                        value={addForm.data.name}
+                        onChange={(e) =>
+                            addForm.setData('name', e.target.value)
+                        }
+                        placeholder="e.g. My Mod"
+                        required
+                    />
+                    {addForm.errors.name && (
+                        <p className="text-sm text-destructive">
+                            {addForm.errors.name}
+                        </p>
+                    )}
+                </div>
+                <Button type="submit" disabled={addForm.processing}>
+                    <Plus className="mr-2 size-4" />
+                    Add Mod
+                </Button>
+            </form>
+
+            {mods.length === 0 ? (
+                <Alert>
+                    <AlertDescription>
+                        No {sectionLabel.toLowerCase()} registered. Add them
+                        using the form above.
+                    </AlertDescription>
+                </Alert>
+            ) : (
+                <div className="overflow-hidden rounded-lg border">
+                    <table className="w-full text-sm">
+                        <thead>
+                            <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground">
+                                <th className="px-4 py-3">Mod ID</th>
+                                <th className="px-4 py-3">Name</th>
+                                <th className="px-4 py-3">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {mods.map((mod) => (
+                                <tr
+                                    key={mod.id}
+                                    className="border-b last:border-0"
+                                >
+                                    <td className="px-4 py-3 font-mono text-xs">
+                                        {
+                                            (mod as Record<string, unknown>)
+                                                .mod_id as string
+                                        }
+                                    </td>
+                                    <td className="px-4 py-3">{mod.name}</td>
+                                    <td className="px-4 py-3">
+                                        <Button
+                                            size="sm"
+                                            variant="destructive"
+                                            onClick={() => onDelete(mod.id)}
+                                        >
+                                            <Trash2 className="mr-2 size-4" />
+                                            Delete
+                                        </Button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+        </TabsContent>
     );
 }
 

@@ -2,8 +2,7 @@
 
 namespace App\Services\Steam;
 
-use App\Contracts\GameHandler;
-use App\Enums\GameType;
+use App\Contracts\SteamGameHandler;
 use App\GameManager;
 use App\Models\SteamAccount;
 use Illuminate\Contracts\Process\ProcessResult;
@@ -29,7 +28,7 @@ class SteamCmdService
      *
      * @param  callable(string): void  $onOutput
      */
-    public function installServer(string $installDir, string $branch = 'public', ?callable $onOutput = null, ?GameHandler $handler = null): ProcessResult
+    public function installServer(string $installDir, string $branch = 'public', ?callable $onOutput = null, ?SteamGameHandler $handler = null): ProcessResult
     {
         $args = $this->baseArgs($installDir);
 
@@ -62,7 +61,7 @@ class SteamCmdService
      * Start a SteamCMD workshop mod download asynchronously.
      * Returns a pending process so the caller can poll while it runs.
      */
-    public function startDownloadMod(string $installDir, int $workshopId, ?GameHandler $handler = null): InvokedProcess
+    public function startDownloadMod(string $installDir, int $workshopId, ?SteamGameHandler $handler = null): InvokedProcess
     {
         $args = $this->baseArgs($installDir);
         $gameId = ($handler ?? $this->defaultHandler())->gameId();
@@ -80,7 +79,7 @@ class SteamCmdService
      *
      * @param  list<int>  $workshopIds
      */
-    public function startBatchDownloadMods(string $installDir, array $workshopIds, ?GameHandler $handler = null): InvokedProcess
+    public function startBatchDownloadMods(string $installDir, array $workshopIds, ?SteamGameHandler $handler = null): InvokedProcess
     {
         $args = $this->baseArgs($installDir);
 
@@ -163,11 +162,15 @@ class SteamCmdService
     }
 
     /**
-     * Resolve the default game handler (Arma 3) as a fallback.
+     * Resolve the default game handler as a fallback.
      */
-    private function defaultHandler(): GameHandler
+    private function defaultHandler(): SteamGameHandler
     {
-        return app(GameManager::class)->driver(GameType::default()->value);
+        $handler = app(GameManager::class)->driver();
+
+        assert($handler instanceof SteamGameHandler);
+
+        return $handler;
     }
 
     /**

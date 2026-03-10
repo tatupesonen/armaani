@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Presets;
 
-use App\Enums\GameType;
 use App\Jobs\BatchDownloadModsJob;
 use App\Jobs\DownloadModJob;
 use App\Models\ModPreset;
@@ -120,7 +119,7 @@ class ModPresetManagementTest extends TestCase
                 ->component('presets/create')
                 ->has('gameTypes')
                 ->has('workshopMods')
-                ->has('reforgerMods')
+                ->has('registeredMods')
             );
     }
 
@@ -135,7 +134,7 @@ class ModPresetManagementTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->component('presets/create')
                 ->has('workshopMods', 1)
-                ->has('reforgerMods', 1)
+                ->has('registeredMods.reforger', 1)
             );
     }
 
@@ -181,7 +180,7 @@ class ModPresetManagementTest extends TestCase
 
     public function test_create_preset_validates_unique_name_per_game_type(): void
     {
-        ModPreset::factory()->create(['name' => 'Duplicate Name', 'game_type' => GameType::Arma3]);
+        ModPreset::factory()->create(['name' => 'Duplicate Name', 'game_type' => 'arma3']);
 
         $this->actingAs($this->user)
             ->post(route('presets.store'), [
@@ -193,7 +192,7 @@ class ModPresetManagementTest extends TestCase
 
     public function test_create_preset_allows_same_name_for_different_game_types(): void
     {
-        ModPreset::factory()->create(['name' => 'Shared Name', 'game_type' => GameType::Arma3]);
+        ModPreset::factory()->create(['name' => 'Shared Name', 'game_type' => 'arma3']);
 
         $this->actingAs($this->user)
             ->post(route('presets.store'), [
@@ -270,7 +269,8 @@ class ModPresetManagementTest extends TestCase
                 ->component('presets/edit')
                 ->has('preset')
                 ->has('workshopMods')
-                ->has('reforgerMods')
+                ->has('registeredMods')
+                ->has('modSections')
             );
     }
 
@@ -519,7 +519,7 @@ class ModPresetManagementTest extends TestCase
 
         WorkshopMod::factory()->installed()->create([
             'workshop_id' => 463939057,
-            'game_type' => GameType::Arma3,
+            'game_type' => 'arma3',
         ]);
 
         $workshopService = Mockery::mock(SteamWorkshopService::class);

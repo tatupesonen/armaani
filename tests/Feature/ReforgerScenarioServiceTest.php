@@ -189,7 +189,7 @@ class ReforgerScenarioServiceTest extends TestCase
         ]);
 
         $response = $this->actingAs($user)
-            ->get(route('servers.reforger-scenarios', $server))
+            ->get(route('servers.scenarios', $server))
             ->assertOk();
 
         $scenarios = $response->json('scenarios');
@@ -207,7 +207,7 @@ class ReforgerScenarioServiceTest extends TestCase
         ]);
 
         $this->actingAs($user)
-            ->get(route('servers.reforger-scenarios', $server))
+            ->get(route('servers.scenarios', $server))
             ->assertStatus(422)
             ->assertJson(['scenarios' => []]);
     }
@@ -222,7 +222,7 @@ class ReforgerScenarioServiceTest extends TestCase
             'game_type' => 'reforger',
         ]);
 
-        $this->get(route('servers.reforger-scenarios', $server))
+        $this->get(route('servers.scenarios', $server))
             ->assertRedirect(route('login'));
     }
 
@@ -235,7 +235,7 @@ class ReforgerScenarioServiceTest extends TestCase
         ]);
 
         $this->actingAs($user)
-            ->post(route('servers.reforger-scenarios.reload', $server))
+            ->post(route('servers.scenarios.reload', $server))
             ->assertStatus(422)
             ->assertJson(['scenarios' => []]);
     }
@@ -250,7 +250,7 @@ class ReforgerScenarioServiceTest extends TestCase
             'game_type' => 'reforger',
         ]);
 
-        $this->post(route('servers.reforger-scenarios.reload', $server))
+        $this->post(route('servers.scenarios.reload', $server))
             ->assertRedirect(route('login'));
     }
 }

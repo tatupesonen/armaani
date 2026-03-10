@@ -7,7 +7,6 @@ use App\Contracts\ManagesModAssets;
 use App\Contracts\SupportsBackups;
 use App\Contracts\SupportsHeadlessClients;
 use App\Contracts\SupportsMissions;
-use App\Enums\GameType;
 use App\GameHandlers\ReforgerHandler;
 use App\Models\ModPreset;
 use App\Models\ReforgerMod;
@@ -53,7 +52,7 @@ class ReforgerHandlerTest extends TestCase
 
     public function test_game_type_returns_arma_reforger(): void
     {
-        $this->assertEquals(GameType::ArmaReforger, $this->handler->gameType());
+        $this->assertEquals('reforger', $this->handler->value());
     }
 
     public function test_get_binary_path_returns_arma_reforger_server(): void
@@ -166,6 +165,11 @@ class ReforgerHandlerTest extends TestCase
             'max_players' => 64,
         ]);
 
+        $server->reforgerSettings()->update([
+            'scenario_id' => '{ECC61978EDCC2B5A}Missions/23_Campaign.conf',
+        ]);
+        $server->refresh();
+
         $config = $this->generateAndReadConfig($server);
         $this->assertEquals('', $config['bindAddress']);
         $this->assertEquals($server->port, $config['bindPort']);
@@ -225,7 +229,7 @@ class ReforgerHandlerTest extends TestCase
         $mod1 = ReforgerMod::factory()->create(['mod_id' => 'AAAA1111BBBB2222', 'name' => 'Test Mod 1']);
         $mod2 = ReforgerMod::factory()->create(['mod_id' => 'CCCC3333DDDD4444', 'name' => 'Test Mod 2']);
 
-        $preset = ModPreset::factory()->create(['game_type' => GameType::ArmaReforger]);
+        $preset = ModPreset::factory()->create(['game_type' => 'reforger']);
         $preset->reforgerMods()->attach([$mod1->id, $mod2->id]);
 
         $server->update(['active_preset_id' => $preset->id]);

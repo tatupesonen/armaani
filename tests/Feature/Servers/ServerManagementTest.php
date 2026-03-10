@@ -110,15 +110,15 @@ class ServerManagementTest extends TestCase
             );
     }
 
-    public function test_servers_index_includes_network_settings(): void
+    public function test_servers_index_includes_arma3_settings(): void
     {
         $server = Server::factory()->create();
-        $server->networkSettings()->create(['max_msg_send' => 2048]);
+        $server->arma3Settings()->create(['max_msg_send' => 2048]);
 
         $this->actingAs($this->user)
             ->get(route('servers.index'))
             ->assertInertia(fn (Assert $page) => $page
-                ->has('servers.0.network_settings', fn (Assert $ns) => $ns
+                ->has('servers.0.arma3_settings', fn (Assert $ns) => $ns
                     ->where('max_msg_send', 2048)
                     ->etc()
                 )
@@ -297,7 +297,7 @@ class ServerManagementTest extends TestCase
         ]);
     }
 
-    public function test_create_server_creates_network_settings_with_defaults(): void
+    public function test_create_server_creates_arma3_settings_with_defaults(): void
     {
         $this->actingAs($this->user)
             ->post(route('servers.store'), [
@@ -312,10 +312,10 @@ class ServerManagementTest extends TestCase
             ->assertSessionHas('success');
 
         $server = Server::query()->where('name', 'Network Test Server')->first();
-        $this->assertNotNull($server->networkSettings);
-        $this->assertEquals(128, $server->networkSettings->max_msg_send);
-        $this->assertEquals(512, $server->networkSettings->max_size_guaranteed);
-        $this->assertEquals(1400, $server->networkSettings->max_packet_size);
+        $this->assertNotNull($server->arma3Settings);
+        $this->assertEquals(128, $server->arma3Settings->max_msg_send);
+        $this->assertEquals(512, $server->arma3Settings->max_size_guaranteed);
+        $this->assertEquals(1400, $server->arma3Settings->max_packet_size);
     }
 
     public function test_create_reforger_server_creates_reforger_settings(): void
@@ -327,9 +327,9 @@ class ServerManagementTest extends TestCase
                 'game_type' => 'reforger',
                 'name' => 'Reforger Server',
                 'port' => 2001,
-                'query_port' => 17777,
                 'max_players' => 32,
                 'game_install_id' => $reforgerInstall->id,
+                'scenario_id' => '{ECC61978EDCC2B5A}Missions/23_Campaign.conf',
             ])
             ->assertRedirect()
             ->assertSessionHas('success');
@@ -338,6 +338,7 @@ class ServerManagementTest extends TestCase
         $this->assertNotNull($server);
         $this->assertNotNull($server->reforgerSettings);
         $this->assertTrue($server->reforgerSettings->third_person_view_enabled);
+        $this->assertEquals('{ECC61978EDCC2B5A}Missions/23_Campaign.conf', $server->reforgerSettings->scenario_id);
     }
 
     // ---------------------------------------------------------------
@@ -398,10 +399,10 @@ class ServerManagementTest extends TestCase
             ->assertSessionHas('success');
     }
 
-    public function test_update_server_saves_network_settings(): void
+    public function test_update_server_saves_arma3_settings(): void
     {
         $server = Server::factory()->create();
-        $server->networkSettings()->create([]);
+        $server->arma3Settings()->create([]);
 
         $this->actingAs($this->user)
             ->put(route('servers.update', $server), [
@@ -420,16 +421,16 @@ class ServerManagementTest extends TestCase
             ->assertSessionHas('success');
 
         $server->refresh();
-        $this->assertEquals(2048, $server->networkSettings->max_msg_send);
-        $this->assertEquals(5120000, $server->networkSettings->min_bandwidth);
-        $this->assertEquals(104857600, $server->networkSettings->max_bandwidth);
-        $this->assertEquals(5000, $server->networkSettings->view_distance);
+        $this->assertEquals(2048, $server->arma3Settings->max_msg_send);
+        $this->assertEquals(5120000, $server->arma3Settings->min_bandwidth);
+        $this->assertEquals(104857600, $server->arma3Settings->max_bandwidth);
+        $this->assertEquals(5000, $server->arma3Settings->view_distance);
     }
 
-    public function test_network_settings_validation_rejects_invalid_values(): void
+    public function test_arma3_settings_validation_rejects_invalid_values(): void
     {
         $server = Server::factory()->create();
-        $server->networkSettings()->create([]);
+        $server->arma3Settings()->create([]);
 
         $this->actingAs($this->user)
             ->put(route('servers.update', $server), [

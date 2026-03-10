@@ -1,0 +1,26 @@
+<?php
+
+namespace Database\Factories;
+
+use App\Models\{{ model }};
+use App\Models\Server;
+use Illuminate\Database\Eloquent\Factories\Factory;
+
+/**
+ * @extends Factory<{{ model }}>
+ */
+class {{ class }} extends Factory
+{
+    protected $model = {{ model }}::class;
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function definition(): array
+    {
+        return [
+            'server_id' => Server::factory(),
+            // TODO: Add your settings column defaults here
+        ];
+    }
+}

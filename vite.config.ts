@@ -1,8 +1,46 @@
+import { execSync } from 'child_process';
 import { wayfinder } from '@laravel/vite-plugin-wayfinder';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import laravel from 'laravel-vite-plugin';
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
+
+/**
+ * Vite plugin that regenerates TypeScript types from game handler schemas.
+ * Watches `app/GameHandlers/*.php` during dev and runs the artisan command.
+ */
+function gameTypes(): Plugin {
+    const command = 'php artisan game:generate-types';
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+
+    function generate() {
+        try {
+            execSync(command, { stdio: 'ignore' });
+        } catch {
+            // silently ignore — artisan may not be available during npm install
+        }
+    }
+
+    return {
+        name: 'game-types',
+        buildStart() {
+            generate();
+        },
+        configureServer(server) {
+            server.watcher.add('app/GameHandlers/**/*.php');
+            server.watcher.add('app/Contracts/GameHandler.php');
+            server.watcher.on('change', (path) => {
+                if (
+                    path.includes('GameHandlers/') ||
+                    path.includes('Contracts/GameHandler')
+                ) {
+                    if (timeout) clearTimeout(timeout);
+                    timeout = setTimeout(generate, 300);
+                }
+            });
+        },
+    };
+}
 
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, process.cwd(), '');
@@ -22,6 +60,7 @@ export default defineConfig(({ mode }) => {
             wayfinder({
                 formVariants: true,
             }),
+            gameTypes(),
         ],
         server: {
             host: '0.0.0.0',

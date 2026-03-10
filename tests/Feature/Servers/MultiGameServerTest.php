@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Servers;
 
-use App\Enums\GameType;
 use App\GameHandlers\Arma3Handler;
 use App\GameHandlers\DayZHandler;
 use App\GameHandlers\ReforgerHandler;
@@ -80,7 +79,7 @@ class MultiGameServerTest extends TestCase
         $handler = app(GameManager::class)->for($server);
 
         $this->assertInstanceOf(Arma3Handler::class, $handler);
-        $this->assertSame(GameType::Arma3, $handler->gameType());
+        $this->assertSame('arma3', $handler->value());
     }
 
     public function test_game_manager_resolves_reforger_handler(): void
@@ -90,7 +89,7 @@ class MultiGameServerTest extends TestCase
         $handler = app(GameManager::class)->for($server);
 
         $this->assertInstanceOf(ReforgerHandler::class, $handler);
-        $this->assertSame(GameType::ArmaReforger, $handler->gameType());
+        $this->assertSame('reforger', $handler->value());
     }
 
     public function test_game_manager_resolves_dayz_handler(): void
@@ -100,16 +99,16 @@ class MultiGameServerTest extends TestCase
         $handler = app(GameManager::class)->for($server);
 
         $this->assertInstanceOf(DayZHandler::class, $handler);
-        $this->assertSame(GameType::DayZ, $handler->gameType());
+        $this->assertSame('dayz', $handler->value());
     }
 
     // ---------------------------------------------------------------
-    // 4. GameType enum methods
+    // 4. Handler game properties
     // ---------------------------------------------------------------
 
     public function test_arma3_handler_game_properties(): void
     {
-        $handler = app(GameManager::class)->driver(GameType::Arma3->value);
+        $handler = app(GameManager::class)->driver('arma3');
 
         $this->assertSame(233780, $handler->serverAppId());
         $this->assertSame(107410, $handler->gameId());
@@ -122,7 +121,7 @@ class MultiGameServerTest extends TestCase
 
     public function test_reforger_handler_game_properties(): void
     {
-        $handler = app(GameManager::class)->driver(GameType::ArmaReforger->value);
+        $handler = app(GameManager::class)->driver('reforger');
 
         $this->assertSame(1874900, $handler->serverAppId());
         $this->assertSame(1874900, $handler->gameId());
@@ -135,7 +134,7 @@ class MultiGameServerTest extends TestCase
 
     public function test_dayz_handler_game_properties(): void
     {
-        $handler = app(GameManager::class)->driver(GameType::DayZ->value);
+        $handler = app(GameManager::class)->driver('dayz');
 
         $this->assertSame(223350, $handler->serverAppId());
         $this->assertSame(221100, $handler->gameId());
@@ -155,7 +154,7 @@ class MultiGameServerTest extends TestCase
         $workshopId = 123456789;
 
         $arma3Mod = WorkshopMod::factory()->installed()->create([
-            'game_type' => GameType::Arma3,
+            'game_type' => 'arma3',
             'workshop_id' => $workshopId,
             'name' => 'Shared Mod',
         ]);
@@ -168,8 +167,8 @@ class MultiGameServerTest extends TestCase
         $this->assertDatabaseCount('workshop_mods', 2);
         $this->assertSame($workshopId, $arma3Mod->workshop_id);
         $this->assertSame($workshopId, $dayzMod->workshop_id);
-        $this->assertSame(GameType::Arma3, $arma3Mod->game_type);
-        $this->assertSame(GameType::DayZ, $dayzMod->game_type);
+        $this->assertSame('arma3', $arma3Mod->game_type);
+        $this->assertSame('dayz', $dayzMod->game_type);
     }
 
     // ---------------------------------------------------------------
@@ -181,7 +180,7 @@ class MultiGameServerTest extends TestCase
         $presetName = 'My Modpack';
 
         $arma3Preset = ModPreset::factory()->create([
-            'game_type' => GameType::Arma3,
+            'game_type' => 'arma3',
             'name' => $presetName,
         ]);
 
@@ -192,8 +191,8 @@ class MultiGameServerTest extends TestCase
         $this->assertDatabaseCount('mod_presets', 2);
         $this->assertSame($presetName, $arma3Preset->name);
         $this->assertSame($presetName, $dayzPreset->name);
-        $this->assertSame(GameType::Arma3, $arma3Preset->game_type);
-        $this->assertSame(GameType::DayZ, $dayzPreset->game_type);
+        $this->assertSame('arma3', $arma3Preset->game_type);
+        $this->assertSame('dayz', $dayzPreset->game_type);
     }
 
     // ---------------------------------------------------------------
@@ -206,12 +205,12 @@ class MultiGameServerTest extends TestCase
 
         $this->assertDatabaseHas('servers', [
             'id' => $server->id,
-            'game_type' => GameType::ArmaReforger->value,
+            'game_type' => 'reforger',
             'name' => 'Reforger Test',
         ]);
 
-        $this->assertSame(GameType::ArmaReforger, $server->game_type);
-        $this->assertSame(GameType::ArmaReforger, $server->gameInstall->game_type);
+        $this->assertSame('reforger', $server->game_type);
+        $this->assertSame('reforger', $server->gameInstall->game_type);
         $this->assertNotNull($server->reforgerSettings);
     }
 
@@ -225,11 +224,11 @@ class MultiGameServerTest extends TestCase
 
         $this->assertDatabaseHas('servers', [
             'id' => $server->id,
-            'game_type' => GameType::DayZ->value,
+            'game_type' => 'dayz',
             'name' => 'DayZ Test',
         ]);
 
-        $this->assertSame(GameType::DayZ, $server->game_type);
-        $this->assertSame(GameType::DayZ, $server->gameInstall->game_type);
+        $this->assertSame('dayz', $server->game_type);
+        $this->assertSame('dayz', $server->gameInstall->game_type);
     }
 }

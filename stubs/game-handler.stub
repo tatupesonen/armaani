@@ -1,0 +1,152 @@
+<?php
+
+namespace {{ namespace }};
+
+use App\Contracts\GameHandler;
+use App\Models\ModPreset;
+use App\Models\Server;
+{{ extraImports }}
+
+final class {{ class }} implements GameHandler{{ extraInterfaces }}
+{
+    public function value(): string
+    {
+        return '{{ gameType }}';
+    }
+
+    public function label(): string
+    {
+        return '{{ gameLabel }}';
+    }
+
+    // --- Game Metadata ---
+
+    public function defaultPort(): int
+    {
+        // TODO: Set the default game server port
+        return 2302;
+    }
+
+    public function defaultQueryPort(): int
+    {
+        // TODO: Set the default query port
+        return 27016;
+    }
+
+    public function branches(): array
+    {
+        return ['public'];
+    }
+
+    public function supportsWorkshopMods(): bool
+    {
+        return false;
+    }
+
+    public function requiresLowercaseConversion(): bool
+    {
+        return false;
+    }
+
+    // --- Server Process ---
+
+    public function buildLaunchCommand(Server $server): array
+    {
+        // TODO: Build the command to launch the dedicated server
+        throw new \RuntimeException('{{ gameLabel }} server support is not yet implemented.');
+    }
+
+    public function generateConfigFiles(Server $server): void
+    {
+        // TODO: Write config files (server.cfg, etc.)
+    }
+
+    public function getBinaryPath(Server $server): string
+    {
+        // TODO: Return the path to the server executable
+        throw new \RuntimeException('{{ gameLabel }} server support is not yet implemented.');
+    }
+
+    public function getProfileName(Server $server): string
+    {
+        return '{{ gameType }}_' . $server->id;
+    }
+
+    public function getServerLogPath(Server $server): string
+    {
+        return $server->getProfilesPath() . '/server.log';
+    }
+
+    // --- Validation ---
+
+    public function serverValidationRules(?Server $server = null): array
+    {
+        return [];
+    }
+
+    public function settingsValidationRules(): array
+    {
+        return [];
+    }
+
+    // --- UI Schema ---
+
+    public function settingsSchema(): array
+    {
+        // TODO: Define sections & fields for the server settings UI.
+        // See Arma3Handler::settingsSchema() for a comprehensive example.
+        return [];
+    }
+
+    // --- Related Settings ---
+
+    /** @phpstan-ignore return.unusedType */
+    public function settingsModelClass(): ?string
+    {
+        {{ settingsModelReturn }}
+    }
+
+    /** @phpstan-ignore return.unusedType */
+    public function settingsRelationName(): ?string
+    {
+        {{ settingsRelationReturn }}
+    }
+
+    public function createRelatedSettings(Server $server): void
+    {
+        {{ createRelatedSettings }}
+    }
+
+    public function updateRelatedSettings(Server $server, array $validated): void
+    {
+        {{ updateRelatedSettings }}
+    }
+
+    // --- Mod Presets ---
+
+    /**
+     * @return list<array{type: 'workshop'|'registered', label: string, relationship: string, formField: string}>
+     */
+    public function modSections(): array
+    {
+        return [
+            [
+                'type' => 'workshop',
+                'label' => 'Workshop Mods',
+                'relationship' => 'mods',
+                'formField' => 'mod_ids',
+            ],
+        ];
+    }
+
+    public function syncPresetMods(ModPreset $preset, array $validated): void
+    {
+        $preset->mods()->sync($validated['mod_ids'] ?? []);
+    }
+
+    public function getPresetModCount(ModPreset $preset): int
+    {
+        return $preset->mods()->count();
+    }
+{{ extraMethods }}
+}

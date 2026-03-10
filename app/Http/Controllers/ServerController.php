@@ -2,10 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Contracts\GameHandler;
 use App\Contracts\SupportsBackups;
 use App\Contracts\SupportsHeadlessClients;
 use App\Contracts\SupportsMissions;
-use App\Enums\GameType;
+use App\Contracts\SupportsScenarios;
 use App\Enums\InstallationStatus;
 use App\Enums\ServerStatus;
 use App\GameManager;
@@ -16,7 +17,6 @@ use App\Jobs\StopServerJob;
 use App\Models\GameInstall;
 use App\Models\ModPreset;
 use App\Models\Server;
-use App\Services\Mod\ReforgerScenarioService;
 use App\Services\Server\ServerProcessService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -33,8 +33,17 @@ class ServerController extends Controller
 
     public function index(): Response
     {
+        $allHandlers = $this->gameManager->allHandlers();
+
+        // Build eager-load list dynamically from handlers
+        $settingsRelations = collect($allHandlers)
+            ->map(fn (GameHandler $h) => $h->settingsRelationName())
+            ->filter()
+            ->values()
+            ->all();
+
         $servers = Server::query()
-            ->with(['activePreset', 'gameInstall', 'difficultySettings', 'networkSettings', 'reforgerSettings', 'dayzSettings', 'backups'])
+            ->with(array_merge(['activePreset', 'gameInstall', 'backups'], $settingsRelations))
             ->orderBy('name')
             ->get()
             ->each(function (Server $server): void {
@@ -50,31 +59,28 @@ class ServerController extends Controller
                 ->whereIn('installation_status', [InstallationStatus::Installed, InstallationStatus::Installing])
                 ->orderBy('name')
                 ->get(),
-            'gameTypes' => collect(GameType::cases())->map(function (GameType $gt) {
-                $handler = $this->gameManager->driver($gt->value);
-
-                return [
-                    'value' => $gt->value,
-                    'label' => $gt->label(),
-                    'defaultPort' => $handler->defaultPort(),
-                    'defaultQueryPort' => $handler->defaultQueryPort(),
-                    'supportsHeadlessClients' => $handler instanceof SupportsHeadlessClients,
-                    'supportsWorkshopMods' => $handler->supportsWorkshopMods(),
-                    'supportsMissionUpload' => $handler instanceof SupportsMissions,
-                ];
-            }),
+            'gameTypes' => collect($allHandlers)->map(fn (GameHandler $handler) => [
+                'value' => $handler->value(),
+                'label' => $handler->label(),
+                'defaultPort' => $handler->defaultPort(),
+                'defaultQueryPort' => $handler->defaultQueryPort(),
+                'supportsHeadlessClients' => $handler instanceof SupportsHeadlessClients,
+                'supportsWorkshopMods' => $handler->supportsWorkshopMods(),
+                'supportsMissionUpload' => $handler instanceof SupportsMissions,
+                'settingsSchema' => $handler->settingsSchema(),
+            ])->values(),
         ]);
     }
 
     public function store(StoreServerRequest $request): RedirectResponse
     {
         $validated = $request->validated();
-        $gameType = GameType::from($validated['game_type']);
 
         $server = Server::query()->create($validated);
 
-        $handler = $this->gameManager->driver($gameType->value);
+        $handler = $this->gameManager->driver($validated['game_type']);
         $handler->createRelatedSettings($server);
+        $handler->updateRelatedSettings($server, $validated);
 
         Log::info(auth_context()." created server: {$server->name}");
 
@@ -190,25 +196,29 @@ class ServerController extends Controller
         ]);
     }
 
-    public function reforgerScenarios(Server $server, ReforgerScenarioService $scenarioService): JsonResponse
+    public function scenarios(Server $server): JsonResponse
     {
-        if ($server->game_type !== GameType::ArmaReforger) {
+        $handler = $this->gameManager->for($server);
+
+        if (! $handler instanceof SupportsScenarios) {
             return response()->json(['scenarios' => []], 422);
         }
 
         return response()->json([
-            'scenarios' => $scenarioService->getScenarios($server),
+            'scenarios' => $handler->getScenarios($server),
         ]);
     }
 
-    public function reloadReforgerScenarios(Server $server, ReforgerScenarioService $scenarioService): JsonResponse
+    public function reloadScenarios(Server $server): JsonResponse
     {
-        if ($server->game_type !== GameType::ArmaReforger) {
+        $handler = $this->gameManager->for($server);
+
+        if (! $handler instanceof SupportsScenarios) {
             return response()->json(['scenarios' => []], 422);
         }
 
         return response()->json([
-            'scenarios' => $scenarioService->refreshScenarios($server),
+            'scenarios' => $handler->refreshScenarios($server),
         ]);
     }
 }

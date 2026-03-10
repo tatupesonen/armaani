@@ -53,7 +53,7 @@ class InstallServerJobTest extends TestCase
         @mkdir($manifestDir, 0755, true);
 
         file_put_contents(
-            $manifestDir.'/appmanifest_'.app(GameManager::class)->driver($install->game_type->value)->serverAppId().'.acf',
+            $manifestDir.'/appmanifest_'.app(GameManager::class)->driver($install->game_type)->serverAppId().'.acf',
             <<<'ACF'
             "AppState"
             {

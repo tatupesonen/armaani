@@ -41,7 +41,7 @@ class DownloadModJob implements ShouldQueue
         $modPath = $this->mod->getInstallationPath();
         $expectedSize = $this->mod->file_size;
 
-        $handler = app(GameManager::class)->driver($this->mod->game_type->value);
+        $handler = app(GameManager::class)->driver($this->mod->game_type);
 
         $process = $steamCmd->startDownloadMod($installDir, $this->mod->workshop_id, $handler);
 

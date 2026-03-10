@@ -2,7 +2,7 @@ import type { InertiaLinkProps } from '@inertiajs/react';
 import { clsx } from 'clsx';
 import type { ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import type { GameType, InstallationStatus, ServerStatus } from '@/types/game';
+import type { InstallationStatus, ServerStatus } from '@/types/game';
 
 export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
@@ -21,16 +21,6 @@ export function formatBytes(bytes: number | null | undefined): string {
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
 
     return `${(bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0)} ${units[i]}`;
-}
-
-export function gameTypeLabel(gameType: GameType): string {
-    const labels: Record<GameType, string> = {
-        arma3: 'Arma 3',
-        reforger: 'Arma Reforger',
-        dayz: 'DayZ',
-    };
-
-    return labels[gameType];
 }
 
 export function serverStatusLabel(status: ServerStatus): string {

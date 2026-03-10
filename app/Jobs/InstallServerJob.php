@@ -42,7 +42,7 @@ class InstallServerJob implements ShouldQueue
 
         $lastProgressUpdate = 0;
 
-        $handler = app(GameManager::class)->driver($this->gameInstall->game_type->value);
+        $handler = app(GameManager::class)->driver($this->gameInstall->game_type);
 
         $result = $steamCmd->installServer(
             $installDir,
@@ -105,7 +105,7 @@ class InstallServerJob implements ShouldQueue
     /**
      * Parse the build ID from the SteamCMD appmanifest ACF file.
      */
-    protected function parseBuildId(string $installDir, \App\Contracts\GameHandler $handler): ?string
+    protected function parseBuildId(string $installDir, \App\Contracts\SteamGameHandler $handler): ?string
     {
         $manifestPath = $installDir.'/steamapps/appmanifest_'.$handler->serverAppId().'.acf';
 

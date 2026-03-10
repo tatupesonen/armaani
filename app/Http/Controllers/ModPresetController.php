@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\GameType;
+use App\Contracts\GameHandler;
+use App\Contracts\SupportsRegisteredMods;
 use App\GameManager;
 use App\Http\Requests\ModPreset\ImportModPresetRequest;
 use App\Http\Requests\ModPreset\StoreModPresetRequest;
 use App\Http\Requests\ModPreset\UpdateModPresetRequest;
 use App\Models\ModPreset;
-use App\Models\ReforgerMod;
 use App\Models\WorkshopMod;
 use App\Services\Mod\PresetImportService;
 use Illuminate\Http\RedirectResponse;
@@ -24,46 +24,54 @@ class ModPresetController extends Controller
 
     public function index(): Response
     {
+        $presets = ModPreset::query()
+            ->withCount('mods')
+            ->orderBy('name')
+            ->get();
+
+        // Add dynamic registered mod counts per preset from handlers
+        $handlers = $this->gameManager->allHandlers();
+        $presets->each(function (ModPreset $preset) use ($handlers): void {
+            $handler = $handlers[$preset->game_type] ?? null;
+            if ($handler) {
+                $preset->setAttribute('total_mod_count', $handler->getPresetModCount($preset));
+            } else {
+                $preset->setAttribute('total_mod_count', $preset->mods_count);
+            }
+        });
+
         return Inertia::render('presets/index', [
-            'presets' => ModPreset::query()
-                ->withCount(['mods', 'reforgerMods'])
-                ->orderBy('name')
-                ->get(),
+            'presets' => $presets,
         ]);
     }
 
     public function create(): Response
     {
-        return Inertia::render('presets/create', [
-            'gameTypes' => collect(GameType::cases())->map(function (GameType $gt) {
-                $handler = $this->gameManager->driver($gt->value);
+        $handlers = $this->gameManager->allHandlers();
 
-                return [
-                    'value' => $gt->value,
-                    'label' => $gt->label(),
-                    'supportsWorkshopMods' => $handler->supportsWorkshopMods(),
-                ];
-            }),
+        return Inertia::render('presets/create', [
+            'gameTypes' => collect($handlers)->map(fn (GameHandler $handler) => [
+                'value' => $handler->value(),
+                'label' => $handler->label(),
+                'supportsWorkshopMods' => $handler->supportsWorkshopMods(),
+                'modSections' => $handler->modSections(),
+            ])->values(),
             'workshopMods' => WorkshopMod::query()->orderBy('name')->get(),
-            'reforgerMods' => ReforgerMod::query()->orderBy('name')->get(),
+            'registeredMods' => $this->gatherRegisteredMods($handlers),
         ]);
     }
 
     public function store(StoreModPresetRequest $request): RedirectResponse
     {
         $validated = $request->validated();
-        $gameType = GameType::from($validated['game_type']);
 
         $preset = ModPreset::query()->create([
             'game_type' => $validated['game_type'],
             'name' => $validated['name'],
         ]);
 
-        if ($gameType === GameType::ArmaReforger) {
-            $preset->reforgerMods()->sync($validated['reforger_mod_ids'] ?? []);
-        } else {
-            $preset->mods()->sync($validated['mod_ids'] ?? []);
-        }
+        $handler = $this->gameManager->driver($validated['game_type']);
+        $handler->syncPresetMods($preset, $validated);
 
         Log::info(auth_context()." created preset: {$preset->name}");
 
@@ -72,30 +80,34 @@ class ModPresetController extends Controller
 
     public function edit(ModPreset $modPreset): Response
     {
-        $modPreset->load(['mods', 'reforgerMods']);
+        $handler = $this->gameManager->driver($modPreset->game_type);
+
+        // Eager-load the relationships this handler uses
+        $relations = ['mods'];
+        if ($handler instanceof SupportsRegisteredMods) {
+            $relations[] = $handler->registeredModRelationName();
+        }
+        $modPreset->load($relations);
 
         return Inertia::render('presets/edit', [
             'preset' => $modPreset,
+            'modSections' => $handler->modSections(),
             'workshopMods' => WorkshopMod::query()
                 ->forGame($modPreset->game_type)
                 ->orderBy('name')
                 ->get(),
-            'reforgerMods' => ReforgerMod::query()->orderBy('name')->get(),
+            'registeredMods' => $this->gatherRegisteredMods($this->gameManager->allHandlers()),
         ]);
     }
 
     public function update(UpdateModPresetRequest $request, ModPreset $modPreset): RedirectResponse
     {
         $validated = $request->validated();
-        $gameType = $modPreset->game_type;
 
         $modPreset->update(['name' => $validated['name']]);
 
-        if ($gameType === GameType::ArmaReforger) {
-            $modPreset->reforgerMods()->sync($validated['reforger_mod_ids'] ?? []);
-        } else {
-            $modPreset->mods()->sync($validated['mod_ids'] ?? []);
-        }
+        $handler = $this->gameManager->driver($modPreset->game_type);
+        $handler->syncPresetMods($modPreset, $validated);
 
         Log::info(auth_context()." updated preset: {$modPreset->name}");
 
@@ -126,5 +138,25 @@ class ModPresetController extends Controller
         Log::info(auth_context()." imported preset: {$preset->name}");
 
         return back()->with('success', "Preset '{$preset->name}' imported with {$modCount} mod(s).");
+    }
+
+    /**
+     * Gather all registered mods from handlers that support them, keyed by game type.
+     *
+     * @param  array<string, GameHandler>  $handlers
+     * @return array<string, \Illuminate\Database\Eloquent\Collection<int, \Illuminate\Database\Eloquent\Model>>
+     */
+    private function gatherRegisteredMods(array $handlers): array
+    {
+        $registeredMods = [];
+
+        foreach ($handlers as $handler) {
+            if ($handler instanceof SupportsRegisteredMods) {
+                $modelClass = $handler->registeredModModelClass();
+                $registeredMods[$handler->value()] = $modelClass::query()->orderBy('name')->get();
+            }
+        }
+
+        return $registeredMods;
     }
 }

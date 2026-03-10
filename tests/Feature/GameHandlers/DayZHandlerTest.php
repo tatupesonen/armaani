@@ -7,7 +7,6 @@ use App\Contracts\ManagesModAssets;
 use App\Contracts\SupportsBackups;
 use App\Contracts\SupportsHeadlessClients;
 use App\Contracts\SupportsMissions;
-use App\Enums\GameType;
 use App\GameHandlers\DayZHandler;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\CreatesGameScenarios;
@@ -29,7 +28,7 @@ class DayZHandlerTest extends TestCase
 
     public function test_game_type_returns_dayz(): void
     {
-        $this->assertEquals(GameType::DayZ, $this->handler->gameType());
+        $this->assertEquals('dayz', $this->handler->value());
     }
 
     public function test_get_binary_path_returns_dayz_server(): void

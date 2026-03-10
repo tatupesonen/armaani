@@ -1,4 +1,4 @@
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { Download, Plus, RotateCw, Terminal, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import Heading from '@/components/heading';
@@ -35,7 +35,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
-import { formatBytes, gameTypeLabel, installStatusVariant } from '@/lib/utils';
+import { formatBytes, installStatusVariant } from '@/lib/utils';
 import { index as gameInstallsIndex } from '@/routes/game-installs';
 import { store, reinstall, destroy } from '@/routes/game-installs';
 import type { BreadcrumbItem, GameInstall, GameTypeInfo } from '@/types';
@@ -69,8 +69,8 @@ export default function GameInstallsIndex({ installs, gameTypes }: Props) {
     }
 
     const createForm = useForm({
-        game_type: 'arma3' as string,
-        name: 'Arma 3 Server',
+        game_type: (gameTypes[0]?.value ?? '') as string,
+        name: (gameTypes[0]?.defaultName ?? '') as string,
         branch: 'public',
     });
 
@@ -301,6 +301,7 @@ function InstallCard({
     onReinstall: (install: GameInstall) => void;
     onDelete: (id: number) => void;
 }) {
+    const { gameTypeLabels } = usePage().props;
     const isActive =
         install.installation_status === 'installing' ||
         install.installation_status === 'queued';
@@ -316,7 +317,8 @@ function InstallCard({
                             {install.name}
                         </h3>
                         <Badge variant="outline">
-                            {gameTypeLabel(install.game_type)}
+                            {gameTypeLabels[install.game_type] ??
+                                install.game_type}
                         </Badge>
                         <Badge
                             variant={installStatusVariant(

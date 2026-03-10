@@ -2,30 +2,39 @@
 
 namespace App\GameHandlers;
 
-use App\Attributes\HandlesGame;
 use App\Contracts\DetectsServerState;
 use App\Contracts\GameHandler;
 use App\Contracts\ManagesModAssets;
+use App\Contracts\SteamGameHandler;
 use App\Contracts\SupportsBackups;
 use App\Contracts\SupportsHeadlessClients;
 use App\Contracts\SupportsMissions;
-use App\Enums\GameType;
-use App\Models\DifficultySettings;
-use App\Models\NetworkSettings;
+use App\Models\Arma3Settings;
+use App\Models\ModPreset;
 use App\Models\Server;
 use App\Services\Renderer\TwigConfigRenderer;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 
-#[HandlesGame(GameType::Arma3)]
-final class Arma3Handler implements DetectsServerState, GameHandler, ManagesModAssets, SupportsBackups, SupportsHeadlessClients, SupportsMissions
+final class Arma3Handler implements DetectsServerState, GameHandler, ManagesModAssets, SteamGameHandler, SupportsBackups, SupportsHeadlessClients, SupportsMissions
 {
     public function __construct(
         protected TwigConfigRenderer $configRenderer,
     ) {}
 
-    public function gameType(): GameType
+    public function value(): string
     {
-        return GameType::Arma3;
+        return 'arma3';
+    }
+
+    public function label(): string
+    {
+        return 'Arma 3';
+    }
+
+    public function consumerAppId(): int
+    {
+        return 107410;
     }
 
     public function serverAppId(): int
@@ -279,16 +288,228 @@ final class Arma3Handler implements DetectsServerState, GameHandler, ManagesModA
         return 'arma3_'.$server->id.'.vars.Arma3Profile';
     }
 
+    // --- UI Schema ---
+
+    public function settingsSchema(): array
+    {
+        $neverLimitedAlways = [
+            ['value' => '0', 'label' => 'Never'],
+            ['value' => '1', 'label' => 'Limited'],
+            ['value' => '2', 'label' => 'Always'],
+        ];
+
+        $neverFadeAlways = [
+            ['value' => '0', 'label' => 'Never'],
+            ['value' => '1', 'label' => 'Fade'],
+            ['value' => '2', 'label' => 'Always'],
+        ];
+
+        return [
+            // --- Server Rules ---
+            [
+                'title' => 'Server Rules',
+                'showOnCreate' => true,
+                'createLabel' => 'Arma 3 Options',
+                'source' => 'server',
+                'fields' => [
+                    ['key' => 'query_port', 'label' => 'Steam Query Port', 'type' => 'number', 'default' => $this->defaultQueryPort(), 'min' => 1, 'max' => 65535, 'description' => 'Steam server browser query port. Typically game port + 1.'],
+                    ['key' => 'password', 'label' => 'Server Password', 'type' => 'text', 'default' => '', 'placeholder' => 'Leave empty for no password'],
+                    ['key' => 'admin_password', 'label' => 'Admin Password', 'type' => 'text', 'default' => '', 'placeholder' => 'In-game admin password'],
+                    ['type' => 'separator'],
+                    ['key' => 'verify_signatures', 'label' => 'Verify Signatures', 'type' => 'toggle', 'default' => true],
+                    ['key' => 'allowed_file_patching', 'label' => 'Allow File Patching', 'type' => 'toggle', 'default' => false],
+                    ['key' => 'battle_eye', 'label' => 'BattlEye Anti-Cheat', 'type' => 'toggle', 'default' => true],
+                    ['key' => 'von_enabled', 'label' => 'Voice Over Network', 'type' => 'toggle', 'default' => true],
+                    ['key' => 'persistent', 'label' => 'Persistent Server', 'type' => 'toggle', 'default' => false],
+                    ['key' => 'auto_restart', 'label' => 'Auto-Restart on Crash', 'type' => 'toggle', 'default' => false],
+                ],
+            ],
+
+            // --- Difficulty Settings ---
+            [
+                'title' => 'Difficulty Settings',
+                'description' => 'HUD elements, third-person view, AI behavior, and gameplay options.',
+                'collapsible' => true,
+                'source' => 'arma3_settings',
+                'layout' => 'columns',
+                'groups' => [
+                    // Column 1: Boolean toggles
+                    [
+                        'fields' => [
+                            ['key' => 'reduced_damage', 'label' => 'Reduced damage', 'type' => 'toggle', 'default' => false],
+                            ['key' => 'stamina_bar', 'label' => 'Stamina bar', 'type' => 'toggle', 'default' => true],
+                            ['key' => 'weapon_crosshair', 'label' => 'Weapon crosshair', 'type' => 'toggle', 'default' => true],
+                            ['key' => 'vision_aid', 'label' => 'Vision aid', 'type' => 'toggle', 'default' => false],
+                            ['key' => 'camera_shake', 'label' => 'Camera shake', 'type' => 'toggle', 'default' => true],
+                            ['key' => 'score_table', 'label' => 'Score table', 'type' => 'toggle', 'default' => true],
+                            ['key' => 'death_messages', 'label' => 'Killed by', 'type' => 'toggle', 'default' => true],
+                            ['key' => 'von_id', 'label' => 'VON ID', 'type' => 'toggle', 'default' => true],
+                            ['key' => 'map_content', 'label' => 'Extended map content', 'type' => 'toggle', 'default' => true],
+                            ['key' => 'auto_report', 'label' => 'Auto report', 'type' => 'toggle', 'default' => false],
+                        ],
+                    ],
+                    // Column 2: Situational awareness + AI
+                    [
+                        'fields' => [
+                            ['key' => 'group_indicators', 'label' => 'Group indicators', 'type' => 'segmented', 'default' => 2, 'options' => $neverLimitedAlways],
+                            ['key' => 'friendly_tags', 'label' => 'Friendly tags', 'type' => 'segmented', 'default' => 2, 'options' => $neverLimitedAlways],
+                            ['key' => 'enemy_tags', 'label' => 'Enemy tags', 'type' => 'segmented', 'default' => 0, 'options' => $neverLimitedAlways],
+                            ['key' => 'detected_mines', 'label' => 'Detected mines', 'type' => 'segmented', 'default' => 2, 'options' => $neverLimitedAlways],
+                            ['type' => 'separator'],
+                            ['key' => 'ai_level_preset', 'label' => 'AI level preset', 'type' => 'segmented', 'default' => 3, 'options' => [
+                                ['value' => '0', 'label' => 'Low'],
+                                ['value' => '1', 'label' => 'Normal'],
+                                ['value' => '2', 'label' => 'High'],
+                                ['value' => '3', 'label' => 'Custom'],
+                            ]],
+                            ['key' => 'skill_ai', 'label' => 'AI Skill', 'type' => 'number', 'default' => '0.50', 'min' => 0, 'max' => 1, 'step' => 0.05, 'storeAsString' => true, 'halfWidth' => true],
+                            ['key' => 'precision_ai', 'label' => 'AI Precision', 'type' => 'number', 'default' => '0.50', 'min' => 0, 'max' => 1, 'step' => 0.05, 'storeAsString' => true, 'halfWidth' => true],
+                        ],
+                    ],
+                    // Column 3: HUD & view settings
+                    [
+                        'fields' => [
+                            ['key' => 'commands', 'label' => 'Commands', 'type' => 'segmented', 'default' => 2, 'options' => $neverFadeAlways],
+                            ['key' => 'waypoints', 'label' => 'Waypoints', 'type' => 'segmented', 'default' => 2, 'options' => $neverFadeAlways],
+                            ['key' => 'weapon_info', 'label' => 'Weapon info', 'type' => 'segmented', 'default' => 2, 'options' => $neverFadeAlways],
+                            ['key' => 'stance_indicator', 'label' => 'Stance indicator', 'type' => 'segmented', 'default' => 2, 'options' => $neverFadeAlways],
+                            ['key' => 'third_person_view', 'label' => 'Third person view', 'type' => 'segmented', 'default' => 1, 'options' => [
+                                ['value' => '0', 'label' => 'Disabled'],
+                                ['value' => '1', 'label' => 'Enabled'],
+                                ['value' => '2', 'label' => 'Vehicles'],
+                            ]],
+                            ['key' => 'tactical_ping', 'label' => 'Tactical ping', 'type' => 'segmented', 'default' => 3, 'options' => [
+                                ['value' => '0', 'label' => 'Off'],
+                                ['value' => '1', 'label' => '3D'],
+                                ['value' => '2', 'label' => 'Map'],
+                                ['value' => '3', 'label' => 'Both'],
+                            ]],
+                        ],
+                    ],
+                ],
+            ],
+
+            // --- Network Settings ---
+            [
+                'title' => 'Network Settings',
+                'description' => 'Bandwidth, packet sizes, terrain detail, and view distance tuning for server_basic.cfg.',
+                'collapsible' => true,
+                'source' => 'arma3_settings',
+                'layout' => 'rows',
+                'presets' => [
+                    [
+                        'label' => 'Reset to Default',
+                        'variant' => 'ghost',
+                        'icon' => 'reset',
+                        'values' => [
+                            'max_msg_send' => 128,
+                            'max_size_guaranteed' => 512,
+                            'max_size_nonguaranteed' => 256,
+                            'min_bandwidth' => '131072',
+                            'max_bandwidth' => '10000000000',
+                            'min_error_to_send' => '0.0010',
+                            'min_error_to_send_near' => '0.0100',
+                            'max_packet_size' => 1400,
+                            'max_custom_file_size' => 0,
+                            'terrain_grid' => '25.0000',
+                            'view_distance' => 0,
+                        ],
+                    ],
+                    [
+                        'label' => 'Apply High Performance',
+                        'variant' => 'default',
+                        'icon' => 'zap',
+                        'values' => [
+                            'max_msg_send' => 2048,
+                            'max_size_guaranteed' => 512,
+                            'max_size_nonguaranteed' => 256,
+                            'min_bandwidth' => '5120000',
+                            'max_bandwidth' => '104857600',
+                            'min_error_to_send' => '0.0010',
+                            'min_error_to_send_near' => '0.0100',
+                            'max_packet_size' => 1400,
+                            'max_custom_file_size' => 0,
+                            'terrain_grid' => '3.1250',
+                            'view_distance' => 0,
+                        ],
+                    ],
+                ],
+                'groups' => [
+                    [
+                        'columns' => 3,
+                        'fields' => [
+                            ['key' => 'max_msg_send', 'label' => 'MaxMsgSend', 'type' => 'number', 'default' => 128, 'min' => 1, 'max' => 10000, 'description' => 'Max packets per simulation cycle. Default: 128, high-perf: 2048.'],
+                            ['key' => 'max_size_guaranteed', 'label' => 'MaxSizeGuaranteed', 'type' => 'number', 'default' => 512, 'min' => 1, 'max' => 4096, 'description' => 'Max guaranteed packet payload (bytes). Used for non-repetitive events. Default: 512.'],
+                            ['key' => 'max_size_nonguaranteed', 'label' => 'MaxSizeNonguaranteed', 'type' => 'number', 'default' => 256, 'min' => 1, 'max' => 4096, 'description' => 'Max non-guaranteed packet payload (bytes). Used for position updates. Default: 256.'],
+                        ],
+                    ],
+                    [
+                        'columns' => 2,
+                        'fields' => [
+                            ['key' => 'min_bandwidth', 'label' => 'MinBandwidth', 'type' => 'text', 'default' => '131072', 'inputMode' => 'decimal', 'storeAsString' => true, 'description' => 'Guaranteed bandwidth (bps). Default: 131072, high-perf: 5120000.'],
+                            ['key' => 'max_bandwidth', 'label' => 'MaxBandwidth', 'type' => 'text', 'default' => '10000000000', 'inputMode' => 'decimal', 'storeAsString' => true, 'description' => 'Max bandwidth cap (bps). High-perf: 104857600 (100 Mbps).'],
+                        ],
+                    ],
+                    [
+                        'columns' => 2,
+                        'fields' => [
+                            ['key' => 'min_error_to_send', 'label' => 'MinErrorToSend', 'type' => 'text', 'default' => '0.0010', 'inputMode' => 'decimal', 'storeAsString' => true, 'description' => 'Min error for distant unit updates. Smaller = smoother optics. Default: 0.001.'],
+                            ['key' => 'min_error_to_send_near', 'label' => 'MinErrorToSendNear', 'type' => 'text', 'default' => '0.0100', 'inputMode' => 'decimal', 'storeAsString' => true, 'description' => 'Min error for near unit updates. Too large causes warping. Default: 0.01.'],
+                        ],
+                    ],
+                    [
+                        'columns' => 3,
+                        'fields' => [
+                            ['key' => 'max_packet_size', 'label' => 'MaxPacketSize', 'type' => 'number', 'default' => 1400, 'min' => 256, 'max' => 1500, 'description' => 'Max network packet size. Only change if router enforces lower. Default: 1400.'],
+                            ['key' => 'max_custom_file_size', 'label' => 'MaxCustomFileSize', 'type' => 'number', 'default' => 0, 'min' => 0, 'description' => 'Users with custom face/sound larger than this (bytes) are kicked. 0 = no limit.'],
+                            ['key' => 'view_distance', 'label' => 'View Distance', 'type' => 'number', 'default' => 0, 'min' => 0, 'description' => 'Server-side view distance override (meters). 0 = mission default.'],
+                        ],
+                    ],
+                    [
+                        'fields' => [
+                            ['key' => 'terrain_grid', 'label' => 'Terrain Grid', 'type' => 'text', 'default' => '25.0000', 'inputMode' => 'decimal', 'storeAsString' => true, 'description' => 'Server-side terrain resolution. 25 = low detail, 3.125 = high detail. Default: 25.'],
+                        ],
+                    ],
+                ],
+            ],
+
+            // --- Advanced ---
+            [
+                'advanced' => true,
+                'fields' => [
+                    ['key' => 'additional_params', 'label' => 'Additional Launch Parameters', 'type' => 'textarea', 'default' => '', 'rows' => 2, 'placeholder' => '-loadMissionToMemory -enableHT', 'source' => 'server'],
+                    ['key' => 'additional_server_options', 'label' => 'Additional server.cfg Options', 'type' => 'textarea', 'default' => '', 'rows' => 3, 'placeholder' => 'Raw config directives appended to server.cfg'],
+                ],
+            ],
+        ];
+    }
+
+    // --- DetectsServerState: Auto-Restart ---
+
+    public function shouldAutoRestart(Server $server): bool
+    {
+        return (bool) $server->auto_restart;
+    }
+
     // --- Validation ---
 
-    public function serverValidationRules(): array
+    public function serverValidationRules(?Server $server = null): array
     {
         return [
+            'query_port' => [
+                'required', 'integer', 'min:1', 'max:65535',
+                Rule::unique('servers', 'query_port')->when($server, fn ($rule) => $rule->ignore($server->id)),
+                Rule::unique('servers', 'port')->when($server, fn ($rule) => $rule->ignore($server->id)),
+            ],
+            'password' => ['nullable', 'string', 'max:255'],
+            'admin_password' => ['nullable', 'string', 'max:255'],
+            'auto_restart' => ['boolean'],
             'verify_signatures' => ['boolean'],
             'allowed_file_patching' => ['boolean'],
             'battle_eye' => ['boolean'],
             'persistent' => ['boolean'],
             'von_enabled' => ['boolean'],
+            'additional_params' => ['nullable', 'string', 'max:1000'],
             'additional_server_options' => ['nullable', 'string'],
         ];
     }
@@ -338,35 +559,59 @@ final class Arma3Handler implements DetectsServerState, GameHandler, ManagesModA
 
     // --- Related Settings ---
 
+    /** @phpstan-ignore return.unusedType */
+    public function settingsModelClass(): ?string
+    {
+        return Arma3Settings::class;
+    }
+
+    /** @phpstan-ignore return.unusedType */
+    public function settingsRelationName(): ?string
+    {
+        return 'arma3Settings';
+    }
+
     public function createRelatedSettings(Server $server): void
     {
-        DifficultySettings::query()->create(['server_id' => $server->id]);
-        NetworkSettings::query()->create(['server_id' => $server->id]);
+        Arma3Settings::query()->create(['server_id' => $server->id]);
     }
 
     public function updateRelatedSettings(Server $server, array $validated): void
     {
-        $difficultyFields = collect($validated)->only(
-            (new DifficultySettings)->getFillable()
+        $settingsFields = collect($validated)->only(
+            (new Arma3Settings)->getFillable()
         )->except('server_id')->toArray();
 
-        $networkFields = collect($validated)->only(
-            (new NetworkSettings)->getFillable()
-        )->except('server_id')->toArray();
-
-        if (! empty($difficultyFields)) {
-            $server->difficultySettings()->updateOrCreate(
+        if (! empty($settingsFields)) {
+            $server->arma3Settings()->updateOrCreate(
                 ['server_id' => $server->id],
-                $difficultyFields,
+                $settingsFields,
             );
         }
+    }
 
-        if (! empty($networkFields)) {
-            $server->networkSettings()->updateOrCreate(
-                ['server_id' => $server->id],
-                $networkFields,
-            );
-        }
+    // --- Mod Presets ---
+
+    public function modSections(): array
+    {
+        return [
+            [
+                'type' => 'workshop',
+                'label' => 'Workshop Mods',
+                'relationship' => 'mods',
+                'formField' => 'mod_ids',
+            ],
+        ];
+    }
+
+    public function syncPresetMods(ModPreset $preset, array $validated): void
+    {
+        $preset->mods()->sync($validated['mod_ids'] ?? []);
+    }
+
+    public function getPresetModCount(ModPreset $preset): int
+    {
+        return $preset->mods()->count();
     }
 
     /**
@@ -420,7 +665,7 @@ final class Arma3Handler implements DetectsServerState, GameHandler, ManagesModA
     protected function generateBasicConfig(Server $server): void
     {
         $renderer = $this->configRenderer;
-        $settings = $server->networkSettings ?? $this->getDefaultNetworkSettings();
+        $settings = $server->arma3Settings ?? $this->getDefaultSettings();
 
         $content = $renderer->render('arma3/server_basic.cfg.twig', [
             'max_msg_send' => $settings->max_msg_send,
@@ -448,7 +693,7 @@ final class Arma3Handler implements DetectsServerState, GameHandler, ManagesModA
     protected function generateProfileConfig(Server $server): void
     {
         $renderer = $this->configRenderer;
-        $settings = $server->difficultySettings ?? $this->getDefaultDifficultySettings();
+        $settings = $server->arma3Settings ?? $this->getDefaultSettings();
         $profileName = $this->getProfileName($server);
         $profileDir = $server->getProfilesPath().'/home/'.$profileName;
 
@@ -489,32 +734,12 @@ final class Arma3Handler implements DetectsServerState, GameHandler, ManagesModA
     }
 
     /**
-     * Build a default NetworkSettings object for servers without custom network settings.
+     * Build a default Arma3Settings object for servers without custom settings.
      */
-    protected function getDefaultNetworkSettings(): NetworkSettings
+    protected function getDefaultSettings(): Arma3Settings
     {
-        $settings = new NetworkSettings;
-        $settings->max_msg_send = 128;
-        $settings->max_size_guaranteed = 512;
-        $settings->max_size_nonguaranteed = 256;
-        $settings->min_bandwidth = 131072;
-        $settings->max_bandwidth = 10000000000;
-        $settings->min_error_to_send = 0.001;
-        $settings->min_error_to_send_near = 0.01;
-        $settings->max_packet_size = 1400;
-        $settings->max_custom_file_size = 0;
-        $settings->terrain_grid = 25.0;
-        $settings->view_distance = 0;
-
-        return $settings;
-    }
-
-    /**
-     * Build a default DifficultySettings object for servers without custom difficulty settings.
-     */
-    protected function getDefaultDifficultySettings(): DifficultySettings
-    {
-        $settings = new DifficultySettings;
+        $settings = new Arma3Settings;
+        // Difficulty defaults
         $settings->reduced_damage = false;
         $settings->group_indicators = 2;
         $settings->friendly_tags = 2;
@@ -538,6 +763,18 @@ final class Arma3Handler implements DetectsServerState, GameHandler, ManagesModA
         $settings->ai_level_preset = 1;
         $settings->skill_ai = 0.50;
         $settings->precision_ai = 0.50;
+        // Network defaults
+        $settings->max_msg_send = 128;
+        $settings->max_size_guaranteed = 512;
+        $settings->max_size_nonguaranteed = 256;
+        $settings->min_bandwidth = 131072;
+        $settings->max_bandwidth = 10000000000;
+        $settings->min_error_to_send = 0.001;
+        $settings->min_error_to_send_near = 0.01;
+        $settings->max_packet_size = 1400;
+        $settings->max_custom_file_size = 0;
+        $settings->terrain_grid = 25.0;
+        $settings->view_distance = 0;
 
         return $settings;
     }

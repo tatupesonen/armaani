@@ -1,4 +1,18 @@
-export type GameType = 'arma3' | 'reforger' | 'dayz';
+// Server type is a discriminated union generated from game handler schemas.
+// Narrow on `server.game_type` to access game-specific settings.
+// Regenerate with: php artisan game:generate-types
+export type {
+    Server,
+    ServerBase,
+    Arma3Settings,
+    ReforgerSettings,
+    Arma3Server,
+    ReforgerServer,
+    DayzServer,
+} from './generated';
+import type { Server } from './generated';
+
+export type GameType = string;
 
 export type ServerStatus =
     | 'stopped'
@@ -29,40 +43,6 @@ export type GameInstall = {
     created_at: string;
     updated_at: string;
     servers?: Server[];
-};
-
-export type Server = {
-    id: number;
-    game_type: GameType;
-    name: string;
-    port: number;
-    query_port: number;
-    max_players: number;
-    password: string | null;
-    admin_password: string | null;
-    description: string | null;
-    active_preset_id: number | null;
-    game_install_id: number | null;
-    status: ServerStatus;
-    auto_restart: boolean;
-    additional_params: string | null;
-    verify_signatures: boolean;
-    allowed_file_patching: boolean;
-    battle_eye: boolean;
-    persistent: boolean;
-    von_enabled: boolean;
-    additional_server_options: string | null;
-    supports_backups?: boolean;
-    profiles_path?: string;
-    created_at: string;
-    updated_at: string;
-    game_install?: GameInstall;
-    active_preset?: ModPreset;
-    backups?: ServerBackup[];
-    difficulty_settings?: DifficultySettings;
-    network_settings?: NetworkSettings;
-    reforger_settings?: ReforgerSettings;
-    dayz_settings?: DayZSettings;
 };
 
 export type WorkshopMod = {
@@ -97,9 +77,8 @@ export type ModPreset = {
     created_at: string;
     updated_at: string;
     mods?: WorkshopMod[];
-    reforger_mods?: ReforgerMod[];
     mods_count?: number;
-    reforger_mods_count?: number;
+    total_mod_count?: number;
     servers_count?: number;
 };
 
@@ -123,62 +102,27 @@ export type ServerBackup = {
     server?: Server;
 };
 
-export type DifficultySettings = {
-    id: number;
-    server_id: number;
-    reduced_damage: boolean;
-    group_indicators: number;
-    friendly_tags: number;
-    enemy_tags: number;
-    detected_mines: number;
-    commands: number;
-    waypoints: number;
-    tactical_ping: number;
-    weapon_info: number;
-    stance_indicator: number;
-    stamina_bar: boolean;
-    weapon_crosshair: boolean;
-    vision_aid: boolean;
-    third_person_view: number;
-    camera_shake: boolean;
-    score_table: boolean;
-    death_messages: boolean;
-    von_id: boolean;
-    map_content: boolean;
-    auto_report: boolean;
-    ai_level_preset: number;
-    skill_ai: string;
-    precision_ai: string;
+// Game-specific settings types are dynamic — the schema-driven renderer reads
+// from the server object using the `source` key defined in each handler's
+// settingsSchema(). These types exist only for backward compatibility and
+// developer convenience; the frontend does not branch on them.
+
+export type ModSection = {
+    type: 'workshop' | 'registered';
+    label: string;
+    relationship: string;
+    formField: string;
 };
 
-export type NetworkSettings = {
-    id: number;
-    server_id: number;
-    max_msg_send: number;
-    max_size_guaranteed: number;
-    max_size_nonguaranteed: number;
-    min_bandwidth: string;
-    max_bandwidth: string;
-    min_error_to_send: string;
-    min_error_to_send_near: string;
-    max_packet_size: number;
-    max_custom_file_size: number;
-    terrain_grid: string;
-    view_distance: number;
+export type GameModSections = {
+    gameType: GameType;
+    gameLabel: string;
+    sections: ModSection[];
 };
 
-export type ReforgerSettings = {
+export type RegisteredMod = {
     id: number;
-    server_id: number;
-    scenario_id: string | null;
-    third_person_view_enabled: boolean;
-    max_fps: number;
-    cross_platform: boolean;
-};
-
-export type DayZSettings = {
-    id: number;
-    server_id: number;
+    name: string;
     [key: string]: unknown;
 };
 
@@ -187,6 +131,78 @@ export type GameTypeInfo = {
     label: string;
     branches: string[];
     defaultName: string;
+};
+
+// --- Settings Schema Types ---
+
+export type SettingsFieldOption = {
+    value: string;
+    label: string;
+};
+
+export type SettingsField = {
+    key?: string;
+    label?: string;
+    type:
+        | 'toggle'
+        | 'number'
+        | 'text'
+        | 'textarea'
+        | 'segmented'
+        | 'separator'
+        | 'custom';
+    default?: string | number | boolean;
+    description?: string;
+    source?: string;
+    halfWidth?: boolean;
+    options?: SettingsFieldOption[];
+    min?: number;
+    max?: number;
+    step?: number;
+    storeAsString?: boolean;
+    inputMode?: string;
+    placeholder?: string;
+    required?: boolean;
+    rows?: number;
+    component?: string;
+};
+
+export type SettingsPreset = {
+    label: string;
+    variant: 'ghost' | 'default';
+    icon: 'reset' | 'zap';
+    values: Record<string, string | number | boolean>;
+};
+
+export type SettingsFieldGroup = {
+    columns?: number;
+    fields: SettingsField[];
+};
+
+export type SettingsSection = {
+    title?: string;
+    description?: string;
+    collapsible?: boolean;
+    showOnCreate?: boolean;
+    createLabel?: string;
+    source?: string;
+    layout?: 'columns' | 'rows';
+    advanced?: boolean;
+    presets?: SettingsPreset[];
+    fields?: SettingsField[];
+    groups?: SettingsFieldGroup[];
+};
+
+export type ServerGameTypeOption = {
+    value: GameType;
+    label: string;
+    defaultPort: number;
+    defaultQueryPort: number;
+    supportsHeadlessClients: boolean;
+    supportsWorkshopMods: boolean;
+    supportsMissionUpload: boolean;
+    settingsSchema: SettingsSection[];
+    modSections: ModSection[];
 };
 
 export type Mission = {

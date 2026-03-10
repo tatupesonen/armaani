@@ -6,13 +6,16 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class DifficultySettings extends Model
+class Arma3Settings extends Model
 {
-    /** @use HasFactory<\Database\Factories\DifficultySettingsFactory> */
+    /** @use HasFactory<\Database\Factories\Arma3SettingsFactory> */
     use HasFactory;
+
+    protected $table = 'arma3_settings';
 
     protected $fillable = [
         'server_id',
+        // Difficulty settings
         'reduced_damage',
         'group_indicators',
         'friendly_tags',
@@ -36,6 +39,18 @@ class DifficultySettings extends Model
         'ai_level_preset',
         'skill_ai',
         'precision_ai',
+        // Network settings
+        'max_msg_send',
+        'max_size_guaranteed',
+        'max_size_nonguaranteed',
+        'min_bandwidth',
+        'max_bandwidth',
+        'min_error_to_send',
+        'min_error_to_send_near',
+        'max_packet_size',
+        'max_custom_file_size',
+        'terrain_grid',
+        'view_distance',
     ];
 
     /**
@@ -44,6 +59,7 @@ class DifficultySettings extends Model
     protected function casts(): array
     {
         return [
+            // Difficulty
             'reduced_damage' => 'boolean',
             'group_indicators' => 'integer',
             'friendly_tags' => 'integer',
@@ -67,6 +83,18 @@ class DifficultySettings extends Model
             'ai_level_preset' => 'integer',
             'skill_ai' => 'decimal:2',
             'precision_ai' => 'decimal:2',
+            // Network
+            'max_msg_send' => 'integer',
+            'max_size_guaranteed' => 'integer',
+            'max_size_nonguaranteed' => 'integer',
+            'min_bandwidth' => 'integer',
+            'max_bandwidth' => 'integer',
+            'min_error_to_send' => 'decimal:4',
+            'min_error_to_send_near' => 'decimal:4',
+            'max_packet_size' => 'integer',
+            'max_custom_file_size' => 'integer',
+            'terrain_grid' => 'decimal:4',
+            'view_distance' => 'integer',
         ];
     }
 

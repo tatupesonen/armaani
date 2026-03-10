@@ -2,18 +2,27 @@
 
 namespace App\GameHandlers;
 
-use App\Attributes\HandlesGame;
 use App\Contracts\GameHandler;
-use App\Enums\GameType;
+use App\Contracts\SteamGameHandler;
 use App\Models\DayZSettings;
+use App\Models\ModPreset;
 use App\Models\Server;
 
-#[HandlesGame(GameType::DayZ)]
-final class DayZHandler implements GameHandler
+final class DayZHandler implements GameHandler, SteamGameHandler
 {
-    public function gameType(): GameType
+    public function value(): string
     {
-        return GameType::DayZ;
+        return 'dayz';
+    }
+
+    public function label(): string
+    {
+        return 'DayZ';
+    }
+
+    public function consumerAppId(): int
+    {
+        return 221100;
     }
 
     public function serverAppId(): int
@@ -76,9 +85,16 @@ final class DayZHandler implements GameHandler
         return $server->getProfilesPath().'/server.log';
     }
 
+    // --- UI Schema ---
+
+    public function settingsSchema(): array
+    {
+        return [];
+    }
+
     // --- Validation ---
 
-    public function serverValidationRules(): array
+    public function serverValidationRules(?Server $server = null): array
     {
         return [];
     }
@@ -89,6 +105,18 @@ final class DayZHandler implements GameHandler
     }
 
     // --- Related Settings ---
+
+    /** @phpstan-ignore return.unusedType */
+    public function settingsModelClass(): ?string
+    {
+        return DayZSettings::class;
+    }
+
+    /** @phpstan-ignore return.unusedType */
+    public function settingsRelationName(): ?string
+    {
+        return 'dayzSettings';
+    }
 
     public function createRelatedSettings(Server $server): void
     {
@@ -107,5 +135,29 @@ final class DayZHandler implements GameHandler
                 $dayzFields,
             );
         }
+    }
+
+    // --- Mod Presets ---
+
+    public function modSections(): array
+    {
+        return [
+            [
+                'type' => 'workshop',
+                'label' => 'Workshop Mods',
+                'relationship' => 'mods',
+                'formField' => 'mod_ids',
+            ],
+        ];
+    }
+
+    public function syncPresetMods(ModPreset $preset, array $validated): void
+    {
+        $preset->mods()->sync($validated['mod_ids'] ?? []);
+    }
+
+    public function getPresetModCount(ModPreset $preset): int
+    {
+        return $preset->mods()->count();
     }
 }

@@ -1,4 +1,4 @@
-import { router } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
 import {
     Code,
     Loader2,
@@ -16,11 +16,7 @@ import HeadlessClientControls from '@/components/servers/headless-client-control
 import ServerEditPanel from '@/components/servers/server-edit-panel';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-    gameTypeLabel,
-    serverStatusLabel,
-    serverStatusVariant,
-} from '@/lib/utils';
+import { serverStatusLabel, serverStatusVariant } from '@/lib/utils';
 import {
     start,
     stop,
@@ -28,12 +24,14 @@ import {
     launchCommand,
     log as serverLog,
 } from '@/routes/servers';
-import type { GameInstall, ModPreset, Server } from '@/types';
+import type { GameInstall, ModPreset, Server, SettingsSection } from '@/types';
 
 type ServerCardProps = {
     server: Server;
     presets: ModPreset[];
     gameInstalls: GameInstall[];
+    settingsSchema: SettingsSection[];
+    supportsHeadlessClients: boolean;
     onDelete: (id: number) => void;
 };
 
@@ -74,8 +72,11 @@ export default function ServerCard({
     server,
     presets,
     gameInstalls,
+    settingsSchema,
+    supportsHeadlessClients,
     onDelete,
 }: ServerCardProps) {
+    const { gameTypeLabels } = usePage().props;
     const [showLogs, setShowLogs] = useState(
         ['booting', 'downloading_mods', 'running'].includes(server.status),
     );
@@ -83,8 +84,7 @@ export default function ServerCard({
     const [commandText, setCommandText] = useState<string | null>(null);
     const [editing, setEditing] = useState(false);
 
-    const supportsHC =
-        server.game_type === 'arma3' && server.status === 'running';
+    const showHC = supportsHeadlessClients && server.status === 'running';
 
     const loadInitialLogLines = useCallback(async (): Promise<string[]> => {
         const res = await fetch(serverLog.url(server.id));
@@ -122,7 +122,8 @@ export default function ServerCard({
                     <div className="flex items-center gap-2">
                         <h3 className="text-lg font-semibold">{server.name}</h3>
                         <Badge variant="outline">
-                            {gameTypeLabel(server.game_type)}
+                            {gameTypeLabels[server.game_type] ??
+                                server.game_type}
                         </Badge>
                         <Badge variant={serverStatusVariant(server.status)}>
                             {serverStatusLabel(server.status)}
@@ -262,7 +263,7 @@ export default function ServerCard({
             </div>
 
             {/* Headless client controls */}
-            {supportsHC && <HeadlessClientControls server={server} />}
+            {showHC && <HeadlessClientControls server={server} />}
 
             {/* Log viewer */}
             {showLogs && (
@@ -295,6 +296,7 @@ export default function ServerCard({
                     server={server}
                     presets={presets}
                     gameInstalls={gameInstalls}
+                    settingsSchema={settingsSchema}
                     onCancel={() => setEditing(false)}
                 />
             )}

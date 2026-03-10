@@ -2,24 +2,39 @@
 
 namespace App\GameHandlers;
 
-use App\Attributes\HandlesGame;
 use App\Contracts\DetectsServerState;
 use App\Contracts\GameHandler;
-use App\Enums\GameType;
+use App\Contracts\SteamGameHandler;
+use App\Contracts\SupportsRegisteredMods;
+use App\Contracts\SupportsScenarios;
+use App\Models\ModPreset;
+use App\Models\ReforgerMod;
 use App\Models\ReforgerSettings;
 use App\Models\Server;
+use App\Services\Mod\ReforgerScenarioService;
 use App\Services\Renderer\JsonConfigRenderer;
+use Illuminate\Database\Eloquent\Model;
 
-#[HandlesGame(GameType::ArmaReforger)]
-final class ReforgerHandler implements DetectsServerState, GameHandler
+final class ReforgerHandler implements DetectsServerState, GameHandler, SteamGameHandler, SupportsRegisteredMods, SupportsScenarios
 {
     public function __construct(
         protected JsonConfigRenderer $configRenderer,
+        protected ReforgerScenarioService $scenarioService,
     ) {}
 
-    public function gameType(): GameType
+    public function value(): string
     {
-        return GameType::ArmaReforger;
+        return 'reforger';
+    }
+
+    public function label(): string
+    {
+        return 'Arma Reforger';
+    }
+
+    public function consumerAppId(): int
+    {
+        return 1874900;
     }
 
     public function serverAppId(): int
@@ -173,11 +188,37 @@ final class ReforgerHandler implements DetectsServerState, GameHandler
         return [];
     }
 
+    public function shouldAutoRestart(Server $server): bool
+    {
+        return false;
+    }
+
+    // --- UI Schema ---
+
+    public function settingsSchema(): array
+    {
+        return [
+            [
+                'title' => 'Reforger Settings',
+                'source' => 'reforger_settings',
+                'fields' => [
+                    ['key' => 'scenario_id', 'label' => 'Scenario ID', 'type' => 'custom', 'component' => 'scenario-picker', 'default' => ''],
+                    ['key' => 'third_person_view_enabled', 'label' => 'Third Person View', 'type' => 'toggle', 'default' => true],
+                    ['key' => 'battle_eye', 'label' => 'BattlEye Anti-Cheat', 'type' => 'toggle', 'default' => true, 'source' => 'server'],
+                    ['key' => 'cross_platform', 'label' => 'Cross-Platform', 'type' => 'toggle', 'default' => false],
+                    ['key' => 'max_fps', 'label' => 'Max FPS', 'type' => 'number', 'default' => 60, 'min' => 10, 'max' => 240, 'description' => 'Recommended: 60-120. Limits server tick rate to prevent excessive CPU usage.'],
+                ],
+            ],
+        ];
+    }
+
     // --- Validation ---
 
-    public function serverValidationRules(): array
+    public function serverValidationRules(?Server $server = null): array
     {
-        return [];
+        return [
+            'battle_eye' => ['boolean'],
+        ];
     }
 
     public function settingsValidationRules(): array
@@ -191,6 +232,16 @@ final class ReforgerHandler implements DetectsServerState, GameHandler
     }
 
     // --- Related Settings ---
+
+    public function settingsModelClass(): ?string
+    {
+        return ReforgerSettings::class;
+    }
+
+    public function settingsRelationName(): ?string
+    {
+        return 'reforgerSettings';
+    }
 
     public function createRelatedSettings(Server $server): void
     {
@@ -209,5 +260,78 @@ final class ReforgerHandler implements DetectsServerState, GameHandler
                 $reforgerFields,
             );
         }
+    }
+
+    // --- Mod Presets ---
+
+    public function modSections(): array
+    {
+        return [
+            [
+                'type' => 'registered',
+                'label' => 'Reforger Mods',
+                'relationship' => 'reforgerMods',
+                'formField' => 'reforger_mod_ids',
+            ],
+        ];
+    }
+
+    public function syncPresetMods(ModPreset $preset, array $validated): void
+    {
+        $preset->reforgerMods()->sync($validated['reforger_mod_ids'] ?? []);
+    }
+
+    public function getPresetModCount(ModPreset $preset): int
+    {
+        return $preset->reforgerMods()->count();
+    }
+
+    // --- SupportsRegisteredMods ---
+
+    public function registeredModModelClass(): string
+    {
+        return ReforgerMod::class;
+    }
+
+    public function registeredModRelationName(): string
+    {
+        return 'reforgerMods';
+    }
+
+    public function registeredModPivotTable(): string
+    {
+        return 'mod_preset_reforger_mod';
+    }
+
+    public function storeRegisteredMod(array $data): Model
+    {
+        return ReforgerMod::query()->create($data);
+    }
+
+    public function destroyRegisteredMod(Model $mod): void
+    {
+        /** @var ReforgerMod $mod */
+        $mod->presets()->detach();
+        $mod->delete();
+    }
+
+    public function registeredModValidationRules(): array
+    {
+        return [
+            'mod_id' => ['required', 'string', 'unique:reforger_mods,mod_id'],
+            'name' => ['required', 'string', 'max:255'],
+        ];
+    }
+
+    // --- SupportsScenarios ---
+
+    public function getScenarios(Server $server): array
+    {
+        return $this->scenarioService->getScenarios($server);
+    }
+
+    public function refreshScenarios(Server $server): array
+    {
+        return $this->scenarioService->refreshScenarios($server);
     }
 }

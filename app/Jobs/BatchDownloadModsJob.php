@@ -77,7 +77,7 @@ class BatchDownloadModsJob implements ShouldQueue
         $installDir = config('arma.mods_base_path');
         $workshopIds = $this->mods->pluck('workshop_id')->all();
 
-        $handler = app(GameManager::class)->driver($this->mods->first()->game_type->value);
+        $handler = app(GameManager::class)->driver($this->mods->first()->game_type);
         $process = $steamCmd->startBatchDownloadMods($installDir, $workshopIds, $handler);
 
         ModDownloadOutput::dispatch(

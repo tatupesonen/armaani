@@ -1,4 +1,4 @@
-import { Head, Link, usePoll } from '@inertiajs/react';
+import { Head, Link, usePage, usePoll } from '@inertiajs/react';
 import {
     HardDrive,
     Map,
@@ -9,12 +9,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
-import {
-    formatBytes,
-    gameTypeLabel,
-    serverStatusVariant,
-    usageBarColor,
-} from '@/lib/utils';
+import { formatBytes, serverStatusVariant, usageBarColor } from '@/lib/utils';
 import { dashboard, steamSettings } from '@/routes';
 import { index as gameInstallsIndex } from '@/routes/game-installs';
 import { index as missionsIndex } from '@/routes/missions';
@@ -135,6 +130,7 @@ export default function Dashboard({
     memoryUsage,
     cpuInfo,
 }: DashboardProps) {
+    const { gameTypeLabels } = usePage().props;
     usePoll(5000);
 
     return (
@@ -279,9 +275,11 @@ export default function Dashboard({
                                                             ? server
                                                                   .game_install
                                                                   .name
-                                                            : gameTypeLabel(
-                                                                  server.game_type,
-                                                              )}
+                                                            : (gameTypeLabels[
+                                                                  server
+                                                                      .game_type
+                                                              ] ??
+                                                              server.game_type)}
                                                     </td>
                                                     <td className="py-2 text-right tabular-nums">
                                                         {server.port}

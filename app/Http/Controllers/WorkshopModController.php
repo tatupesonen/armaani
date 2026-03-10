@@ -2,13 +2,14 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\GameType;
+use App\Contracts\GameHandler;
+use App\Contracts\SupportsRegisteredMods;
 use App\Enums\InstallationStatus;
+use App\GameManager;
 use App\Http\Requests\WorkshopMod\StoreWorkshopModRequest;
 use App\Http\Requests\WorkshopMod\UpdateSelectedModsRequest;
 use App\Jobs\BatchDownloadModsJob;
 use App\Jobs\DownloadModJob;
-use App\Models\ReforgerMod;
 use App\Models\WorkshopMod;
 use App\Services\Steam\SteamWorkshopService;
 use Carbon\Carbon;
@@ -22,6 +23,10 @@ use Inertia\Response;
 
 class WorkshopModController extends Controller
 {
+    public function __construct(
+        private GameManager $gameManager,
+    ) {}
+
     public function index(Request $request): Response
     {
         $query = WorkshopMod::query();
@@ -50,9 +55,27 @@ class WorkshopModController extends Controller
             ->selectRaw('COUNT(*) as count, COALESCE(SUM(file_size), 0) as total_size')
             ->first();
 
+        // Collect mod sections from all handlers for the frontend tabs
+        $allHandlers = $this->gameManager->allHandlers();
+        $modSections = collect($allHandlers)->map(fn (GameHandler $handler) => [
+            'gameType' => $handler->value(),
+            'gameLabel' => $handler->label(),
+            'sections' => $handler->modSections(),
+        ])->values()->all();
+
+        // Gather all registered mods keyed by game type
+        $registeredMods = [];
+        foreach ($allHandlers as $handler) {
+            if ($handler instanceof SupportsRegisteredMods) {
+                $modelClass = $handler->registeredModModelClass();
+                $registeredMods[$handler->value()] = $modelClass::query()->orderBy('name')->get();
+            }
+        }
+
         return Inertia::render('mods/index', [
             'mods' => $mods,
-            'reforgerMods' => ReforgerMod::query()->orderBy('name')->get(),
+            'registeredMods' => $registeredMods,
+            'modSections' => $modSections,
             'filters' => $request->only(['search', 'sort_by', 'sort_direction']),
             'installedStats' => [
                 'count' => (int) $installedStats->count,
@@ -65,12 +88,10 @@ class WorkshopModController extends Controller
     {
         $validated = $request->validated();
 
-        $gameType = GameType::from($validated['game_type'] ?? 'arma3');
-
         $mod = WorkshopMod::query()->firstOrCreate(
             [
                 'workshop_id' => $validated['workshop_id'],
-                'game_type' => $gameType,
+                'game_type' => $validated['game_type'] ?? 'arma3',
             ],
             [
                 'installation_status' => InstallationStatus::Queued,
