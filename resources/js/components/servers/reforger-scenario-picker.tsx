@@ -94,7 +94,7 @@ export default function ReforgerScenarioPicker({
                 <button
                     type="button"
                     onClick={reload}
-                    disabled={loading}
+                    disabled={loading || !serverId}
                     className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
                     title="Reload scenarios from server"
                 >
@@ -118,7 +118,6 @@ export default function ReforgerScenarioPicker({
                         }
                     }}
                     placeholder="{ECC61978EDCC2B5A}Missions/23_Campaign.conf"
-                    required
                 />
                 {loading && (
                     <Loader2 className="absolute top-1/2 right-3 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
