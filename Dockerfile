@@ -53,6 +53,7 @@ RUN sed -i 's|^listen = .*|listen = /run/php/php-fpm.sock|' /etc/php/8.5/fpm/poo
     && sed -i 's|^listen\.group = .*|listen.group = root|' /etc/php/8.5/fpm/pool.d/www.conf \
     && echo 'catch_workers_output = yes' >> /etc/php/8.5/fpm/pool.d/www.conf \
     && echo 'decorate_workers_output = no' >> /etc/php/8.5/fpm/pool.d/www.conf \
+    && sed -i 's|^error_log = .*|error_log = /dev/stderr|' /etc/php/8.5/fpm/php-fpm.conf \
     && mkdir -p /run/php
 
 # PHP production tuning
