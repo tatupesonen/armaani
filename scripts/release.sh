@@ -5,7 +5,7 @@ set -euo pipefail
 #
 # Usage:
 #   ./scripts/release.sh          Push develop → main, triggering release-please.
-#   ./scripts/release.sh sync     After merging the release-please PR, sync main back into develop.
+#   ./scripts/release.sh sync     After merging the release-please PR, rebase develop onto main.
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -40,7 +40,10 @@ do_release() {
     git pull origin main
 
     info "Merging develop into main..."
-    git merge develop --no-edit
+    if ! git merge develop --ff-only 2>/dev/null; then
+        warn "Fast-forward not possible, performing merge commit..."
+        git merge develop --no-edit
+    fi
 
     info "Pushing main..."
     git push origin main
@@ -53,7 +56,7 @@ do_release() {
     warn "After merging the release-please PR, run: ./scripts/release.sh sync"
 }
 
-# ── Sync main back into develop ─────────────────────────────────────
+# ── Rebase develop onto main ───────────────────────────────────────
 do_sync() {
     require_clean
 
@@ -73,14 +76,16 @@ do_sync() {
         exit 0
     fi
 
-    info "Merging main into develop..."
-    git merge main --no-edit
+    info "Rebasing develop onto main..."
+    if ! git rebase main; then
+        die "Rebase failed. Resolve conflicts with 'git rebase --continue' or abort with 'git rebase --abort'."
+    fi
 
     info "Pushing develop..."
-    git push origin develop
+    git push origin develop --force-with-lease
 
     echo ""
-    info "Done. develop is now in sync with main."
+    info "Done. develop is now rebased onto main."
 }
 
 case "${1:-}" in
