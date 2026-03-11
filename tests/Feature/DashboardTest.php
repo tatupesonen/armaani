@@ -8,42 +8,27 @@ use App\Models\GameInstall;
 use App\Models\ModPreset;
 use App\Models\Server;
 use App\Models\SteamAccount;
-use App\Models\User;
 use App\Models\WorkshopMod;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 class DashboardTest extends TestCase
 {
-    use RefreshDatabase;
-
-    protected User $user;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-
-        $this->user = User::factory()->create();
-    }
-
     public function test_guests_are_redirected_to_the_login_page(): void
     {
-        $this->get(route('dashboard'))->assertRedirect(route('login'));
+        $this->asGuest()->get(route('dashboard'))->assertRedirect(route('login'));
     }
 
     public function test_authenticated_users_can_visit_the_dashboard(): void
     {
-        $this->actingAs($this->user)
-            ->get(route('dashboard'))
+        $this->get(route('dashboard'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page->component('dashboard'));
     }
 
     public function test_dashboard_returns_all_expected_props(): void
     {
-        $this->actingAs($this->user)
-            ->get(route('dashboard'))
+        $this->get(route('dashboard'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('dashboard')
@@ -73,8 +58,7 @@ class DashboardTest extends TestCase
             'status' => ServerStatus::Stopped,
         ]);
 
-        $this->actingAs($this->user)
-            ->get(route('dashboard'))
+        $this->get(route('dashboard'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->where('serverStats.total', 2)
@@ -88,8 +72,7 @@ class DashboardTest extends TestCase
         GameInstall::factory()->installed()->create();
         GameInstall::factory()->create(['installation_status' => InstallationStatus::Queued]);
 
-        $this->actingAs($this->user)
-            ->get(route('dashboard'))
+        $this->get(route('dashboard'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->where('gameInstallStats.total', 2)
@@ -102,8 +85,7 @@ class DashboardTest extends TestCase
         WorkshopMod::factory()->installed()->count(3)->create();
         WorkshopMod::factory()->create(['installation_status' => InstallationStatus::Queued]);
 
-        $this->actingAs($this->user)
-            ->get(route('dashboard'))
+        $this->get(route('dashboard'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->where('modStats.total', 4)
@@ -115,8 +97,7 @@ class DashboardTest extends TestCase
     {
         ModPreset::factory()->count(3)->create();
 
-        $this->actingAs($this->user)
-            ->get(route('dashboard'))
+        $this->get(route('dashboard'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->where('presetCount', 3)
@@ -125,8 +106,7 @@ class DashboardTest extends TestCase
 
     public function test_dashboard_shows_steam_configured_status(): void
     {
-        $this->actingAs($this->user)
-            ->get(route('dashboard'))
+        $this->get(route('dashboard'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->where('steamConfigured', false)
@@ -134,8 +114,7 @@ class DashboardTest extends TestCase
 
         SteamAccount::factory()->create();
 
-        $this->actingAs($this->user)
-            ->get(route('dashboard'))
+        $this->get(route('dashboard'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->where('steamConfigured', true)
@@ -150,8 +129,7 @@ class DashboardTest extends TestCase
             'name' => 'Test Server',
         ]);
 
-        $this->actingAs($this->user)
-            ->get(route('dashboard'))
+        $this->get(route('dashboard'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->has('servers', 1)
@@ -162,8 +140,7 @@ class DashboardTest extends TestCase
 
     public function test_app_version_is_shared_with_all_pages(): void
     {
-        $this->actingAs($this->user)
-            ->get(route('dashboard'))
+        $this->get(route('dashboard'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->where('appVersion', config('app.version'))
@@ -172,8 +149,7 @@ class DashboardTest extends TestCase
 
     public function test_dashboard_returns_system_resource_info(): void
     {
-        $this->actingAs($this->user)
-            ->get(route('dashboard'))
+        $this->get(route('dashboard'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->has('diskUsage.total')

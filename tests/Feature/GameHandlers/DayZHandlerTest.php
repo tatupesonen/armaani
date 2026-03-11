@@ -2,20 +2,13 @@
 
 namespace Tests\Feature\GameHandlers;
 
-use App\Contracts\DetectsServerState;
-use App\Contracts\ManagesModAssets;
-use App\Contracts\SupportsBackups;
-use App\Contracts\SupportsHeadlessClients;
-use App\Contracts\SupportsMissions;
 use App\GameHandlers\DayZHandler;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\CreatesGameScenarios;
 use Tests\TestCase;
 
 class DayZHandlerTest extends TestCase
 {
     use CreatesGameScenarios;
-    use RefreshDatabase;
 
     private DayZHandler $handler;
 
@@ -52,31 +45,6 @@ class DayZHandlerTest extends TestCase
 
         $expected = $server->getProfilesPath().'/server.log';
         $this->assertEquals($expected, $this->handler->getServerLogPath($server));
-    }
-
-    public function test_does_not_implement_detects_server_state(): void
-    {
-        $this->assertNotInstanceOf(DetectsServerState::class, $this->handler);
-    }
-
-    public function test_does_not_implement_supports_headless_clients(): void
-    {
-        $this->assertNotInstanceOf(SupportsHeadlessClients::class, $this->handler);
-    }
-
-    public function test_does_not_implement_supports_backups(): void
-    {
-        $this->assertNotInstanceOf(SupportsBackups::class, $this->handler);
-    }
-
-    public function test_does_not_implement_manages_mod_assets(): void
-    {
-        $this->assertNotInstanceOf(ManagesModAssets::class, $this->handler);
-    }
-
-    public function test_does_not_implement_supports_missions(): void
-    {
-        $this->assertNotInstanceOf(SupportsMissions::class, $this->handler);
     }
 
     public function test_build_launch_command_throws_not_implemented(): void

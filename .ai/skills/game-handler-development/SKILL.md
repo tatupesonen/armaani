@@ -9,11 +9,12 @@ description: 'Activates when adding a new game to the server manager. Use when c
 
 Activate this skill when:
 
-- Adding support for a new game (e.g., Squad, Project Zomboid, Insurgency)
+- Adding support for a new game (e.g., Squad, Insurgency)
 - Modifying an existing game handler in `app/GameHandlers/`
-- Working with the `GameHandler`, `SteamGameHandler`, `SupportsRegisteredMods`, or `SupportsScenarios` contracts
+- Working with the `GameHandler`, `SteamGameHandler`, `SupportsWorkshopMods`, `SupportsRegisteredMods`, or `SupportsScenarios` contracts
 - Creating or editing config templates in `resources/templates/configs/`
 - Working with `settingsSchema()` UI definitions
+- Working with the `AbstractGameHandler` base class or capability interfaces/traits
 - Running `php artisan make:game-handler`
 
 ## Research First
@@ -64,9 +65,86 @@ The command auto-appends `Handler` to the name if not present.
 
 ## Architecture Overview
 
+### AbstractGameHandler Base Class
+
+All handlers extend `App\GameHandlers\AbstractGameHandler`, which implements the `GameHandler` interface. The base class uses constructor property promotion for identity values and provides default implementations for common methods.
+
+**Constructor properties (all `final` getters):**
+
+| Property               | Type                        | Purpose                                     |
+| ---------------------- | --------------------------- | ------------------------------------------- |
+| `value`                | `string`                    | Unique identifier (e.g., `'squad'`)         |
+| `label`                | `string`                    | Display name (e.g., `'Squad'`)              |
+| `defaultPort`          | `int`                       | Default game port                           |
+| `defaultQueryPort`     | `int`                       | Default query port                          |
+| `branches`             | `list<string>`              | SteamCMD branches (at minimum `['public']`) |
+| `settingsModelClass`   | `class-string<Model>\|null` | Settings model FQCN (optional)              |
+| `settingsRelationName` | `string\|null`              | Relationship name on Server (optional)      |
+
+**Default implementations (override as needed):**
+
+- `serverValidationRules()` — returns `[]`
+- `settingsValidationRules()` — returns `[]`
+- `settingsSchema()` — returns `[]`
+- `createRelatedSettings()` — creates settings model row if `settingsModelClass` is set
+- `updateRelatedSettings()` — updates settings via relationship if both class and relation are set
+- `modSections()` — returns `[]` (no mod support)
+- `syncPresetMods()` — no-op
+- `getPresetModCount()` — returns `0`
+
+**Abstract methods (must implement):**
+
+- `getBinaryPath(Server): string`
+- `getProfileName(Server): string`
+- `getServerLogPath(Server): string`
+- `buildLaunchCommand(Server): array`
+- `generateConfigFiles(Server): void`
+
+Example handler constructor:
+
+```php
+final class SquadHandler extends AbstractGameHandler implements SteamGameHandler
+{
+    public function __construct(
+        protected TwigConfigRenderer $configRenderer,
+    ) {
+        parent::__construct(
+            value: 'squad',
+            label: 'Squad',
+            defaultPort: 7787,
+            defaultQueryPort: 27165,
+            branches: ['public'],
+            settingsModelClass: SquadSettings::class,
+            settingsRelationName: 'squadSettings',
+        );
+    }
+}
+```
+
 ### Auto-Discovery
 
-Game handlers are auto-discovered by `GameServiceProvider` from `app/GameHandlers/`. No manual registration needed — just create the handler class and it works.
+Game handlers are auto-discovered by `GameServiceProvider` from `app/GameHandlers/`. No manual registration needed — just create the handler class and it works. The provider automatically skips abstract classes and classes marked with the `#[Beta]` attribute in production.
+
+### `#[Beta]` Attribute
+
+Mark work-in-progress handlers with `#[Beta]` (`App\Attributes\Beta`):
+
+```php
+use App\Attributes\Beta;
+
+#[Beta]
+final class SquadHandler extends AbstractGameHandler implements SteamGameHandler
+{
+    // ...
+}
+```
+
+Handlers with `#[Beta]` are:
+
+- **Excluded** from discovery in production (`app()->isProduction()`)
+- **Included** in all other environments (local, testing, staging)
+
+Use this for scaffolded handlers that throw `RuntimeException` for unimplemented features (e.g., DayZ).
 
 ### Dynamic Relationships
 
@@ -84,34 +162,34 @@ This generates `resources/js/types/generated.d.ts` with a discriminated union `S
 
 ## Contracts Reference
 
-### GameHandler (required)
+### GameHandler (required — implemented by AbstractGameHandler)
 
-Every handler must implement `App\Contracts\GameHandler`. Key methods:
+Every handler must implement `App\Contracts\GameHandler`. The `AbstractGameHandler` base class implements it with constructor properties and default methods. Handlers extend the base class and override methods as needed.
 
-| Method                                       | Purpose                                                               |
-| -------------------------------------------- | --------------------------------------------------------------------- |
-| `value(): string`                            | Unique identifier (e.g., `'squad'`). Used as DB value and driver key. |
-| `label(): string`                            | Display name (e.g., `'Squad'`).                                       |
-| `defaultPort(): int`                         | Default game server port.                                             |
-| `defaultQueryPort(): int`                    | Default Steam query port.                                             |
-| `branches(): array`                          | SteamCMD beta branches (at minimum `['public']`).                     |
-| `supportsWorkshopMods(): bool`               | Whether the game uses Steam Workshop.                                 |
-| `requiresLowercaseConversion(): bool`        | Whether mod files need lowercase conversion (Linux).                  |
-| `buildLaunchCommand(Server): array`          | Command array to start the server process.                            |
-| `generateConfigFiles(Server): void`          | Write config files before server start.                               |
-| `getBinaryPath(Server): string`              | Path to the server executable.                                        |
-| `getProfileName(Server): string`             | Profile directory name (e.g., `'squad_1'`).                           |
-| `getServerLogPath(Server): string`           | Path to the server log file.                                          |
-| `serverValidationRules(?Server): array`      | Validation rules for game-specific server fields.                     |
-| `settingsValidationRules(): array`           | Validation rules for game-specific settings.                          |
-| `settingsSchema(): array`                    | UI schema for the server settings panel.                              |
-| `settingsModelClass(): ?string`              | FQCN of the settings model, or null.                                  |
-| `settingsRelationName(): ?string`            | Relationship name on Server (e.g., `'squadSettings'`), or null.       |
-| `createRelatedSettings(Server): void`        | Create default settings when a server is created.                     |
-| `updateRelatedSettings(Server, array): void` | Update settings from validated form data.                             |
-| `modSections(): array`                       | Define mod UI tabs (workshop and/or registered).                      |
-| `syncPresetMods(ModPreset, array): void`     | Sync mod preset relationships from form data.                         |
-| `getPresetModCount(ModPreset): int`          | Total mod count for a preset.                                         |
+Key methods on the interface:
+
+| Method                                       | Purpose                                       | Default in AbstractGameHandler |
+| -------------------------------------------- | --------------------------------------------- | ------------------------------ |
+| `value(): string`                            | Unique identifier (DB value, driver key).     | `final` — from constructor     |
+| `label(): string`                            | Display name.                                 | `final` — from constructor     |
+| `defaultPort(): int`                         | Default game server port.                     | `final` — from constructor     |
+| `defaultQueryPort(): int`                    | Default Steam query port.                     | `final` — from constructor     |
+| `branches(): array`                          | SteamCMD beta branches.                       | `final` — from constructor     |
+| `settingsModelClass(): ?string`              | FQCN of the settings model.                   | `final` — from constructor     |
+| `settingsRelationName(): ?string`            | Relationship name on Server.                  | `final` — from constructor     |
+| `buildLaunchCommand(Server): array`          | Command array to start the server process.    | **abstract**                   |
+| `generateConfigFiles(Server): void`          | Write config files before server start.       | **abstract**                   |
+| `getBinaryPath(Server): string`              | Path to the server executable.                | **abstract**                   |
+| `getProfileName(Server): string`             | Profile directory name.                       | **abstract**                   |
+| `getServerLogPath(Server): string`           | Path to the server log file.                  | **abstract**                   |
+| `serverValidationRules(?Server): array`      | Validation rules for game-specific fields.    | returns `[]`                   |
+| `settingsValidationRules(): array`           | Validation rules for game settings.           | returns `[]`                   |
+| `settingsSchema(): array`                    | UI schema for the settings panel.             | returns `[]`                   |
+| `createRelatedSettings(Server): void`        | Create default settings for new server.       | auto-creates from model class  |
+| `updateRelatedSettings(Server, array): void` | Update settings from validated form data.     | auto-updates via relationship  |
+| `modSections(): array`                       | Define mod UI tabs.                           | returns `[]`                   |
+| `syncPresetMods(ModPreset, array): void`     | Sync mod preset relationships from form data. | no-op                          |
+| `getPresetModCount(ModPreset): int`          | Total mod count for a preset.                 | returns `0`                    |
 
 ### SteamGameHandler (most games)
 
@@ -140,13 +218,68 @@ Implement `App\Contracts\DownloadsDirectly` for games whose server binaries are 
 
 Games downloaded via HTTP often write runtime data relative to their binary. To isolate per-server state from the shared game install directory, generate a per-server config file that redirects the write path to the server's profiles directory, and pass it via a CLI flag (e.g., `--config`). See `FactorioHandler::generateConfigIni()` for the reference implementation.
 
+### SupportsWorkshopMods (capability interface)
+
+Implement `App\Contracts\SupportsWorkshopMods` for games that use Steam Workshop mods downloaded via SteamCMD. Use with the `WorkshopModBehavior` trait for standard implementations.
+
+| Method                                | Purpose                                              |
+| ------------------------------------- | ---------------------------------------------------- |
+| `requiresLowercaseConversion(): bool` | Whether mod files need lowercase conversion (Linux). |
+
+**Usage pattern:**
+
+```php
+use App\Concerns\WorkshopModBehavior;
+use App\Contracts\SupportsWorkshopMods;
+
+final class SquadHandler extends AbstractGameHandler implements SteamGameHandler, SupportsWorkshopMods
+{
+    use WorkshopModBehavior;
+
+    // WorkshopModBehavior provides default implementations for:
+    // - requiresLowercaseConversion() → returns false
+    // - modSections() → returns single 'Workshop Mods' section
+    // - syncPresetMods() → syncs mods() pivot relationship
+    // - getPresetModCount() → counts mods() relationship
+
+    // Override requiresLowercaseConversion() to return true if needed (Arma 3, DayZ):
+    // public function requiresLowercaseConversion(): bool { return true; }
+}
+```
+
+**Callers use `instanceof` checks**, not boolean methods:
+
+```php
+// Correct — capability interface check
+if ($handler instanceof SupportsWorkshopMods) {
+    $handler->requiresLowercaseConversion();
+}
+
+// Wrong — removed from the interface
+// $handler->supportsWorkshopMods()
+```
+
+The `WorkshopModBehavior` trait overrides the `modSections()`, `syncPresetMods()`, and `getPresetModCount()` defaults from `AbstractGameHandler` with working workshop mod implementations. These methods stay on the `GameHandler` interface (and `AbstractGameHandler` provides no-op defaults) because `ModPresetController` calls them unconditionally on all game types.
+
 ### SupportsRegisteredMods (optional)
 
-Implement `App\Contracts\SupportsRegisteredMods` for games with GUID-based mods (not Steam Workshop). Requires its own mod model, pivot table, and CRUD logic.
+Implement `App\Contracts\SupportsRegisteredMods` for games with GUID-based mods (not Steam Workshop). Requires its own mod model, pivot table, and CRUD logic. Override `modSections()`, `syncPresetMods()`, and `getPresetModCount()` directly (no trait — each registered mod system is different).
 
 ### SupportsScenarios (optional)
 
 Implement `App\Contracts\SupportsScenarios` for games with discoverable scenarios/missions.
+
+### Other Capability Interfaces
+
+| Interface                 | Purpose                                       | Trait                        |
+| ------------------------- | --------------------------------------------- | ---------------------------- |
+| `DetectsServerState`      | Boot detection string, auto-restart           | `DetectsServerStateBehavior` |
+| `HasQueryPort`            | Game uses a separate query port               | —                            |
+| `ManagesModAssets`        | Mod symlink management                        | —                            |
+| `SupportsBackups`         | Server profile backup/restore                 | —                            |
+| `SupportsHeadlessClients` | Dynamic headless clients (Arma 3 only)        | —                            |
+| `SupportsMissions`        | PBO file mission support                      | —                            |
+| `WritesNativeLogs`        | Server writes its own log (vs stdout capture) | —                            |
 
 ## Config File Generation
 
@@ -159,11 +292,19 @@ Use for key-value config formats (`.cfg`, `.ini`, custom text formats). Template
 ```php
 use App\Services\Renderer\TwigConfigRenderer;
 
-final class SquadHandler implements GameHandler, SteamGameHandler
+final class SquadHandler extends AbstractGameHandler implements SteamGameHandler
 {
     public function __construct(
         protected TwigConfigRenderer $configRenderer,
-    ) {}
+    ) {
+        parent::__construct(
+            value: 'squad',
+            label: 'Squad',
+            defaultPort: 7787,
+            defaultQueryPort: 27165,
+            branches: ['public'],
+        );
+    }
 
     public function generateConfigFiles(Server $server): void
     {
@@ -204,22 +345,30 @@ Use for games with JSON-based server configuration (e.g., Arma Reforger). Build 
 ```php
 use App\Services\Renderer\JsonConfigRenderer;
 
-final class ReforgerHandler implements GameHandler, SteamGameHandler
+final class ReforgerHandler extends AbstractGameHandler implements SteamGameHandler
 {
     public function __construct(
         protected JsonConfigRenderer $configRenderer,
-    ) {}
+    ) {
+        parent::__construct(
+            value: 'reforger',
+            label: 'Arma Reforger',
+            defaultPort: 2001,
+            defaultQueryPort: 17777,
+            branches: ['public', 'profiling'],
+            settingsModelClass: ReforgerSettings::class,
+            settingsRelationName: 'reforgerSettings',
+        );
+    }
 
     public function generateConfigFiles(Server $server): void
     {
         $config = [
             'bindAddress' => '0.0.0.0',
             'bindPort' => $server->port,
-            'publicAddress' => '',
             'game' => [
                 'name' => $server->name,
                 'maxPlayers' => $server->max_players,
-                'passwordPlayerJoin' => $server->password ?? '',
             ],
         ];
 
@@ -324,34 +473,48 @@ public function modSections(): array
 
 The `formField` key must exactly match the field name expected by the backend validation rules. Do not rely on automatic name derivation.
 
+For handlers implementing `SupportsWorkshopMods` with the `WorkshopModBehavior` trait, this is provided automatically. Only override if you need custom behavior (e.g., Reforger's registered mods).
+
 ## Existing Handlers (Reference)
 
-| Handler                 | Game            | Complexity | Best Reference For                                                            |
-| ----------------------- | --------------- | ---------- | ----------------------------------------------------------------------------- |
-| `DayZHandler`           | DayZ            | Simplest   | Minimal scaffold, unimplemented methods throw `RuntimeException`              |
-| `ReforgerHandler`       | Arma Reforger   | Medium     | JSON config, registered mods, scenarios, custom component                     |
-| `FactorioHandler`       | Factorio        | Full       | HTTP download (DownloadsDirectly), JSON config, save creation, non-Steam game |
-| `ProjectZomboidHandler` | Project Zomboid | Full       | Twig INI templates, DetectsServerState, wrapper-script games                  |
-| `Arma3Handler`          | Arma 3          | Full       | Twig templates, complex settings schema, headless clients                     |
+| Handler                 | Game            | Extends               | Implements                                                                                                                                                             | Uses Traits                                         |
+| ----------------------- | --------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `DayZHandler`           | DayZ            | `AbstractGameHandler` | `SteamGameHandler`, `SupportsWorkshopMods`                                                                                                                             | `WorkshopModBehavior`                               |
+| `ReforgerHandler`       | Arma Reforger   | `AbstractGameHandler` | `SteamGameHandler`, `DetectsServerState`, `HasQueryPort`, `SupportsRegisteredMods`, `SupportsScenarios`, `WritesNativeLogs`                                            | `DetectsServerStateBehavior`                        |
+| `FactorioHandler`       | Factorio        | `AbstractGameHandler` | `DownloadsDirectly`, `DetectsServerState`, `HasQueryPort`                                                                                                              | `DetectsServerStateBehavior`                        |
+| `ProjectZomboidHandler` | Project Zomboid | `AbstractGameHandler` | `SteamGameHandler`, `DetectsServerState`, `HasQueryPort`, `SupportsWorkshopMods`                                                                                       | `DetectsServerStateBehavior`, `WorkshopModBehavior` |
+| `Arma3Handler`          | Arma 3          | `AbstractGameHandler` | `SteamGameHandler`, `DetectsServerState`, `HasQueryPort`, `ManagesModAssets`, `SupportsBackups`, `SupportsHeadlessClients`, `SupportsMissions`, `SupportsWorkshopMods` | `DetectsServerStateBehavior`, `WorkshopModBehavior` |
+
+**Best reference for:**
+
+| Use Case                                          | Reference Handler       |
+| ------------------------------------------------- | ----------------------- |
+| Minimal scaffold / WIP (`#[Beta]`)                | `DayZHandler`           |
+| JSON config, registered mods, custom component    | `ReforgerHandler`       |
+| HTTP download (`DownloadsDirectly`), non-Steam    | `FactorioHandler`       |
+| Twig INI templates, wrapper-script games          | `ProjectZomboidHandler` |
+| Complex settings, headless clients, full-featured | `Arma3Handler`          |
 
 ## Post-Creation Checklist
 
 After scaffolding a handler:
 
-1. Set Steam App IDs (look up on SteamDB)
+1. Set Steam App IDs (look up on SteamDB) — or implement `DownloadsDirectly` for non-Steam games
 2. Verify the server binary is a direct executable vs. a wrapper script (check if it's a shell script that spawns another process)
 3. Check if the server requires interactive input on first run (e.g., admin password prompts) and handle via launch flags
 4. Implement `buildLaunchCommand()` and `getBinaryPath()` based on the game's docs
 5. Create config templates in `resources/templates/configs/{game}/`
 6. Define `settingsSchema()` for the server settings UI
 7. Fill in `settingsValidationRules()` matching the schema fields
-8. Run `php artisan game:generate-types` to update TypeScript types
-9. If settings model was generated, add columns to the migration and run `php artisan migrate`
-10. Add a `create{Game}Server()` method to `tests/Concerns/CreatesGameScenarios.php`
-11. Do **not** write tests for game handlers directly — handler logic is covered by integration and feature tests elsewhere
-12. Run `vendor/bin/pint --dirty --format agent`
-13. Run `vendor/bin/phpstan analyse --memory-limit=512M`
-14. Run `php artisan test --compact`
+8. If the game supports Steam Workshop mods, implement `SupportsWorkshopMods` and use `WorkshopModBehavior` trait
+9. If the game needs lowercase mod conversion (Linux), override `requiresLowercaseConversion()` to return `true`
+10. Run `php artisan game:generate-types` to update TypeScript types
+11. If settings model was generated, add columns to the migration and run `php artisan migrate`
+12. Add a `create{Game}Server()` method to `tests/Concerns/CreatesGameScenarios.php`
+13. Handler capability tests in `HandlerCapabilitiesTest.php` are fully dynamic and auto-discover new handlers — no test updates needed
+14. Run `vendor/bin/pint --dirty --format agent`
+15. Run `vendor/bin/phpstan analyse --memory-limit=512M`
+16. Run `php artisan test --compact`
 
 ## Common Pitfalls
 

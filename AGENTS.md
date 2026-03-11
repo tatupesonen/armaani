@@ -471,14 +471,19 @@ The toast system (`resources/js/components/toast-manager.tsx`) handles:
 - `app/Contracts/GameHandler.php` — Interface defining `value()`, `label()`, and game-specific methods
 - `app/Contracts/SteamGameHandler.php` — Interface for Steam-specific methods (`serverAppId()`, `gameId()`, `consumerAppId()`)
 - `app/Contracts/DownloadsDirectly.php` — Interface for HTTP-downloadable games (`getDownloadUrl()`, `getArchiveStripComponents()`)
+- `app/Contracts/SupportsWorkshopMods.php` — Capability interface for handlers using Steam Workshop mods (`requiresLowercaseConversion()`)
 - `app/Contracts/GameServerInstaller.php` — Unified installer interface (`install()`)
+- `app/GameHandlers/AbstractGameHandler.php` — Abstract base class implementing `GameHandler`. Constructor properties for identity values (`value`, `label`, `defaultPort`, `defaultQueryPort`, `branches`, `settingsModelClass`, `settingsRelationName`) with `final` getters. Provides default implementations for `serverValidationRules`, `settingsValidationRules`, `settingsSchema` (return `[]`), `createRelatedSettings`, `updateRelatedSettings`, `modSections`, `syncPresetMods`, `getPresetModCount` (no-ops). Abstract methods: `getBinaryPath()`, `getProfileName()`, `getServerLogPath()`, `buildLaunchCommand()`, `generateConfigFiles()`.
+- `app/Attributes/Beta.php` — PHP attribute `#[Beta]` for WIP game handlers. Handlers with this attribute are excluded from discovery in production but loaded in all other environments (local, testing, staging).
+- `app/Concerns/WorkshopModBehavior.php` — Trait providing default `modSections()`, `syncPresetMods()`, `getPresetModCount()`, and `requiresLowercaseConversion()` (default `false`) for `SupportsWorkshopMods` handlers
+- `app/Concerns/DetectsServerStateBehavior.php` — Trait providing default `supportsAutoRestart()` and `shouldAutoRestart()` for `DetectsServerState` handlers
 - `app/GameManager.php` — Extends `Illuminate\Support\Manager`; `for(Server|GameInstall)` resolves handler; `allHandlers()`, `availableTypes()`, `fromConsumerAppId()`
-- `app/Providers/GameServiceProvider.php` — Auto-discovers handler classes via glob and registers them with `GameManager::extend()`. Supports a cached manifest at `bootstrap/cache/game-handlers.php` via `game-handlers:cache` / `game-handlers:clear` artisan commands, integrated with `php artisan optimize`.
-- `app/GameHandlers/Arma3Handler.php` — Full implementation (~510 lines); implements `GameHandler` + `SteamGameHandler`; generates server.cfg, server_basic.cfg, .Arma3Profile
-- `app/GameHandlers/ReforgerHandler.php` — Full implementation; implements `GameHandler` + `SteamGameHandler`; generates JSON config
-- `app/GameHandlers/ProjectZomboidHandler.php` — Full implementation; implements `GameHandler` + `SteamGameHandler` + `DetectsServerState`; generates INI config via Twig; PZ auto-expands partial INI on first boot
-- `app/GameHandlers/FactorioHandler.php` — Full implementation; implements `GameHandler` + `DownloadsDirectly` + `DetectsServerState`; generates 3 JSON configs + per-server config.ini; auto-creates save file on first start
-- `app/GameHandlers/DayZHandler.php` — Scaffold; implements `GameHandler` + `SteamGameHandler`; throws RuntimeException for unimplemented features
+- `app/Providers/GameServiceProvider.php` — Auto-discovers handler classes via glob, skips abstract classes and `#[Beta]` handlers in production, and registers them with `GameManager::extend()`. Supports a cached manifest at `bootstrap/cache/game-handlers.php` via `game-handlers:cache` / `game-handlers:clear` artisan commands, integrated with `php artisan optimize`.
+- `app/GameHandlers/Arma3Handler.php` — Full implementation; extends `AbstractGameHandler`; implements `SteamGameHandler`, `DetectsServerState`, `HasQueryPort`, `ManagesModAssets`, `SupportsBackups`, `SupportsHeadlessClients`, `SupportsMissions`, `SupportsWorkshopMods`; uses `DetectsServerStateBehavior`, `WorkshopModBehavior` traits; generates server.cfg, server_basic.cfg, .Arma3Profile
+- `app/GameHandlers/ReforgerHandler.php` — Full implementation; extends `AbstractGameHandler`; implements `SteamGameHandler`, `DetectsServerState`, `HasQueryPort`, `SupportsRegisteredMods`, `SupportsScenarios`, `WritesNativeLogs`; uses `DetectsServerStateBehavior` trait; generates JSON config; overrides `modSections()`/`syncPresetMods()`/`getPresetModCount()` for registered mods
+- `app/GameHandlers/ProjectZomboidHandler.php` — Full implementation; extends `AbstractGameHandler`; implements `SteamGameHandler`, `DetectsServerState`, `HasQueryPort`, `SupportsWorkshopMods`; uses `DetectsServerStateBehavior`, `WorkshopModBehavior` traits; generates INI config via Twig; PZ auto-expands partial INI on first boot
+- `app/GameHandlers/FactorioHandler.php` — Full implementation; extends `AbstractGameHandler`; implements `DownloadsDirectly`, `DetectsServerState`, `HasQueryPort`; uses `DetectsServerStateBehavior` trait; generates 3 JSON configs + per-server config.ini; auto-creates save file on first start
+- `app/GameHandlers/DayZHandler.php` — Scaffold, marked `#[Beta]`; extends `AbstractGameHandler`; implements `SteamGameHandler`, `SupportsWorkshopMods`; uses `WorkshopModBehavior` trait; throws RuntimeException for unimplemented features
 
 ### Services
 
@@ -582,40 +587,55 @@ Form Request conventions: array-based validation rules, no `authorize()` method 
 - `SteamWorkshopService::validateApiKey()` returns `array{valid: bool, error: string|null}`.
 - Streamed downloads use `$response->streamedContent()` not `$response->getContent()`.
 
-### Test Files (518 tests total across 33 files)
+### Test Files (598 tests total across 48 files)
 
-- `tests/Feature/DashboardTest.php` — 10 tests
-- `tests/Feature/ExampleTest.php` — 1 test
-- `tests/Feature/ReforgerScenarioServiceTest.php` — 11 tests
 - `tests/Feature/Auth/AuthenticationTest.php` — 6 tests
 - `tests/Feature/Auth/EmailVerificationTest.php` — 6 tests
 - `tests/Feature/Auth/PasswordConfirmationTest.php` — 2 tests
 - `tests/Feature/Auth/PasswordResetTest.php` — 5 tests
 - `tests/Feature/Auth/TwoFactorChallengeTest.php` — 2 tests
 - `tests/Feature/Auth/VerificationNotificationTest.php` — 2 tests
+- `tests/Feature/CreateAdminUserTest.php` — 4 tests
+- `tests/Feature/DashboardTest.php` — 11 tests
 - `tests/Feature/Events/BroadcastEventsTest.php` — 9 tests
-- `tests/Feature/GameHandlers/DayZHandlerTest.php` — 14 tests
-- `tests/Feature/GameHandlers/ProjectZomboidHandlerTest.php` — 37 tests
-- `tests/Feature/GameHandlers/ReforgerHandlerTest.php` — 23 tests
-- `tests/Feature/GameInstalls/GameInstallManagementTest.php` — 8 tests
+- `tests/Feature/ExampleTest.php` — 1 test
+- `tests/Feature/GameHandlers/Arma3ConfigGenerationTest.php` — 10 tests
+- `tests/Feature/GameHandlers/Arma3HandlerTest.php` — 29 tests
+- `tests/Feature/GameHandlers/DayZHandlerTest.php` — 9 tests
+- `tests/Feature/GameHandlers/FactorioHandlerTest.php` — 37 tests
+- `tests/Feature/GameHandlers/HandlerCapabilitiesTest.php` — 18 tests (dynamic, auto-discovers handlers)
+- `tests/Feature/GameHandlers/ProjectZomboidHandlerTest.php` — 33 tests
+- `tests/Feature/GameHandlers/ReforgerHandlerTest.php` — 20 tests
+- `tests/Feature/GameHandlers/SettingsSchemaTest.php` — 24 tests
+- `tests/Feature/GameInstalls/GameInstallManagementTest.php` — 11 tests
+- `tests/Feature/GameManager/GameHandlersCacheTest.php` — 12 tests (dynamic, includes Beta exclusion tests)
+- `tests/Feature/GameManager/GameManagerDiscoveryTest.php` — 3 tests (dynamic)
+- `tests/Feature/GenerateGameTypesCommandTest.php` — 8 tests
+- `tests/Feature/HttpDownloadServiceTest.php` — 11 tests
 - `tests/Feature/Jobs/BatchDownloadModsJobTest.php` — 8 tests
 - `tests/Feature/Jobs/DownloadModJobTest.php` — 9 tests
 - `tests/Feature/Jobs/InstallServerJobTest.php` — 3 tests
 - `tests/Feature/Jobs/StartServerJobTest.php` — 3 tests
 - `tests/Feature/Jobs/StopServerJobTest.php` — 3 tests
-- `tests/Feature/Listeners/DetectServerBootedTest.php` — 9 tests
-- `tests/Feature/Missions/MissionManagementTest.php` — 14 tests
+- `tests/Feature/Listeners/DetectServerEventsTest.php` — 17 tests
+- `tests/Feature/MakeGameHandlerCommandTest.php` — 10 tests
+- `tests/Feature/Missions/MissionManagementTest.php` — 16 tests
+- `tests/Feature/Mods/ReforgerModManagementTest.php` — 8 tests
 - `tests/Feature/Mods/WorkshopModManagementTest.php` — 37 tests
 - `tests/Feature/Presets/ModPresetManagementTest.php` — 32 tests
+- `tests/Feature/ReforgerScenarioServiceTest.php` — 14 tests
 - `tests/Feature/Servers/MultiGameServerTest.php` — 14 tests
 - `tests/Feature/Servers/ServerBackupManagementTest.php` — 14 tests
 - `tests/Feature/Servers/ServerBackupServiceTest.php` — 15 tests
-- `tests/Feature/Servers/ServerManagementTest.php` — 36 tests
-- `tests/Feature/Servers/ServerProcessServiceTest.php` — 33 tests
+- `tests/Feature/Servers/ServerManagementTest.php` — 44 tests
+- `tests/Feature/Servers/ServerProcessServiceTest.php` — 7 tests
+- `tests/Feature/Services/HttpDownloadServiceTest.php` — 1 test
 - `tests/Feature/Settings/PasswordUpdateTest.php` — 3 tests
 - `tests/Feature/Settings/ProfileUpdateTest.php` — 5 tests
 - `tests/Feature/Settings/TwoFactorAuthenticationTest.php` — 4 tests
-- `tests/Feature/SteamSettings/SteamSettingsTest.php` — 27 tests
+- `tests/Feature/SteamSettings/SteamSettingsTest.php` — 38 tests
+- `tests/Feature/TailServerLogTest.php` — 12 tests
+- `tests/Feature/VersionCheckCommandTest.php` — 7 tests
 - `tests/Unit/ExampleTest.php` — 1 test
 
 ## File System Layout

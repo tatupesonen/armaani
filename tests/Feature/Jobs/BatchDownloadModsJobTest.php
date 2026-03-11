@@ -9,29 +9,25 @@ use App\Models\SteamAccount;
 use App\Models\WorkshopMod;
 use App\Services\Steam\SteamCmdService;
 use App\Services\Steam\SteamWorkshopService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Process\InvokedProcess;
 use Illuminate\Support\Facades\Event;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Process;
-use Mockery;
+use Mockery\MockInterface;
 use Tests\Concerns\MocksSteamCmdProcess;
+use Tests\Concerns\UsesTestPaths;
 use Tests\TestCase;
 
 class BatchDownloadModsJobTest extends TestCase
 {
     use MocksSteamCmdProcess;
-    use RefreshDatabase;
-
-    private string $testModsBasePath;
+    use UsesTestPaths;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->testModsBasePath = sys_get_temp_dir().'/armaani_test_mods_'.uniqid();
-        config(['arma.mods_base_path' => $this->testModsBasePath]);
+        $this->setUpTestPaths(['mods']);
 
         SteamAccount::factory()->create();
         Event::fake([ModDownloadOutput::class]);
@@ -39,20 +35,9 @@ class BatchDownloadModsJobTest extends TestCase
 
     protected function tearDown(): void
     {
-        File::deleteDirectory($this->testModsBasePath);
+        $this->tearDownTestPaths();
 
         parent::tearDown();
-    }
-
-    /**
-     * Create a SteamWorkshopService mock that allows syncMetadataForMany calls.
-     */
-    private function mockWorkshopService(): \Mockery\MockInterface
-    {
-        $workshop = Mockery::mock(SteamWorkshopService::class);
-        $workshop->shouldReceive('syncMetadataForMany')->andReturnNull();
-
-        return $workshop;
     }
 
     public function test_successful_batch_download_marks_all_mods_as_installed(): void
@@ -72,13 +57,13 @@ class BatchDownloadModsJobTest extends TestCase
 
         Process::fake(['du *' => Process::result('50000000	/fake/path')]);
 
-        $steamCmd = Mockery::mock(SteamCmdService::class);
-        $steamCmd->shouldReceive('startBatchDownloadMods')->once()->andReturn($this->makeInvokedProcess(true));
+        $steamCmd = $this->mock(SteamCmdService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('startBatchDownloadMods')->once()->andReturn($this->makeInvokedProcess(true));
+        });
 
-        $workshop = $this->mockWorkshopService();
-
-        $this->app->instance(SteamCmdService::class, $steamCmd);
-        $this->app->instance(SteamWorkshopService::class, $workshop);
+        $workshop = $this->mock(SteamWorkshopService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('syncMetadataForMany')->andReturnNull();
+        });
 
         $job = new BatchDownloadModsJob($mods);
         $job->handle($steamCmd, $workshop);
@@ -108,13 +93,13 @@ class BatchDownloadModsJobTest extends TestCase
 
         Process::fake(['du *' => Process::result('0	/fake/path')]);
 
-        $steamCmd = Mockery::mock(SteamCmdService::class);
-        $steamCmd->shouldReceive('startBatchDownloadMods')->once()->andReturn($this->makeInvokedProcess(false));
+        $steamCmd = $this->mock(SteamCmdService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('startBatchDownloadMods')->once()->andReturn($this->makeInvokedProcess(false));
+        });
 
-        $workshop = $this->mockWorkshopService();
-
-        $this->app->instance(SteamCmdService::class, $steamCmd);
-        $this->app->instance(SteamWorkshopService::class, $workshop);
+        $workshop = $this->mock(SteamWorkshopService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('syncMetadataForMany')->andReturnNull();
+        });
 
         $job = new BatchDownloadModsJob($mods);
         $job->handle($steamCmd, $workshop);
@@ -168,10 +153,9 @@ class BatchDownloadModsJobTest extends TestCase
             ]),
         ]);
 
-        $steamCmd = Mockery::mock(SteamCmdService::class);
-        $steamCmd->shouldReceive('startBatchDownloadMods')->once()->andReturn($this->makeInvokedProcess(true));
-
-        $this->app->instance(SteamCmdService::class, $steamCmd);
+        $steamCmd = $this->mock(SteamCmdService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('startBatchDownloadMods')->once()->andReturn($this->makeInvokedProcess(true));
+        });
 
         $workshop = app(SteamWorkshopService::class);
 
@@ -207,21 +191,21 @@ class BatchDownloadModsJobTest extends TestCase
 
         $statusesDuringDownload = [];
 
-        $steamCmd = Mockery::mock(SteamCmdService::class);
-        $steamCmd->shouldReceive('startBatchDownloadMods')->once()->andReturnUsing(
-            function () use ($mods, &$statusesDuringDownload): InvokedProcess {
-                foreach ($mods as $mod) {
-                    $statusesDuringDownload[] = $mod->fresh()->installation_status;
+        $steamCmd = $this->mock(SteamCmdService::class, function (MockInterface $mock) use ($mods, &$statusesDuringDownload) {
+            $mock->shouldReceive('startBatchDownloadMods')->once()->andReturnUsing(
+                function () use ($mods, &$statusesDuringDownload): InvokedProcess {
+                    foreach ($mods as $mod) {
+                        $statusesDuringDownload[] = $mod->fresh()->installation_status;
+                    }
+
+                    return $this->makeInvokedProcess(true);
                 }
+            );
+        });
 
-                return $this->makeInvokedProcess(true);
-            }
-        );
-
-        $workshop = $this->mockWorkshopService();
-
-        $this->app->instance(SteamCmdService::class, $steamCmd);
-        $this->app->instance(SteamWorkshopService::class, $workshop);
+        $workshop = $this->mock(SteamWorkshopService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('syncMetadataForMany')->andReturnNull();
+        });
 
         $job = new BatchDownloadModsJob($mods);
         $job->handle($steamCmd, $workshop);
@@ -248,13 +232,13 @@ class BatchDownloadModsJobTest extends TestCase
 
         Process::fake(['du *' => Process::result('50000000	/fake/path')]);
 
-        $steamCmd = Mockery::mock(SteamCmdService::class);
-        $steamCmd->shouldReceive('startBatchDownloadMods')->once()->andReturn($this->makeInvokedProcess(true));
+        $steamCmd = $this->mock(SteamCmdService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('startBatchDownloadMods')->once()->andReturn($this->makeInvokedProcess(true));
+        });
 
-        $workshop = $this->mockWorkshopService();
-
-        $this->app->instance(SteamCmdService::class, $steamCmd);
-        $this->app->instance(SteamWorkshopService::class, $workshop);
+        $workshop = $this->mock(SteamWorkshopService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('syncMetadataForMany')->andReturnNull();
+        });
 
         $job = new BatchDownloadModsJob($mods);
         $job->handle($steamCmd, $workshop);
@@ -285,18 +269,18 @@ class BatchDownloadModsJobTest extends TestCase
 
         Process::fake(['du *' => Process::result('50000000	/fake/path')]);
 
-        $steamCmd = Mockery::mock(SteamCmdService::class);
-        $steamCmd->shouldReceive('startBatchDownloadMods')
-            ->once()
-            ->withArgs(function (string $installDir, array $workshopIds): bool {
-                return $workshopIds === [463939057, 450814997];
-            })
-            ->andReturn($this->makeInvokedProcess(true));
+        $steamCmd = $this->mock(SteamCmdService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('startBatchDownloadMods')
+                ->once()
+                ->withArgs(function (string $installDir, array $workshopIds): bool {
+                    return $workshopIds === [463939057, 450814997];
+                })
+                ->andReturn($this->makeInvokedProcess(true));
+        });
 
-        $workshop = $this->mockWorkshopService();
-
-        $this->app->instance(SteamCmdService::class, $steamCmd);
-        $this->app->instance(SteamWorkshopService::class, $workshop);
+        $workshop = $this->mock(SteamWorkshopService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('syncMetadataForMany')->andReturnNull();
+        });
 
         $job = new BatchDownloadModsJob($mods);
         $job->handle($steamCmd, $workshop);
@@ -336,13 +320,13 @@ class BatchDownloadModsJobTest extends TestCase
 
         Process::fake(['du *' => Process::result('10000000	/fake/path')]);
 
-        $steamCmd = Mockery::mock(SteamCmdService::class);
-        $steamCmd->shouldReceive('startBatchDownloadMods')->once()->andReturn($this->makeInvokedProcess(true));
+        $steamCmd = $this->mock(SteamCmdService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('startBatchDownloadMods')->once()->andReturn($this->makeInvokedProcess(true));
+        });
 
-        $workshop = $this->mockWorkshopService();
-
-        $this->app->instance(SteamCmdService::class, $steamCmd);
-        $this->app->instance(SteamWorkshopService::class, $workshop);
+        $workshop = $this->mock(SteamWorkshopService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('syncMetadataForMany')->andReturnNull();
+        });
 
         $job = new BatchDownloadModsJob($mods);
         $job->handle($steamCmd, $workshop);

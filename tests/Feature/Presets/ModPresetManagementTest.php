@@ -7,42 +7,28 @@ use App\Jobs\DownloadModJob;
 use App\Models\ModPreset;
 use App\Models\ReforgerMod;
 use App\Models\SteamAccount;
-use App\Models\User;
 use App\Models\WorkshopMod;
 use App\Services\Steam\SteamWorkshopService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;
-use Mockery;
+use Mockery\MockInterface;
 use Tests\TestCase;
 
 class ModPresetManagementTest extends TestCase
 {
-    use RefreshDatabase;
-
-    protected User $user;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-
-        $this->user = User::factory()->create();
-    }
-
     // ---------------------------------------------------------------
     // Index
     // ---------------------------------------------------------------
 
     public function test_presets_page_requires_authentication(): void
     {
-        $this->get(route('presets.index'))->assertRedirect(route('login'));
+        $this->asGuest()->get(route('presets.index'))->assertRedirect(route('login'));
     }
 
     public function test_presets_page_is_displayed(): void
     {
-        $this->actingAs($this->user)
-            ->get(route('presets.index'))
+        $this->get(route('presets.index'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page->component('presets/index'));
     }
@@ -51,8 +37,7 @@ class ModPresetManagementTest extends TestCase
     {
         ModPreset::factory()->create(['name' => 'My Combat Preset']);
 
-        $this->actingAs($this->user)
-            ->get(route('presets.index'))
+        $this->get(route('presets.index'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('presets/index')
@@ -63,8 +48,7 @@ class ModPresetManagementTest extends TestCase
 
     public function test_presets_page_shows_empty_state(): void
     {
-        $this->actingAs($this->user)
-            ->get(route('presets.index'))
+        $this->get(route('presets.index'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('presets/index')
@@ -78,8 +62,7 @@ class ModPresetManagementTest extends TestCase
         $preset = ModPreset::factory()->create(['name' => 'Three Mod Preset']);
         $preset->mods()->attach($mods->pluck('id'));
 
-        $this->actingAs($this->user)
-            ->get(route('presets.index'))
+        $this->get(route('presets.index'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('presets/index')
@@ -94,8 +77,7 @@ class ModPresetManagementTest extends TestCase
         ModPreset::factory()->create(['name' => 'Alpha Preset']);
         ModPreset::factory()->create(['name' => 'Mike Preset']);
 
-        $this->actingAs($this->user)
-            ->get(route('presets.index'))
+        $this->get(route('presets.index'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('presets/index')
@@ -112,8 +94,7 @@ class ModPresetManagementTest extends TestCase
 
     public function test_create_preset_page_is_displayed(): void
     {
-        $this->actingAs($this->user)
-            ->get(route('presets.create'))
+        $this->get(route('presets.create'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('presets/create')
@@ -128,8 +109,7 @@ class ModPresetManagementTest extends TestCase
         WorkshopMod::factory()->installed()->create(['name' => 'ACE3']);
         ReforgerMod::factory()->create(['name' => 'Reforger Mod']);
 
-        $this->actingAs($this->user)
-            ->get(route('presets.create'))
+        $this->get(route('presets.create'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('presets/create')
@@ -144,12 +124,11 @@ class ModPresetManagementTest extends TestCase
 
     public function test_user_can_create_preset(): void
     {
-        $this->actingAs($this->user)
-            ->post(route('presets.store'), [
-                'game_type' => 'arma3',
-                'name' => 'New Preset',
-                'mod_ids' => [],
-            ])
+        $this->post(route('presets.store'), [
+            'game_type' => 'arma3',
+            'name' => 'New Preset',
+            'mod_ids' => [],
+        ])
             ->assertRedirect(route('presets.index'))
             ->assertSessionHas('success');
 
@@ -161,20 +140,18 @@ class ModPresetManagementTest extends TestCase
 
     public function test_create_preset_validates_required_name(): void
     {
-        $this->actingAs($this->user)
-            ->post(route('presets.store'), [
-                'game_type' => 'arma3',
-                'name' => '',
-            ])
+        $this->post(route('presets.store'), [
+            'game_type' => 'arma3',
+            'name' => '',
+        ])
             ->assertSessionHasErrors(['name']);
     }
 
     public function test_create_preset_validates_required_game_type(): void
     {
-        $this->actingAs($this->user)
-            ->post(route('presets.store'), [
-                'name' => 'Test Preset',
-            ])
+        $this->post(route('presets.store'), [
+            'name' => 'Test Preset',
+        ])
             ->assertSessionHasErrors(['game_type']);
     }
 
@@ -182,11 +159,10 @@ class ModPresetManagementTest extends TestCase
     {
         ModPreset::factory()->create(['name' => 'Duplicate Name', 'game_type' => 'arma3']);
 
-        $this->actingAs($this->user)
-            ->post(route('presets.store'), [
-                'game_type' => 'arma3',
-                'name' => 'Duplicate Name',
-            ])
+        $this->post(route('presets.store'), [
+            'game_type' => 'arma3',
+            'name' => 'Duplicate Name',
+        ])
             ->assertSessionHasErrors(['name']);
     }
 
@@ -194,12 +170,11 @@ class ModPresetManagementTest extends TestCase
     {
         ModPreset::factory()->create(['name' => 'Shared Name', 'game_type' => 'arma3']);
 
-        $this->actingAs($this->user)
-            ->post(route('presets.store'), [
-                'game_type' => 'dayz',
-                'name' => 'Shared Name',
-                'mod_ids' => [],
-            ])
+        $this->post(route('presets.store'), [
+            'game_type' => 'dayz',
+            'name' => 'Shared Name',
+            'mod_ids' => [],
+        ])
             ->assertRedirect(route('presets.index'))
             ->assertSessionHasNoErrors();
 
@@ -211,12 +186,11 @@ class ModPresetManagementTest extends TestCase
         $mod1 = WorkshopMod::factory()->installed()->create();
         $mod2 = WorkshopMod::factory()->installed()->create();
 
-        $this->actingAs($this->user)
-            ->post(route('presets.store'), [
-                'game_type' => 'arma3',
-                'name' => 'Modded Preset',
-                'mod_ids' => [$mod1->id, $mod2->id],
-            ])
+        $this->post(route('presets.store'), [
+            'game_type' => 'arma3',
+            'name' => 'Modded Preset',
+            'mod_ids' => [$mod1->id, $mod2->id],
+        ])
             ->assertRedirect(route('presets.index'));
 
         $preset = ModPreset::where('name', 'Modded Preset')->first();
@@ -229,12 +203,11 @@ class ModPresetManagementTest extends TestCase
         $mod1 = ReforgerMod::factory()->create();
         $mod2 = ReforgerMod::factory()->create();
 
-        $this->actingAs($this->user)
-            ->post(route('presets.store'), [
-                'game_type' => 'reforger',
-                'name' => 'Reforger Preset',
-                'reforger_mod_ids' => [$mod1->id, $mod2->id],
-            ])
+        $this->post(route('presets.store'), [
+            'game_type' => 'reforger',
+            'name' => 'Reforger Preset',
+            'reforger_mod_ids' => [$mod1->id, $mod2->id],
+        ])
             ->assertRedirect(route('presets.index'));
 
         $preset = ModPreset::where('name', 'Reforger Preset')->first();
@@ -245,12 +218,11 @@ class ModPresetManagementTest extends TestCase
 
     public function test_create_preset_validates_mod_ids_exist(): void
     {
-        $this->actingAs($this->user)
-            ->post(route('presets.store'), [
-                'game_type' => 'arma3',
-                'name' => 'Bad Mods Preset',
-                'mod_ids' => [99999],
-            ])
+        $this->post(route('presets.store'), [
+            'game_type' => 'arma3',
+            'name' => 'Bad Mods Preset',
+            'mod_ids' => [99999],
+        ])
             ->assertSessionHasErrors(['mod_ids.0']);
     }
 
@@ -262,8 +234,7 @@ class ModPresetManagementTest extends TestCase
     {
         $preset = ModPreset::factory()->create();
 
-        $this->actingAs($this->user)
-            ->get(route('presets.edit', $preset))
+        $this->get(route('presets.edit', $preset))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('presets/edit')
@@ -280,8 +251,7 @@ class ModPresetManagementTest extends TestCase
         $preset = ModPreset::factory()->create(['name' => 'Existing Preset']);
         $preset->mods()->attach($mod);
 
-        $this->actingAs($this->user)
-            ->get(route('presets.edit', $preset))
+        $this->get(route('presets.edit', $preset))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('presets/edit')
@@ -299,11 +269,10 @@ class ModPresetManagementTest extends TestCase
     {
         $preset = ModPreset::factory()->create(['name' => 'Old Name']);
 
-        $this->actingAs($this->user)
-            ->put(route('presets.update', $preset), [
-                'name' => 'Updated Name',
-                'mod_ids' => [],
-            ])
+        $this->put(route('presets.update', $preset), [
+            'name' => 'Updated Name',
+            'mod_ids' => [],
+        ])
             ->assertRedirect(route('presets.index'))
             ->assertSessionHas('success');
 
@@ -322,11 +291,10 @@ class ModPresetManagementTest extends TestCase
         $preset = ModPreset::factory()->create();
         $preset->mods()->attach([$mod1->id, $mod2->id]);
 
-        $this->actingAs($this->user)
-            ->put(route('presets.update', $preset), [
-                'name' => $preset->name,
-                'mod_ids' => [$mod2->id, $mod3->id],
-            ])
+        $this->put(route('presets.update', $preset), [
+            'name' => $preset->name,
+            'mod_ids' => [$mod2->id, $mod3->id],
+        ])
             ->assertRedirect(route('presets.index'));
 
         $preset->refresh();
@@ -339,10 +307,9 @@ class ModPresetManagementTest extends TestCase
         ModPreset::factory()->create(['name' => 'Other Preset']);
         $preset = ModPreset::factory()->create(['name' => 'My Preset']);
 
-        $this->actingAs($this->user)
-            ->put(route('presets.update', $preset), [
-                'name' => 'Other Preset',
-            ])
+        $this->put(route('presets.update', $preset), [
+            'name' => 'Other Preset',
+        ])
             ->assertSessionHasErrors(['name']);
     }
 
@@ -350,11 +317,10 @@ class ModPresetManagementTest extends TestCase
     {
         $preset = ModPreset::factory()->create(['name' => 'Keep Name']);
 
-        $this->actingAs($this->user)
-            ->put(route('presets.update', $preset), [
-                'name' => 'Keep Name',
-                'mod_ids' => [],
-            ])
+        $this->put(route('presets.update', $preset), [
+            'name' => 'Keep Name',
+            'mod_ids' => [],
+        ])
             ->assertRedirect(route('presets.index'))
             ->assertSessionHasNoErrors();
     }
@@ -365,11 +331,10 @@ class ModPresetManagementTest extends TestCase
         $mod1 = ReforgerMod::factory()->create();
         $mod2 = ReforgerMod::factory()->create();
 
-        $this->actingAs($this->user)
-            ->put(route('presets.update', $preset), [
-                'name' => $preset->name,
-                'reforger_mod_ids' => [$mod1->id, $mod2->id],
-            ])
+        $this->put(route('presets.update', $preset), [
+            'name' => $preset->name,
+            'reforger_mod_ids' => [$mod1->id, $mod2->id],
+        ])
             ->assertRedirect(route('presets.index'));
 
         $preset->refresh();
@@ -385,8 +350,7 @@ class ModPresetManagementTest extends TestCase
     {
         $preset = ModPreset::factory()->create();
 
-        $this->actingAs($this->user)
-            ->delete(route('presets.destroy', $preset))
+        $this->delete(route('presets.destroy', $preset))
             ->assertRedirect()
             ->assertSessionHas('success');
 
@@ -399,8 +363,7 @@ class ModPresetManagementTest extends TestCase
         $preset = ModPreset::factory()->create();
         $preset->mods()->attach($mod);
 
-        $this->actingAs($this->user)
-            ->delete(route('presets.destroy', $preset));
+        $this->delete(route('presets.destroy', $preset));
 
         $this->assertDatabaseMissing('mod_presets', ['id' => $preset->id]);
         $this->assertDatabaseHas('workshop_mods', ['id' => $mod->id]);
@@ -412,8 +375,7 @@ class ModPresetManagementTest extends TestCase
 
     public function test_import_preset_requires_file(): void
     {
-        $this->actingAs($this->user)
-            ->post(route('presets.import'), [])
+        $this->post(route('presets.import'), [])
             ->assertSessionHasErrors(['import_file']);
     }
 
@@ -421,24 +383,23 @@ class ModPresetManagementTest extends TestCase
     {
         Queue::fake();
 
-        $workshopService = Mockery::mock(SteamWorkshopService::class);
-        $workshopService->shouldReceive('getMultipleModDetails')
-            ->once()
-            ->andReturn([
-                463939057 => ['name' => 'ACE3', 'file_size' => 100000],
-                820924072 => ['name' => 'CBA_A3', 'file_size' => 50000],
-            ]);
-        $this->app->instance(SteamWorkshopService::class, $workshopService);
+        $this->mock(SteamWorkshopService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getMultipleModDetails')
+                ->once()
+                ->andReturn([
+                    463939057 => ['name' => 'ACE3', 'file_size' => 100000],
+                    820924072 => ['name' => 'CBA_A3', 'file_size' => 50000],
+                ]);
+        });
 
         SteamAccount::factory()->create();
 
         $htmlContent = $this->makePresetHtml('Test Import Preset', [463939057, 820924072]);
         $file = UploadedFile::fake()->createWithContent('preset.html', $htmlContent);
 
-        $this->actingAs($this->user)
-            ->post(route('presets.import'), [
-                'import_file' => $file,
-            ])
+        $this->post(route('presets.import'), [
+            'import_file' => $file,
+        ])
             ->assertRedirect()
             ->assertSessionHas('success');
 
@@ -451,24 +412,23 @@ class ModPresetManagementTest extends TestCase
     {
         Queue::fake();
 
-        $workshopService = Mockery::mock(SteamWorkshopService::class);
-        $workshopService->shouldReceive('getMultipleModDetails')
-            ->once()
-            ->andReturn([
-                463939057 => ['name' => 'ACE3', 'file_size' => 100000],
-            ]);
-        $this->app->instance(SteamWorkshopService::class, $workshopService);
+        $this->mock(SteamWorkshopService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getMultipleModDetails')
+                ->once()
+                ->andReturn([
+                    463939057 => ['name' => 'ACE3', 'file_size' => 100000],
+                ]);
+        });
 
         SteamAccount::factory()->create();
 
         $htmlContent = $this->makePresetHtml('Original Name', [463939057]);
         $file = UploadedFile::fake()->createWithContent('preset.html', $htmlContent);
 
-        $this->actingAs($this->user)
-            ->post(route('presets.import'), [
-                'import_file' => $file,
-                'import_name' => 'Custom Name',
-            ])
+        $this->post(route('presets.import'), [
+            'import_file' => $file,
+            'import_name' => 'Custom Name',
+        ])
             ->assertRedirect()
             ->assertSessionHas('success');
 
@@ -480,10 +440,9 @@ class ModPresetManagementTest extends TestCase
     {
         $file = UploadedFile::fake()->createWithContent('preset.html', '<html><body>No mods here</body></html>');
 
-        $this->actingAs($this->user)
-            ->post(route('presets.import'), [
-                'import_file' => $file,
-            ])
+        $this->post(route('presets.import'), [
+            'import_file' => $file,
+        ])
             ->assertRedirect()
             ->assertSessionHasErrors(['import_file']);
     }
@@ -492,23 +451,22 @@ class ModPresetManagementTest extends TestCase
     {
         Queue::fake();
 
-        $workshopService = Mockery::mock(SteamWorkshopService::class);
-        $workshopService->shouldReceive('getMultipleModDetails')
-            ->once()
-            ->andReturn([
-                463939057 => ['name' => 'ACE3', 'file_size' => 100000],
-            ]);
-        $this->app->instance(SteamWorkshopService::class, $workshopService);
+        $this->mock(SteamWorkshopService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getMultipleModDetails')
+                ->once()
+                ->andReturn([
+                    463939057 => ['name' => 'ACE3', 'file_size' => 100000],
+                ]);
+        });
 
         SteamAccount::factory()->create();
 
         $htmlContent = $this->makePresetHtml('Download Preset', [463939057]);
         $file = UploadedFile::fake()->createWithContent('preset.html', $htmlContent);
 
-        $this->actingAs($this->user)
-            ->post(route('presets.import'), [
-                'import_file' => $file,
-            ]);
+        $this->post(route('presets.import'), [
+            'import_file' => $file,
+        ]);
 
         Queue::assertPushed(DownloadModJob::class);
     }
@@ -522,23 +480,22 @@ class ModPresetManagementTest extends TestCase
             'game_type' => 'arma3',
         ]);
 
-        $workshopService = Mockery::mock(SteamWorkshopService::class);
-        $workshopService->shouldReceive('getMultipleModDetails')
-            ->once()
-            ->andReturn([
-                463939057 => ['name' => 'ACE3', 'file_size' => 100000],
-            ]);
-        $this->app->instance(SteamWorkshopService::class, $workshopService);
+        $this->mock(SteamWorkshopService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getMultipleModDetails')
+                ->once()
+                ->andReturn([
+                    463939057 => ['name' => 'ACE3', 'file_size' => 100000],
+                ]);
+        });
 
         SteamAccount::factory()->create();
 
         $htmlContent = $this->makePresetHtml('Already Installed Preset', [463939057]);
         $file = UploadedFile::fake()->createWithContent('preset.html', $htmlContent);
 
-        $this->actingAs($this->user)
-            ->post(route('presets.import'), [
-                'import_file' => $file,
-            ]);
+        $this->post(route('presets.import'), [
+            'import_file' => $file,
+        ]);
 
         Queue::assertNotPushed(DownloadModJob::class);
         Queue::assertNotPushed(BatchDownloadModsJob::class);
@@ -554,21 +511,20 @@ class ModPresetManagementTest extends TestCase
             $metadata[$id] = ['name' => "Mod {$id}", 'file_size' => 1000];
         }
 
-        $workshopService = Mockery::mock(SteamWorkshopService::class);
-        $workshopService->shouldReceive('getMultipleModDetails')
-            ->once()
-            ->andReturn($metadata);
-        $this->app->instance(SteamWorkshopService::class, $workshopService);
+        $this->mock(SteamWorkshopService::class, function (MockInterface $mock) use ($metadata) {
+            $mock->shouldReceive('getMultipleModDetails')
+                ->once()
+                ->andReturn($metadata);
+        });
 
         SteamAccount::factory()->create(['mod_download_batch_size' => 5]);
 
         $htmlContent = $this->makePresetHtml('Big Preset', $workshopIds);
         $file = UploadedFile::fake()->createWithContent('preset.html', $htmlContent);
 
-        $this->actingAs($this->user)
-            ->post(route('presets.import'), [
-                'import_file' => $file,
-            ]);
+        $this->post(route('presets.import'), [
+            'import_file' => $file,
+        ]);
 
         Queue::assertPushed(BatchDownloadModsJob::class, 2);
     }

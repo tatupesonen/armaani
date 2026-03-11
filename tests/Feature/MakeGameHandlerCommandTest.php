@@ -2,14 +2,11 @@
 
 namespace Tests\Feature;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Tests\TestCase;
 
 class MakeGameHandlerCommandTest extends TestCase
 {
-    use RefreshDatabase;
-
     /**
      * @var list<string>
      */

@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Contracts\SupportsWorkshopMods;
 use App\Enums\InstallationStatus;
 use App\Events\ModDownloadOutput;
 use App\GameManager;
@@ -153,7 +154,7 @@ class BatchDownloadModsJob implements ShouldQueue
         foreach ($this->mods as $mod) {
             $modPath = $mod->getInstallationPath();
 
-            if ($handler->requiresLowercaseConversion()) {
+            if ($handler instanceof SupportsWorkshopMods && $handler->requiresLowercaseConversion()) {
                 $this->convertToLowercase($modPath);
             }
             $actualSize = $this->getDirectorySize($modPath);

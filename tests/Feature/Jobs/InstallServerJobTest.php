@@ -9,25 +9,20 @@ use App\Jobs\InstallServerJob;
 use App\Models\GameInstall;
 use App\Models\SteamAccount;
 use App\Services\Installers\InstallerResolver;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
+use Tests\Concerns\UsesTestPaths;
 use Tests\TestCase;
 
 class InstallServerJobTest extends TestCase
 {
-    use RefreshDatabase;
-
-    private string $testGamesBasePath;
+    use UsesTestPaths;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->testGamesBasePath = sys_get_temp_dir().'/armaani_test_games_'.uniqid();
-
-        config(['arma.games_base_path' => $this->testGamesBasePath]);
+        $this->setUpTestPaths(['games']);
 
         SteamAccount::factory()->create();
         Event::fake([GameInstallOutput::class]);
@@ -35,7 +30,7 @@ class InstallServerJobTest extends TestCase
 
     protected function tearDown(): void
     {
-        File::deleteDirectory($this->testGamesBasePath);
+        $this->tearDownTestPaths();
 
         parent::tearDown();
     }

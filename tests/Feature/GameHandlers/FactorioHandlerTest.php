@@ -2,52 +2,33 @@
 
 namespace Tests\Feature\GameHandlers;
 
-use App\Contracts\DetectsServerState;
-use App\Contracts\DownloadsDirectly;
-use App\Contracts\ManagesModAssets;
-use App\Contracts\SteamGameHandler;
-use App\Contracts\SupportsBackups;
-use App\Contracts\SupportsHeadlessClients;
-use App\Contracts\SupportsMissions;
+use App\Contracts\SupportsWorkshopMods;
 use App\GameHandlers\FactorioHandler;
 use App\Models\Server;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 use Tests\Concerns\CreatesGameScenarios;
+use Tests\Concerns\GeneratesHandlerConfigs;
+use Tests\Concerns\UsesTestPaths;
 use Tests\TestCase;
 
 class FactorioHandlerTest extends TestCase
 {
     use CreatesGameScenarios;
-    use RefreshDatabase;
+    use GeneratesHandlerConfigs;
+    use UsesTestPaths;
 
     private FactorioHandler $handler;
-
-    private string $testServersBasePath;
-
-    private string $testGamesBasePath;
 
     protected function setUp(): void
     {
         parent::setUp();
-
-        $this->testServersBasePath = sys_get_temp_dir().'/armaani_test_servers_'.uniqid();
-        $this->testGamesBasePath = sys_get_temp_dir().'/armaani_test_games_'.uniqid();
-
-        config([
-            'arma.servers_base_path' => $this->testServersBasePath,
-            'arma.games_base_path' => $this->testGamesBasePath,
-        ]);
-
+        $this->setUpTestPaths(['servers', 'games']);
         $this->handler = app(FactorioHandler::class);
     }
 
     protected function tearDown(): void
     {
-        File::deleteDirectory($this->testServersBasePath);
-        File::deleteDirectory($this->testGamesBasePath);
-
+        $this->tearDownTestPaths();
         parent::tearDown();
     }
 
@@ -61,43 +42,6 @@ class FactorioHandlerTest extends TestCase
     public function test_label_returns_factorio(): void
     {
         $this->assertEquals('Factorio', $this->handler->label());
-    }
-
-    // --- Interfaces ---
-
-    public function test_implements_downloads_directly(): void
-    {
-        $this->assertInstanceOf(DownloadsDirectly::class, $this->handler);
-    }
-
-    public function test_implements_detects_server_state(): void
-    {
-        $this->assertInstanceOf(DetectsServerState::class, $this->handler);
-    }
-
-    public function test_does_not_implement_steam_game_handler(): void
-    {
-        $this->assertNotInstanceOf(SteamGameHandler::class, $this->handler);
-    }
-
-    public function test_does_not_implement_supports_headless_clients(): void
-    {
-        $this->assertNotInstanceOf(SupportsHeadlessClients::class, $this->handler);
-    }
-
-    public function test_does_not_implement_supports_backups(): void
-    {
-        $this->assertNotInstanceOf(SupportsBackups::class, $this->handler);
-    }
-
-    public function test_does_not_implement_manages_mod_assets(): void
-    {
-        $this->assertNotInstanceOf(ManagesModAssets::class, $this->handler);
-    }
-
-    public function test_does_not_implement_supports_missions(): void
-    {
-        $this->assertNotInstanceOf(SupportsMissions::class, $this->handler);
     }
 
     // --- DownloadsDirectly ---
@@ -138,12 +82,7 @@ class FactorioHandlerTest extends TestCase
 
     public function test_does_not_support_workshop_mods(): void
     {
-        $this->assertFalse($this->handler->supportsWorkshopMods());
-    }
-
-    public function test_does_not_require_lowercase_conversion(): void
-    {
-        $this->assertFalse($this->handler->requiresLowercaseConversion());
+        $this->assertNotInstanceOf(SupportsWorkshopMods::class, $this->handler);
     }
 
     // --- Server Process ---
@@ -580,10 +519,9 @@ class FactorioHandlerTest extends TestCase
         $this->assertEquals(0, $this->handler->getPresetModCount($preset));
     }
 
-    // --- Helpers ---
-
     /**
      * Generate config files and read a specific JSON config back as an array.
+     * Fakes the Process facade to suppress save-file creation subprocesses.
      *
      * @return array<string, mixed>
      */
@@ -591,14 +529,6 @@ class FactorioHandlerTest extends TestCase
     {
         Process::fake();
 
-        $profilesPath = $server->getProfilesPath();
-        @mkdir($profilesPath, 0755, true);
-
-        $this->handler->generateConfigFiles($server);
-
-        $configPath = $profilesPath.'/'.$filename;
-        $this->assertFileExists($configPath);
-
-        return json_decode(file_get_contents($configPath), true);
+        return $this->generateAndReadJsonConfig($server, $filename);
     }
 }

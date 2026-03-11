@@ -5,12 +5,7 @@
  * Regenerate with: php artisan game:generate-types
  */
 
-import type {
-    GameInstall,
-    ModPreset,
-    ServerBackup,
-    ServerStatus,
-} from './game';
+import type { GameInstall, ModPreset, ServerBackup, ServerStatus } from './game';
 
 export type ServerBase = {
     id: number;
@@ -38,13 +33,12 @@ export type ServerBase = {
 export type Arma3Settings = {
     id: number;
     server_id: number;
-    admin_password: string | null;
+    admin_password: string;
     verify_signatures: boolean;
     allowed_file_patching: boolean;
     battle_eye: boolean;
-    persistent: boolean;
     von_enabled: boolean;
-    additional_server_options: string | null;
+    persistent: boolean;
     reduced_damage: boolean;
     stamina_bar: boolean;
     weapon_crosshair: boolean;
@@ -79,6 +73,7 @@ export type Arma3Settings = {
     max_custom_file_size: number;
     view_distance: number;
     terrain_grid: string;
+    additional_server_options: string;
 };
 
 export type FactorioSettings = {
@@ -88,39 +83,39 @@ export type FactorioSettings = {
     visibility_public: boolean;
     visibility_lan: boolean;
     require_user_verification: boolean;
-    auto_pause: boolean;
-    only_admins_can_pause: boolean;
+    max_upload_kbps: number;
+    max_heartbeats_per_second: number;
+    ignore_player_limit_for_returning: boolean;
     allow_commands: number;
     autosave_interval: number;
     autosave_slots: number;
     afk_autokick_interval: number;
-    max_upload_kbps: number;
-    max_heartbeats_per_second: number;
-    ignore_player_limit_for_returning: boolean;
+    auto_pause: boolean;
+    only_admins_can_pause: boolean;
     autosave_only_on_server: boolean;
     non_blocking_saving: boolean;
     tags: string;
-    iron_ore_frequency: number;
-    iron_ore_size: number;
-    iron_ore_richness: number;
-    copper_ore_frequency: number;
-    copper_ore_size: number;
-    copper_ore_richness: number;
     coal_frequency: number;
     coal_size: number;
     coal_richness: number;
-    stone_frequency: number;
-    stone_size: number;
-    stone_richness: number;
+    copper_ore_frequency: number;
+    copper_ore_size: number;
+    copper_ore_richness: number;
     crude_oil_frequency: number;
     crude_oil_size: number;
     crude_oil_richness: number;
-    uranium_ore_frequency: number;
-    uranium_ore_size: number;
-    uranium_ore_richness: number;
+    iron_ore_frequency: number;
+    iron_ore_size: number;
+    iron_ore_richness: number;
+    stone_frequency: number;
+    stone_size: number;
+    stone_richness: number;
     trees_frequency: number;
     trees_size: number;
     trees_richness: number;
+    uranium_ore_frequency: number;
+    uranium_ore_size: number;
+    uranium_ore_richness: number;
     enemy_base_frequency: number;
     enemy_base_size: number;
     enemy_base_richness: number;
@@ -129,23 +124,23 @@ export type FactorioSettings = {
     starting_area: number;
     water: number;
     terrain_segmentation: number;
-    cliff_richness: number;
     cliff_elevation_0: number;
     cliff_elevation_interval: number;
+    cliff_richness: number;
     peaceful_mode: boolean;
     map_seed: string;
     pollution_enabled: boolean;
     evolution_enabled: boolean;
-    evolution_time_factor: string;
-    evolution_destroy_factor: string;
-    evolution_pollution_factor: string;
+    evolution_time_factor: number;
+    evolution_destroy_factor: number;
+    evolution_pollution_factor: number;
     expansion_enabled: boolean;
 };
 
 export type ProjectzomboidSettings = {
     id: number;
     server_id: number;
-    admin_password: string | null;
+    admin_password: string;
     open: boolean;
     pvp: boolean;
     pause_empty: boolean;
@@ -165,10 +160,10 @@ export type ProjectzomboidSettings = {
 export type ReforgerSettings = {
     id: number;
     server_id: number;
-    admin_password: string | null;
-    battle_eye: boolean;
     scenario_id: string | null;
+    admin_password: string;
     third_person_view_enabled: boolean;
+    battle_eye: boolean;
     cross_platform: boolean;
     max_fps: number;
 };
@@ -197,9 +192,4 @@ export type ReforgerServer = ServerBase & {
     reforger_settings?: ReforgerSettings;
 };
 
-export type Server =
-    | Arma3Server
-    | DayzServer
-    | FactorioServer
-    | ProjectzomboidServer
-    | ReforgerServer;
+export type Server = Arma3Server | DayzServer | FactorioServer | ProjectzomboidServer | ReforgerServer;

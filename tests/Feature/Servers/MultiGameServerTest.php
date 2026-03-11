@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Servers;
 
+use App\Contracts\SupportsWorkshopMods;
 use App\GameHandlers\Arma3Handler;
 use App\GameHandlers\DayZHandler;
 use App\GameHandlers\ReforgerHandler;
@@ -11,14 +12,12 @@ use App\Models\Server;
 use App\Models\WorkshopMod;
 use App\Services\Server\ServerBackupService;
 use App\Services\Server\ServerProcessService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\CreatesGameScenarios;
 use Tests\TestCase;
 
 class MultiGameServerTest extends TestCase
 {
     use CreatesGameScenarios;
-    use RefreshDatabase;
 
     // ---------------------------------------------------------------
     // 1. HC rejection for non-Arma3
@@ -115,7 +114,7 @@ class MultiGameServerTest extends TestCase
         $this->assertSame(2302, $handler->defaultPort());
         $this->assertSame(2303, $handler->defaultQueryPort());
         $this->assertSame(['public', 'contact', 'creatordlc', 'profiling', 'performance', 'legacy'], $handler->branches());
-        $this->assertTrue($handler->supportsWorkshopMods());
+        $this->assertInstanceOf(SupportsWorkshopMods::class, $handler);
         $this->assertTrue($handler->requiresLowercaseConversion());
     }
 
@@ -128,8 +127,7 @@ class MultiGameServerTest extends TestCase
         $this->assertSame(2001, $handler->defaultPort());
         $this->assertSame(17777, $handler->defaultQueryPort());
         $this->assertSame(['public'], $handler->branches());
-        $this->assertFalse($handler->supportsWorkshopMods());
-        $this->assertFalse($handler->requiresLowercaseConversion());
+        $this->assertNotInstanceOf(SupportsWorkshopMods::class, $handler);
     }
 
     public function test_dayz_handler_game_properties(): void
@@ -141,7 +139,7 @@ class MultiGameServerTest extends TestCase
         $this->assertSame(2302, $handler->defaultPort());
         $this->assertSame(27016, $handler->defaultQueryPort());
         $this->assertSame(['public', 'experimental'], $handler->branches());
-        $this->assertTrue($handler->supportsWorkshopMods());
+        $this->assertInstanceOf(SupportsWorkshopMods::class, $handler);
         $this->assertTrue($handler->requiresLowercaseConversion());
     }
 

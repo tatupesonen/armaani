@@ -4,7 +4,6 @@ namespace App\GameHandlers;
 
 use App\Concerns\DetectsServerStateBehavior;
 use App\Contracts\DetectsServerState;
-use App\Contracts\GameHandler;
 use App\Contracts\HasQueryPort;
 use App\Contracts\SteamGameHandler;
 use App\Contracts\SupportsRegisteredMods;
@@ -18,24 +17,26 @@ use App\Services\Mod\ReforgerScenarioService;
 use App\Services\Renderer\JsonConfigRenderer;
 use Illuminate\Database\Eloquent\Model;
 
-final class ReforgerHandler implements DetectsServerState, GameHandler, HasQueryPort, SteamGameHandler, SupportsRegisteredMods, SupportsScenarios, WritesNativeLogs
+final class ReforgerHandler extends AbstractGameHandler implements DetectsServerState, HasQueryPort, SteamGameHandler, SupportsRegisteredMods, SupportsScenarios, WritesNativeLogs
 {
     use DetectsServerStateBehavior;
 
     public function __construct(
         protected JsonConfigRenderer $configRenderer,
         protected ReforgerScenarioService $scenarioService,
-    ) {}
-
-    public function value(): string
-    {
-        return 'reforger';
+    ) {
+        parent::__construct(
+            value: 'reforger',
+            label: 'Arma Reforger',
+            defaultPort: 2001,
+            defaultQueryPort: 17777,
+            branches: ['public'],
+            settingsModelClass: ReforgerSettings::class,
+            settingsRelationName: 'reforgerSettings',
+        );
     }
 
-    public function label(): string
-    {
-        return 'Arma Reforger';
-    }
+    // --- SteamGameHandler ---
 
     public function consumerAppId(): int
     {
@@ -52,30 +53,7 @@ final class ReforgerHandler implements DetectsServerState, GameHandler, HasQuery
         return 1874900;
     }
 
-    public function defaultPort(): int
-    {
-        return 2001;
-    }
-
-    public function defaultQueryPort(): int
-    {
-        return 17777;
-    }
-
-    public function branches(): array
-    {
-        return ['public'];
-    }
-
-    public function supportsWorkshopMods(): bool
-    {
-        return false;
-    }
-
-    public function requiresLowercaseConversion(): bool
-    {
-        return false;
-    }
+    // --- Server Process ---
 
     public function buildLaunchCommand(Server $server): array
     {
@@ -227,11 +205,6 @@ final class ReforgerHandler implements DetectsServerState, GameHandler, HasQuery
 
     // --- Validation ---
 
-    public function serverValidationRules(?Server $server = null): array
-    {
-        return [];
-    }
-
     public function settingsValidationRules(): array
     {
         return [
@@ -244,38 +217,7 @@ final class ReforgerHandler implements DetectsServerState, GameHandler, HasQuery
         ];
     }
 
-    // --- Related Settings ---
-
-    public function settingsModelClass(): ?string
-    {
-        return ReforgerSettings::class;
-    }
-
-    public function settingsRelationName(): ?string
-    {
-        return 'reforgerSettings';
-    }
-
-    public function createRelatedSettings(Server $server): void
-    {
-        ReforgerSettings::query()->create(['server_id' => $server->id]);
-    }
-
-    public function updateRelatedSettings(Server $server, array $validated): void
-    {
-        $reforgerFields = collect($validated)->only(
-            (new ReforgerSettings)->getFillable()
-        )->except('server_id')->toArray();
-
-        if (! empty($reforgerFields)) {
-            $server->reforgerSettings()->updateOrCreate(
-                ['server_id' => $server->id],
-                $reforgerFields,
-            );
-        }
-    }
-
-    // --- Mod Presets ---
+    // --- Mod Presets (overrides for registered mods) ---
 
     public function modSections(): array
     {

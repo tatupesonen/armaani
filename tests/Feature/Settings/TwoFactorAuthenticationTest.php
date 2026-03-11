@@ -2,16 +2,12 @@
 
 namespace Tests\Feature\Settings;
 
-use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
 use Laravel\Fortify\Features;
 use Tests\TestCase;
 
 class TwoFactorAuthenticationTest extends TestCase
 {
-    use RefreshDatabase;
-
     public function test_two_factor_settings_page_can_be_rendered()
     {
         if (! Features::canManageTwoFactorAuthentication()) {
@@ -23,9 +19,7 @@ class TwoFactorAuthenticationTest extends TestCase
             'confirmPassword' => true,
         ]);
 
-        $user = User::factory()->create();
-
-        $this->actingAs($user)
+        $this
             ->withSession(['auth.password_confirmed_at' => time()])
             ->get(route('two-factor.show'))
             ->assertInertia(fn (Assert $page) => $page
@@ -40,14 +34,12 @@ class TwoFactorAuthenticationTest extends TestCase
             $this->markTestSkipped('Two-factor authentication is not enabled.');
         }
 
-        $user = User::factory()->create();
-
         Features::twoFactorAuthentication([
             'confirm' => true,
             'confirmPassword' => true,
         ]);
 
-        $response = $this->actingAs($user)
+        $response = $this
             ->get(route('two-factor.show'));
 
         $response->assertRedirect(route('password.confirm'));
@@ -59,14 +51,12 @@ class TwoFactorAuthenticationTest extends TestCase
             $this->markTestSkipped('Two-factor authentication is not enabled.');
         }
 
-        $user = User::factory()->create();
-
         Features::twoFactorAuthentication([
             'confirm' => true,
             'confirmPassword' => false,
         ]);
 
-        $this->actingAs($user)
+        $this
             ->get(route('two-factor.show'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
@@ -82,9 +72,7 @@ class TwoFactorAuthenticationTest extends TestCase
 
         config(['fortify.features' => []]);
 
-        $user = User::factory()->create();
-
-        $this->actingAs($user)
+        $this
             ->withSession(['auth.password_confirmed_at' => time()])
             ->get(route('two-factor.show'))
             ->assertForbidden();

@@ -2,23 +2,39 @@
 
 namespace App\GameHandlers;
 
-use App\Contracts\GameHandler;
+use App\Attributes\Beta;
+use App\Concerns\WorkshopModBehavior;
 use App\Contracts\SteamGameHandler;
+use App\Contracts\SupportsWorkshopMods;
 use App\Models\DayZSettings;
-use App\Models\ModPreset;
 use App\Models\Server;
 
-final class DayZHandler implements GameHandler, SteamGameHandler
+#[Beta]
+final class DayZHandler extends AbstractGameHandler implements SteamGameHandler, SupportsWorkshopMods
 {
-    public function value(): string
+    use WorkshopModBehavior;
+
+    public function __construct()
     {
-        return 'dayz';
+        parent::__construct(
+            value: 'dayz',
+            label: 'DayZ',
+            defaultPort: 2302,
+            defaultQueryPort: 27016,
+            branches: ['public', 'experimental'],
+            settingsModelClass: DayZSettings::class,
+            settingsRelationName: 'dayzSettings',
+        );
     }
 
-    public function label(): string
+    // --- SupportsWorkshopMods ---
+
+    public function requiresLowercaseConversion(): bool
     {
-        return 'DayZ';
+        return true;
     }
+
+    // --- SteamGameHandler ---
 
     public function consumerAppId(): int
     {
@@ -35,30 +51,7 @@ final class DayZHandler implements GameHandler, SteamGameHandler
         return 221100;
     }
 
-    public function defaultPort(): int
-    {
-        return 2302;
-    }
-
-    public function defaultQueryPort(): int
-    {
-        return 27016;
-    }
-
-    public function branches(): array
-    {
-        return ['public', 'experimental'];
-    }
-
-    public function supportsWorkshopMods(): bool
-    {
-        return true;
-    }
-
-    public function requiresLowercaseConversion(): bool
-    {
-        return true;
-    }
+    // --- Server Process ---
 
     public function buildLaunchCommand(Server $server): array
     {
@@ -83,81 +76,5 @@ final class DayZHandler implements GameHandler, SteamGameHandler
     public function getServerLogPath(Server $server): string
     {
         return $server->getProfilesPath().'/server.log';
-    }
-
-    // --- UI Schema ---
-
-    public function settingsSchema(): array
-    {
-        return [];
-    }
-
-    // --- Validation ---
-
-    public function serverValidationRules(?Server $server = null): array
-    {
-        return [];
-    }
-
-    public function settingsValidationRules(): array
-    {
-        return [];
-    }
-
-    // --- Related Settings ---
-
-    /** @phpstan-ignore return.unusedType */
-    public function settingsModelClass(): ?string
-    {
-        return DayZSettings::class;
-    }
-
-    /** @phpstan-ignore return.unusedType */
-    public function settingsRelationName(): ?string
-    {
-        return 'dayzSettings';
-    }
-
-    public function createRelatedSettings(Server $server): void
-    {
-        DayZSettings::query()->create(['server_id' => $server->id]);
-    }
-
-    public function updateRelatedSettings(Server $server, array $validated): void
-    {
-        $dayzFields = collect($validated)->only(
-            (new DayZSettings)->getFillable()
-        )->except('server_id')->toArray();
-
-        if (! empty($dayzFields)) {
-            $server->dayzSettings()->updateOrCreate(
-                ['server_id' => $server->id],
-                $dayzFields,
-            );
-        }
-    }
-
-    // --- Mod Presets ---
-
-    public function modSections(): array
-    {
-        return [
-            [
-                'type' => 'workshop',
-                'label' => 'Workshop Mods',
-                'relationship' => 'mods',
-                'formField' => 'mod_ids',
-            ],
-        ];
-    }
-
-    public function syncPresetMods(ModPreset $preset, array $validated): void
-    {
-        $preset->mods()->sync($validated['mod_ids'] ?? []);
-    }
-
-    public function getPresetModCount(ModPreset $preset): int
-    {
-        return $preset->mods()->count();
     }
 }

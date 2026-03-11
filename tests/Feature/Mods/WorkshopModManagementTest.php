@@ -7,37 +7,28 @@ use App\Jobs\BatchDownloadModsJob;
 use App\Jobs\DownloadModJob;
 use App\Models\ModPreset;
 use App\Models\SteamAccount;
-use App\Models\User;
 use App\Models\WorkshopMod;
 use App\Services\Steam\SteamWorkshopService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;
-use Mockery;
+use Mockery\MockInterface;
+use Tests\Concerns\UsesTestPaths;
 use Tests\TestCase;
 
 class WorkshopModManagementTest extends TestCase
 {
-    use RefreshDatabase;
-
-    protected User $user;
-
-    private string $testModsBasePath;
+    use UsesTestPaths;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->testModsBasePath = sys_get_temp_dir().'/armaani_test_mods_'.uniqid();
-        config(['arma.mods_base_path' => $this->testModsBasePath]);
-
-        $this->user = User::factory()->create();
+        $this->setUpTestPaths(['mods']);
     }
 
     protected function tearDown(): void
     {
-        File::deleteDirectory($this->testModsBasePath);
+        $this->tearDownTestPaths();
 
         parent::tearDown();
     }
@@ -48,13 +39,12 @@ class WorkshopModManagementTest extends TestCase
 
     public function test_mods_page_requires_authentication(): void
     {
-        $this->get(route('mods.index'))->assertRedirect(route('login'));
+        $this->asGuest()->get(route('mods.index'))->assertRedirect(route('login'));
     }
 
     public function test_mods_page_is_displayed(): void
     {
-        $this->actingAs($this->user)
-            ->get(route('mods.index'))
+        $this->get(route('mods.index'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('mods/index')
@@ -68,8 +58,7 @@ class WorkshopModManagementTest extends TestCase
     {
         WorkshopMod::factory()->create(['workshop_id' => 463939057, 'name' => 'ACE3']);
 
-        $this->actingAs($this->user)
-            ->get(route('mods.index'))
+        $this->get(route('mods.index'))
             ->assertInertia(fn (Assert $page) => $page
                 ->has('mods', 1)
                 ->has('mods.0', fn (Assert $mod) => $mod
@@ -82,8 +71,7 @@ class WorkshopModManagementTest extends TestCase
 
     public function test_mods_page_shows_empty_state(): void
     {
-        $this->actingAs($this->user)
-            ->get(route('mods.index'))
+        $this->get(route('mods.index'))
             ->assertInertia(fn (Assert $page) => $page
                 ->has('mods', 0)
             );
@@ -93,8 +81,7 @@ class WorkshopModManagementTest extends TestCase
     {
         WorkshopMod::factory()->outdated()->create(['name' => 'Outdated Mod']);
 
-        $this->actingAs($this->user)
-            ->get(route('mods.index'))
+        $this->get(route('mods.index'))
             ->assertInertia(fn (Assert $page) => $page
                 ->has('mods.0', fn (Assert $mod) => $mod
                     ->where('is_outdated', true)
@@ -107,8 +94,7 @@ class WorkshopModManagementTest extends TestCase
     {
         WorkshopMod::factory()->installed()->create(['name' => 'Fresh Mod']);
 
-        $this->actingAs($this->user)
-            ->get(route('mods.index'))
+        $this->get(route('mods.index'))
             ->assertInertia(fn (Assert $page) => $page
                 ->has('mods.0', fn (Assert $mod) => $mod
                     ->where('is_outdated', false)
@@ -123,8 +109,7 @@ class WorkshopModManagementTest extends TestCase
         WorkshopMod::factory()->installed()->create(['file_size' => 2147483648]); // 2 GB
         WorkshopMod::factory()->failed()->create(['file_size' => 500000000]);
 
-        $this->actingAs($this->user)
-            ->get(route('mods.index'))
+        $this->get(route('mods.index'))
             ->assertInertia(fn (Assert $page) => $page
                 ->where('installedStats.count', 2)
                 ->where('installedStats.total_size', 1073741824 + 2147483648)
@@ -135,8 +120,7 @@ class WorkshopModManagementTest extends TestCase
     {
         WorkshopMod::factory()->failed()->create();
 
-        $this->actingAs($this->user)
-            ->get(route('mods.index'))
+        $this->get(route('mods.index'))
             ->assertInertia(fn (Assert $page) => $page
                 ->where('installedStats.count', 0)
                 ->where('installedStats.total_size', 0)
@@ -152,8 +136,7 @@ class WorkshopModManagementTest extends TestCase
         WorkshopMod::factory()->create(['name' => 'ACE3', 'workshop_id' => 463939057]);
         WorkshopMod::factory()->create(['name' => 'CBA_A3', 'workshop_id' => 450814997]);
 
-        $this->actingAs($this->user)
-            ->get(route('mods.index', ['search' => 'ACE']))
+        $this->get(route('mods.index', ['search' => 'ACE']))
             ->assertInertia(fn (Assert $page) => $page
                 ->has('mods', 1)
                 ->has('mods.0', fn (Assert $mod) => $mod
@@ -168,8 +151,7 @@ class WorkshopModManagementTest extends TestCase
         WorkshopMod::factory()->create(['name' => 'ACE3', 'workshop_id' => 463939057]);
         WorkshopMod::factory()->create(['name' => 'CBA_A3', 'workshop_id' => 450814997]);
 
-        $this->actingAs($this->user)
-            ->get(route('mods.index', ['search' => '450814997']))
+        $this->get(route('mods.index', ['search' => '450814997']))
             ->assertInertia(fn (Assert $page) => $page
                 ->has('mods', 1)
                 ->has('mods.0', fn (Assert $mod) => $mod
@@ -183,8 +165,7 @@ class WorkshopModManagementTest extends TestCase
     {
         WorkshopMod::factory()->create(['name' => 'ACE3']);
 
-        $this->actingAs($this->user)
-            ->get(route('mods.index', ['search' => 'nonexistent']))
+        $this->get(route('mods.index', ['search' => 'nonexistent']))
             ->assertInertia(fn (Assert $page) => $page
                 ->has('mods', 0)
             );
@@ -195,8 +176,7 @@ class WorkshopModManagementTest extends TestCase
         WorkshopMod::factory()->installed()->create(['name' => 'Large Mod', 'file_size' => 9000000]);
         WorkshopMod::factory()->installed()->create(['name' => 'Small Mod', 'file_size' => 1000000]);
 
-        $this->actingAs($this->user)
-            ->get(route('mods.index', ['sort_by' => 'file_size', 'sort_direction' => 'asc']))
+        $this->get(route('mods.index', ['sort_by' => 'file_size', 'sort_direction' => 'asc']))
             ->assertInertia(fn (Assert $page) => $page
                 ->has('mods', 2)
                 ->where('mods.0.name', 'Small Mod')
@@ -209,8 +189,7 @@ class WorkshopModManagementTest extends TestCase
         WorkshopMod::factory()->installed()->create(['name' => 'Large Mod', 'file_size' => 9000000]);
         WorkshopMod::factory()->installed()->create(['name' => 'Small Mod', 'file_size' => 1000000]);
 
-        $this->actingAs($this->user)
-            ->get(route('mods.index', ['sort_by' => 'file_size', 'sort_direction' => 'desc']))
+        $this->get(route('mods.index', ['sort_by' => 'file_size', 'sort_direction' => 'desc']))
             ->assertInertia(fn (Assert $page) => $page
                 ->where('mods.0.name', 'Large Mod')
                 ->where('mods.1.name', 'Small Mod')
@@ -222,8 +201,7 @@ class WorkshopModManagementTest extends TestCase
         WorkshopMod::factory()->installed()->create(['name' => 'Old Mod', 'installed_at' => '2025-01-01']);
         WorkshopMod::factory()->installed()->create(['name' => 'New Mod', 'installed_at' => '2026-06-01']);
 
-        $this->actingAs($this->user)
-            ->get(route('mods.index', ['sort_by' => 'installed_at', 'sort_direction' => 'asc']))
+        $this->get(route('mods.index', ['sort_by' => 'installed_at', 'sort_direction' => 'asc']))
             ->assertInertia(fn (Assert $page) => $page
                 ->where('mods.0.name', 'Old Mod')
                 ->where('mods.1.name', 'New Mod')
@@ -238,8 +216,7 @@ class WorkshopModManagementTest extends TestCase
     {
         Queue::fake();
 
-        $this->actingAs($this->user)
-            ->post(route('mods.store'), ['workshop_id' => 463939057])
+        $this->post(route('mods.store'), ['workshop_id' => 463939057])
             ->assertRedirect()
             ->assertSessionHas('success');
 
@@ -249,15 +226,13 @@ class WorkshopModManagementTest extends TestCase
 
     public function test_add_mod_validates_workshop_id_required(): void
     {
-        $this->actingAs($this->user)
-            ->post(route('mods.store'), ['workshop_id' => ''])
+        $this->post(route('mods.store'), ['workshop_id' => ''])
             ->assertSessionHasErrors(['workshop_id']);
     }
 
     public function test_add_mod_validates_numeric_workshop_id(): void
     {
-        $this->actingAs($this->user)
-            ->post(route('mods.store'), ['workshop_id' => 'not-a-number'])
+        $this->post(route('mods.store'), ['workshop_id' => 'not-a-number'])
             ->assertSessionHasErrors(['workshop_id']);
     }
 
@@ -267,8 +242,7 @@ class WorkshopModManagementTest extends TestCase
 
         WorkshopMod::factory()->installed()->create(['workshop_id' => 463939057]);
 
-        $this->actingAs($this->user)
-            ->post(route('mods.store'), ['workshop_id' => 463939057]);
+        $this->post(route('mods.store'), ['workshop_id' => 463939057]);
 
         $this->assertEquals(1, WorkshopMod::where('workshop_id', 463939057)->count());
         Queue::assertNotPushed(DownloadModJob::class);
@@ -280,8 +254,7 @@ class WorkshopModManagementTest extends TestCase
 
         WorkshopMod::factory()->failed()->create(['workshop_id' => 463939057]);
 
-        $this->actingAs($this->user)
-            ->post(route('mods.store'), ['workshop_id' => 463939057]);
+        $this->post(route('mods.store'), ['workshop_id' => 463939057]);
 
         $mod = WorkshopMod::where('workshop_id', 463939057)->first();
         $this->assertEquals(InstallationStatus::Queued, $mod->installation_status);
@@ -298,8 +271,7 @@ class WorkshopModManagementTest extends TestCase
 
         $mod = WorkshopMod::factory()->failed()->create();
 
-        $this->actingAs($this->user)
-            ->post(route('mods.retry', $mod))
+        $this->post(route('mods.retry', $mod))
             ->assertRedirect()
             ->assertSessionHas('success');
 
@@ -319,8 +291,7 @@ class WorkshopModManagementTest extends TestCase
         @mkdir($path, 0755, true);
         $this->assertTrue(is_dir($path), 'Test setup: directory should exist before delete');
 
-        $this->actingAs($this->user)
-            ->delete(route('mods.destroy', $mod))
+        $this->delete(route('mods.destroy', $mod))
             ->assertRedirect()
             ->assertSessionHas('success');
 
@@ -334,8 +305,7 @@ class WorkshopModManagementTest extends TestCase
         $preset = ModPreset::factory()->create();
         $preset->mods()->attach($mod);
 
-        $this->actingAs($this->user)
-            ->delete(route('mods.destroy', $mod));
+        $this->delete(route('mods.destroy', $mod));
 
         $this->assertDatabaseMissing('workshop_mods', ['id' => $mod->id]);
         $this->assertDatabaseMissing('mod_preset_workshop_mod', ['workshop_mod_id' => $mod->id]);
@@ -353,8 +323,7 @@ class WorkshopModManagementTest extends TestCase
 
         WorkshopMod::factory()->failed()->count(3)->create();
 
-        $this->actingAs($this->user)
-            ->post(route('mods.retry-all-failed'))
+        $this->post(route('mods.retry-all-failed'))
             ->assertRedirect()
             ->assertSessionHas('success');
 
@@ -374,8 +343,7 @@ class WorkshopModManagementTest extends TestCase
 
         WorkshopMod::factory()->failed()->create();
 
-        $this->actingAs($this->user)
-            ->post(route('mods.retry-all-failed'));
+        $this->post(route('mods.retry-all-failed'));
 
         Queue::assertPushed(DownloadModJob::class, 1);
         Queue::assertNotPushed(BatchDownloadModsJob::class);
@@ -389,8 +357,7 @@ class WorkshopModManagementTest extends TestCase
 
         WorkshopMod::factory()->failed()->count(5)->create();
 
-        $this->actingAs($this->user)
-            ->post(route('mods.retry-all-failed'));
+        $this->post(route('mods.retry-all-failed'));
 
         // 5 mods with batch size 2 -> 2 BatchDownloadModsJobs (2+2) + 1 DownloadModJob (1)
         Queue::assertPushed(BatchDownloadModsJob::class, 2);
@@ -403,8 +370,7 @@ class WorkshopModManagementTest extends TestCase
 
         WorkshopMod::factory()->installed()->create();
 
-        $this->actingAs($this->user)
-            ->post(route('mods.retry-all-failed'));
+        $this->post(route('mods.retry-all-failed'));
 
         Queue::assertNotPushed(DownloadModJob::class);
         Queue::assertNotPushed(BatchDownloadModsJob::class);
@@ -423,8 +389,7 @@ class WorkshopModManagementTest extends TestCase
         $mod1 = WorkshopMod::factory()->installed()->create();
         $mod2 = WorkshopMod::factory()->installed()->create();
 
-        $this->actingAs($this->user)
-            ->post(route('mods.update-selected'), ['mod_ids' => [$mod1->id, $mod2->id]])
+        $this->post(route('mods.update-selected'), ['mod_ids' => [$mod1->id, $mod2->id]])
             ->assertRedirect()
             ->assertSessionHas('success');
 
@@ -443,8 +408,7 @@ class WorkshopModManagementTest extends TestCase
 
         $mods = WorkshopMod::factory()->installed()->count(5)->create();
 
-        $this->actingAs($this->user)
-            ->post(route('mods.update-selected'), ['mod_ids' => $mods->pluck('id')->all()]);
+        $this->post(route('mods.update-selected'), ['mod_ids' => $mods->pluck('id')->all()]);
 
         // 5 mods with batch size 2 -> 2 BatchDownloadModsJobs (2+2) + 1 DownloadModJob (1)
         Queue::assertPushed(BatchDownloadModsJob::class, 2);
@@ -457,8 +421,7 @@ class WorkshopModManagementTest extends TestCase
 
         $mod = WorkshopMod::factory()->installed()->create();
 
-        $this->actingAs($this->user)
-            ->post(route('mods.update-selected'), ['mod_ids' => [$mod->id]]);
+        $this->post(route('mods.update-selected'), ['mod_ids' => [$mod->id]]);
 
         Queue::assertPushed(DownloadModJob::class, 1);
         Queue::assertNotPushed(BatchDownloadModsJob::class);
@@ -472,10 +435,9 @@ class WorkshopModManagementTest extends TestCase
         $installingMod = WorkshopMod::factory()->installing()->create();
         $queuedMod = WorkshopMod::factory()->create(); // default is queued
 
-        $this->actingAs($this->user)
-            ->post(route('mods.update-selected'), [
-                'mod_ids' => [$installedMod->id, $installingMod->id, $queuedMod->id],
-            ]);
+        $this->post(route('mods.update-selected'), [
+            'mod_ids' => [$installedMod->id, $installingMod->id, $queuedMod->id],
+        ]);
 
         Queue::assertPushed(DownloadModJob::class, 1);
 
@@ -487,8 +449,7 @@ class WorkshopModManagementTest extends TestCase
     {
         Queue::fake();
 
-        $this->actingAs($this->user)
-            ->post(route('mods.update-selected'), ['mod_ids' => []])
+        $this->post(route('mods.update-selected'), ['mod_ids' => []])
             ->assertSessionHasErrors(['mod_ids']);
 
         Queue::assertNotPushed(DownloadModJob::class);
@@ -500,8 +461,7 @@ class WorkshopModManagementTest extends TestCase
 
         $mod = WorkshopMod::factory()->failed()->create();
 
-        $this->actingAs($this->user)
-            ->post(route('mods.update-selected'), ['mod_ids' => [$mod->id]]);
+        $this->post(route('mods.update-selected'), ['mod_ids' => [$mod->id]]);
 
         Queue::assertPushed(DownloadModJob::class, 1);
         $this->assertEquals(InstallationStatus::Queued, $mod->fresh()->installation_status);
@@ -515,16 +475,15 @@ class WorkshopModManagementTest extends TestCase
     {
         $mod = WorkshopMod::factory()->installed()->create(['workshop_id' => 463939057]);
 
-        $mock = Mockery::mock(SteamWorkshopService::class);
-        $mock->shouldReceive('getMultipleModDetails')
-            ->once()
-            ->andReturn([
-                463939057 => ['name' => 'Test Mod', 'file_size' => 1000, 'time_updated' => 1700000000, 'game_type' => null],
-            ]);
-        $this->app->instance(SteamWorkshopService::class, $mock);
+        $this->mock(SteamWorkshopService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getMultipleModDetails')
+                ->once()
+                ->andReturn([
+                    463939057 => ['name' => 'Test Mod', 'file_size' => 1000, 'time_updated' => 1700000000, 'game_type' => null],
+                ]);
+        });
 
-        $this->actingAs($this->user)
-            ->post(route('mods.check-for-updates'))
+        $this->post(route('mods.check-for-updates'))
             ->assertRedirect()
             ->assertSessionHas('success');
 
@@ -538,12 +497,11 @@ class WorkshopModManagementTest extends TestCase
         WorkshopMod::factory()->failed()->create(['workshop_id' => 100]);
         WorkshopMod::factory()->create(['workshop_id' => 200]); // queued
 
-        $mock = Mockery::mock(SteamWorkshopService::class);
-        $mock->shouldNotReceive('getMultipleModDetails');
-        $this->app->instance(SteamWorkshopService::class, $mock);
+        $this->mock(SteamWorkshopService::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('getMultipleModDetails');
+        });
 
-        $this->actingAs($this->user)
-            ->post(route('mods.check-for-updates'));
+        $this->post(route('mods.check-for-updates'));
     }
 
     // ---------------------------------------------------------------
@@ -559,8 +517,7 @@ class WorkshopModManagementTest extends TestCase
         $outdated = WorkshopMod::factory()->outdated()->create();
         $upToDate = WorkshopMod::factory()->installed()->create();
 
-        $this->actingAs($this->user)
-            ->post(route('mods.update-all-outdated'))
+        $this->post(route('mods.update-all-outdated'))
             ->assertRedirect()
             ->assertSessionHas('success');
 
@@ -577,8 +534,7 @@ class WorkshopModManagementTest extends TestCase
 
         WorkshopMod::factory()->installed()->create();
 
-        $this->actingAs($this->user)
-            ->post(route('mods.update-all-outdated'));
+        $this->post(route('mods.update-all-outdated'));
 
         Queue::assertNotPushed(DownloadModJob::class);
         Queue::assertNotPushed(BatchDownloadModsJob::class);
@@ -592,8 +548,7 @@ class WorkshopModManagementTest extends TestCase
 
         WorkshopMod::factory()->outdated()->count(5)->create();
 
-        $this->actingAs($this->user)
-            ->post(route('mods.update-all-outdated'));
+        $this->post(route('mods.update-all-outdated'));
 
         // 5 mods with batch size 2 -> 2 BatchDownloadModsJobs (2+2) + 1 DownloadModJob (1)
         Queue::assertPushed(BatchDownloadModsJob::class, 2);

@@ -13,16 +13,14 @@ use App\Jobs\StartServerJob;
 use App\Jobs\StopServerJob;
 use App\Listeners\DetectServerEvents;
 use App\Models\Server;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Event;
 use Mockery;
+use Mockery\MockInterface;
 use Tests\TestCase;
 
 class DetectServerEventsTest extends TestCase
 {
-    use RefreshDatabase;
-
     private DetectServerEvents $listener;
 
     protected function setUp(): void
@@ -324,9 +322,9 @@ class DetectServerEventsTest extends TestCase
         $handler->shouldReceive('getCrashDetectionStrings')->andReturn([$crashString]);
         $handler->shouldReceive('shouldAutoRestart')->andReturn($shouldAutoRestart);
 
-        $manager = Mockery::mock(GameManager::class);
-        $manager->shouldReceive('for')->andReturn($handler);
-        $this->app->instance(GameManager::class, $manager);
+        $this->mock(GameManager::class, function (MockInterface $mock) use ($handler) {
+            $mock->shouldReceive('for')->andReturn($handler);
+        });
 
         return app(DetectServerEvents::class);
     }

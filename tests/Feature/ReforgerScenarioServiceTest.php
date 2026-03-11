@@ -5,15 +5,11 @@ namespace Tests\Feature;
 use App\Models\GameInstall;
 use App\Models\ReforgerScenario;
 use App\Models\Server;
-use App\Models\User;
 use App\Services\Mod\ReforgerScenarioService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class ReforgerScenarioServiceTest extends TestCase
 {
-    use RefreshDatabase;
-
     // ---------------------------------------------------------------
     // Service unit tests
     // ---------------------------------------------------------------
@@ -166,7 +162,6 @@ class ReforgerScenarioServiceTest extends TestCase
 
     public function test_reforger_scenarios_endpoint_returns_scenarios(): void
     {
-        $user = User::factory()->create();
         $install = GameInstall::factory()->reforger()->create([
             'installation_status' => 'installed',
         ]);
@@ -188,8 +183,7 @@ class ReforgerScenarioServiceTest extends TestCase
             'is_official' => false,
         ]);
 
-        $response = $this->actingAs($user)
-            ->get(route('servers.scenarios', $server))
+        $response = $this->get(route('servers.scenarios', $server))
             ->assertOk();
 
         $scenarios = $response->json('scenarios');
@@ -200,14 +194,12 @@ class ReforgerScenarioServiceTest extends TestCase
 
     public function test_reforger_scenarios_endpoint_rejects_non_reforger_server(): void
     {
-        $user = User::factory()->create();
         $install = GameInstall::factory()->installed()->create();
         $server = Server::factory()->create([
             'game_install_id' => $install->id,
         ]);
 
-        $this->actingAs($user)
-            ->get(route('servers.scenarios', $server))
+        $this->get(route('servers.scenarios', $server))
             ->assertStatus(422)
             ->assertJson(['scenarios' => []]);
     }
@@ -222,20 +214,18 @@ class ReforgerScenarioServiceTest extends TestCase
             'game_type' => 'reforger',
         ]);
 
-        $this->get(route('servers.scenarios', $server))
+        $this->asGuest()->get(route('servers.scenarios', $server))
             ->assertRedirect(route('login'));
     }
 
     public function test_reload_reforger_scenarios_endpoint_rejects_non_reforger_server(): void
     {
-        $user = User::factory()->create();
         $install = GameInstall::factory()->installed()->create();
         $server = Server::factory()->create([
             'game_install_id' => $install->id,
         ]);
 
-        $this->actingAs($user)
-            ->post(route('servers.scenarios.reload', $server))
+        $this->post(route('servers.scenarios.reload', $server))
             ->assertStatus(422)
             ->assertJson(['scenarios' => []]);
     }
@@ -250,7 +240,7 @@ class ReforgerScenarioServiceTest extends TestCase
             'game_type' => 'reforger',
         ]);
 
-        $this->post(route('servers.scenarios.reload', $server))
+        $this->asGuest()->post(route('servers.scenarios.reload', $server))
             ->assertRedirect(route('login'));
     }
 }

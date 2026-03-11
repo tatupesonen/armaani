@@ -3,34 +3,35 @@
 namespace App\GameHandlers;
 
 use App\Concerns\DetectsServerStateBehavior;
+use App\Concerns\WorkshopModBehavior;
 use App\Contracts\DetectsServerState;
-use App\Contracts\GameHandler;
 use App\Contracts\HasQueryPort;
 use App\Contracts\SteamGameHandler;
-use App\Models\ModPreset;
+use App\Contracts\SupportsWorkshopMods;
 use App\Models\ProjectZomboidSettings;
 use App\Models\Server;
 use App\Services\Renderer\TwigConfigRenderer;
 
-final class ProjectZomboidHandler implements DetectsServerState, GameHandler, HasQueryPort, SteamGameHandler
+final class ProjectZomboidHandler extends AbstractGameHandler implements DetectsServerState, HasQueryPort, SteamGameHandler, SupportsWorkshopMods
 {
     use DetectsServerStateBehavior;
+    use WorkshopModBehavior;
 
     public function __construct(
         protected TwigConfigRenderer $configRenderer,
-    ) {}
-
-    public function value(): string
-    {
-        return 'projectzomboid';
+    ) {
+        parent::__construct(
+            value: 'projectzomboid',
+            label: 'Project Zomboid',
+            defaultPort: 16261,
+            defaultQueryPort: 16262,
+            branches: ['public', 'unstable'],
+            settingsModelClass: ProjectZomboidSettings::class,
+            settingsRelationName: 'projectzomboidSettings',
+        );
     }
 
-    public function label(): string
-    {
-        return 'Project Zomboid';
-    }
-
-    // --- Steam ---
+    // --- SteamGameHandler ---
 
     public function serverAppId(): int
     {
@@ -45,33 +46,6 @@ final class ProjectZomboidHandler implements DetectsServerState, GameHandler, Ha
     public function consumerAppId(): int
     {
         return 108600;
-    }
-
-    // --- Game Metadata ---
-
-    public function defaultPort(): int
-    {
-        return 16261;
-    }
-
-    public function defaultQueryPort(): int
-    {
-        return 16262;
-    }
-
-    public function branches(): array
-    {
-        return ['public', 'unstable'];
-    }
-
-    public function supportsWorkshopMods(): bool
-    {
-        return true;
-    }
-
-    public function requiresLowercaseConversion(): bool
-    {
-        return false;
     }
 
     // --- Server Process ---
@@ -221,66 +195,6 @@ final class ProjectZomboidHandler implements DetectsServerState, GameHandler, Ha
             'login_queue_enabled' => ['boolean'],
             'deny_login_on_overloaded_server' => ['boolean'],
         ];
-    }
-
-    // --- Related Settings ---
-
-    /** @phpstan-ignore return.unusedType */
-    public function settingsModelClass(): ?string
-    {
-        return ProjectZomboidSettings::class;
-    }
-
-    /** @phpstan-ignore return.unusedType */
-    public function settingsRelationName(): ?string
-    {
-        return 'projectzomboidSettings';
-    }
-
-    public function createRelatedSettings(Server $server): void
-    {
-        ProjectZomboidSettings::query()->create(['server_id' => $server->id]);
-    }
-
-    public function updateRelatedSettings(Server $server, array $validated): void
-    {
-        $fields = collect($validated)->only(
-            (new ProjectZomboidSettings)->getFillable()
-        )->except('server_id')->toArray();
-
-        if (! empty($fields)) {
-            $server->projectzomboidSettings()->updateOrCreate(
-                ['server_id' => $server->id],
-                $fields,
-            );
-        }
-    }
-
-    // --- Mod Presets ---
-
-    /**
-     * @return list<array{type: 'workshop'|'registered', label: string, relationship: string, formField: string}>
-     */
-    public function modSections(): array
-    {
-        return [
-            [
-                'type' => 'workshop',
-                'label' => 'Workshop Mods',
-                'relationship' => 'mods',
-                'formField' => 'mod_ids',
-            ],
-        ];
-    }
-
-    public function syncPresetMods(ModPreset $preset, array $validated): void
-    {
-        $preset->mods()->sync($validated['mod_ids'] ?? []);
-    }
-
-    public function getPresetModCount(ModPreset $preset): int
-    {
-        return $preset->mods()->count();
     }
 
     // --- Config Generation ---

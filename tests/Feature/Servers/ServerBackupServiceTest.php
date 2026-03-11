@@ -5,26 +5,24 @@ namespace Tests\Feature\Servers;
 use App\Models\Server;
 use App\Models\ServerBackup;
 use App\Services\Server\ServerBackupService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\File;
+use Tests\Concerns\CreatesVarsFile;
+use Tests\Concerns\UsesTestPaths;
 use Tests\TestCase;
 
 class ServerBackupServiceTest extends TestCase
 {
-    use RefreshDatabase;
+    use CreatesVarsFile;
+    use UsesTestPaths;
 
     protected ServerBackupService $service;
 
     protected Server $server;
 
-    protected string $testBasePath;
-
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->testBasePath = sys_get_temp_dir().'/armaani_test_servers_'.uniqid();
-        config(['arma.servers_base_path' => $this->testBasePath]);
+        $this->setUpTestPaths(['servers']);
 
         $this->service = app(ServerBackupService::class);
         $this->server = Server::factory()->create();
@@ -32,16 +30,14 @@ class ServerBackupServiceTest extends TestCase
 
     protected function tearDown(): void
     {
-        if (is_dir($this->testBasePath)) {
-            File::deleteDirectory($this->testBasePath);
-        }
+        $this->tearDownTestPaths();
 
         parent::tearDown();
     }
 
     public function test_get_vars_file_path_returns_correct_path(): void
     {
-        $expected = $this->testBasePath.'/'.$this->server->id
+        $expected = $this->testPath('servers').'/'.$this->server->id
             .'/home/arma3_'.$this->server->id
             .'/arma3_'.$this->server->id.'.vars.Arma3Profile';
 
@@ -59,7 +55,7 @@ class ServerBackupServiceTest extends TestCase
     public function test_create_from_server_creates_backup_from_existing_vars_file(): void
     {
         $varsContent = "version=148;\nblood=1;\n";
-        $this->createVarsFile($varsContent);
+        $this->createVarsFile($this->server, $varsContent);
 
         $backup = $this->service->createFromServer($this->server, 'My save');
 
@@ -74,7 +70,7 @@ class ServerBackupServiceTest extends TestCase
 
     public function test_create_from_server_with_automatic_flag(): void
     {
-        $this->createVarsFile('test');
+        $this->createVarsFile($this->server, 'test');
 
         $backup = $this->service->createFromServer($this->server, 'Auto-backup before start', isAutomatic: true);
 
@@ -194,7 +190,7 @@ class ServerBackupServiceTest extends TestCase
     {
         config(['arma.max_backups_per_server' => 2]);
 
-        $this->createVarsFile('data');
+        $this->createVarsFile($this->server, 'data');
 
         ServerBackup::factory()->create([
             'server_id' => $this->server->id,
@@ -250,22 +246,5 @@ class ServerBackupServiceTest extends TestCase
         $this->server->delete();
 
         $this->assertDatabaseCount('server_backups', 0);
-    }
-
-    /**
-     * Helper to create a .vars.Arma3Profile file for the test server.
-     */
-    protected function createVarsFile(string $content): string
-    {
-        $varsPath = $this->service->getVarsFilePath($this->server);
-        $varsDir = dirname($varsPath);
-
-        if (! is_dir($varsDir)) {
-            mkdir($varsDir, 0755, true);
-        }
-
-        file_put_contents($varsPath, $content);
-
-        return $varsPath;
     }
 }

@@ -8,6 +8,7 @@ use App\Contracts\SupportsBackups;
 use App\Contracts\SupportsHeadlessClients;
 use App\Contracts\SupportsMissions;
 use App\Contracts\SupportsScenarios;
+use App\Contracts\SupportsWorkshopMods;
 use App\Contracts\WritesNativeLogs;
 use App\Enums\InstallationStatus;
 use App\Enums\ServerStatus;
@@ -67,7 +68,7 @@ class ServerController extends Controller
                 'defaultPort' => $handler->defaultPort(),
                 'defaultQueryPort' => $handler->defaultQueryPort(),
                 'supportsHeadlessClients' => $handler instanceof SupportsHeadlessClients,
-                'supportsWorkshopMods' => $handler->supportsWorkshopMods(),
+                'supportsWorkshopMods' => $handler instanceof SupportsWorkshopMods,
                 'supportsMissionUpload' => $handler instanceof SupportsMissions,
                 'supportsAutoRestart' => $handler instanceof DetectsServerState && $handler->supportsAutoRestart(),
                 'settingsSchema' => $handler->settingsSchema(),

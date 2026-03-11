@@ -3,13 +3,15 @@
 namespace Tests\Feature;
 
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class CreateAdminUserTest extends TestCase
 {
-    use RefreshDatabase;
+    protected function shouldAuthenticate(): bool
+    {
+        return false;
+    }
 
     public function test_creates_admin_user_with_auto_generated_password(): void
     {

@@ -6,8 +6,6 @@ use App\GameHandlers\Arma3Handler;
 use App\GameHandlers\DayZHandler;
 use App\GameHandlers\ReforgerHandler;
 use App\GameManager;
-use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\Concerns\CreatesGameScenarios;
 use Tests\TestCase;
@@ -15,7 +13,6 @@ use Tests\TestCase;
 class SettingsSchemaTest extends TestCase
 {
     use CreatesGameScenarios;
-    use RefreshDatabase;
 
     // ---------------------------------------------------------------
     // Schema Structure Validation
@@ -344,8 +341,6 @@ class SettingsSchemaTest extends TestCase
 
     public function test_server_index_includes_settings_schema_in_game_types(): void
     {
-        $this->actingAs(User::factory()->create());
-
         $this->get(route('servers.index'))
             ->assertInertia(
                 fn (Assert $page) => $page
@@ -391,8 +386,6 @@ class SettingsSchemaTest extends TestCase
 
     public function test_arma3_game_type_schema_is_non_empty(): void
     {
-        $this->actingAs(User::factory()->create());
-
         $this->get(route('servers.index'))
             ->assertInertia(
                 fn (Assert $page) => $page
@@ -408,8 +401,6 @@ class SettingsSchemaTest extends TestCase
 
     public function test_reforger_game_type_schema_is_non_empty(): void
     {
-        $this->actingAs(User::factory()->create());
-
         $this->get(route('servers.index'))
             ->assertInertia(
                 fn (Assert $page) => $page
@@ -425,8 +416,6 @@ class SettingsSchemaTest extends TestCase
 
     public function test_dayz_game_type_schema_is_empty(): void
     {
-        $this->actingAs(User::factory()->create());
-
         $this->get(route('servers.index'))
             ->assertInertia(
                 fn (Assert $page) => $page

@@ -5,51 +5,32 @@ namespace Tests\Feature\Servers;
 use App\Enums\ServerStatus;
 use App\Models\Server;
 use App\Models\ServerBackup;
-use App\Models\User;
 use App\Services\Server\ServerBackupService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\File;
+use Tests\Concerns\CreatesVarsFile;
+use Tests\Concerns\UsesTestPaths;
 use Tests\TestCase;
 
 class ServerBackupManagementTest extends TestCase
 {
-    use RefreshDatabase;
-
-    protected User $user;
+    use CreatesVarsFile;
+    use UsesTestPaths;
 
     protected Server $server;
-
-    protected string $testBasePath;
-
-    protected string $testStoragePath;
-
-    protected string $originalStoragePath;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->testBasePath = sys_get_temp_dir().'/armaani_test_backups_'.uniqid();
-        $this->testStoragePath = sys_get_temp_dir().'/armaani_test_storage_'.uniqid();
+        $this->setUpTestPaths(['servers']);
+        $this->setUpTestStoragePath();
 
-        @mkdir($this->testStoragePath.'/app', 0755, true);
-
-        $this->originalStoragePath = app()->storagePath();
-        app()->useStoragePath($this->testStoragePath);
-
-        config(['arma.servers_base_path' => $this->testBasePath]);
-
-        $this->user = User::factory()->create();
         $this->server = Server::factory()->create();
     }
 
     protected function tearDown(): void
     {
-        File::deleteDirectory($this->testBasePath);
-        File::deleteDirectory($this->testStoragePath);
-
-        app()->useStoragePath($this->originalStoragePath);
+        $this->tearDownTestPaths();
 
         parent::tearDown();
     }
@@ -60,12 +41,11 @@ class ServerBackupManagementTest extends TestCase
 
     public function test_create_backup_from_current_state(): void
     {
-        $this->createVarsFileForServer($this->server, "version=148;\n");
+        $this->createVarsFile($this->server, "version=148;\n");
 
-        $this->actingAs($this->user)
-            ->post(route('servers.backups.store', $this->server), [
-                'backup_name' => 'Before mission change',
-            ])
+        $this->post(route('servers.backups.store', $this->server), [
+            'backup_name' => 'Before mission change',
+        ])
             ->assertRedirect()
             ->assertSessionHas('success');
 
@@ -78,10 +58,9 @@ class ServerBackupManagementTest extends TestCase
 
     public function test_create_backup_without_name(): void
     {
-        $this->createVarsFileForServer($this->server, 'data');
+        $this->createVarsFile($this->server, 'data');
 
-        $this->actingAs($this->user)
-            ->post(route('servers.backups.store', $this->server))
+        $this->post(route('servers.backups.store', $this->server))
             ->assertRedirect()
             ->assertSessionHas('success');
 
@@ -94,8 +73,7 @@ class ServerBackupManagementTest extends TestCase
 
     public function test_create_backup_shows_error_when_no_vars_file(): void
     {
-        $this->actingAs($this->user)
-            ->post(route('servers.backups.store', $this->server))
+        $this->post(route('servers.backups.store', $this->server))
             ->assertRedirect()
             ->assertSessionHas('error');
 
@@ -110,11 +88,10 @@ class ServerBackupManagementTest extends TestCase
     {
         $file = UploadedFile::fake()->createWithContent('my_save.vars.Arma3Profile', "version=148;\nblood=1;\n");
 
-        $this->actingAs($this->user)
-            ->post(route('servers.backups.upload', $this->server), [
-                'backup_file' => $file,
-                'backup_name' => 'Imported save',
-            ])
+        $this->post(route('servers.backups.upload', $this->server), [
+            'backup_file' => $file,
+            'backup_name' => 'Imported save',
+        ])
             ->assertRedirect()
             ->assertSessionHas('success');
 
@@ -132,10 +109,9 @@ class ServerBackupManagementTest extends TestCase
     {
         $file = UploadedFile::fake()->createWithContent('my_save.vars.Arma3Profile', 'data');
 
-        $this->actingAs($this->user)
-            ->post(route('servers.backups.upload', $this->server), [
-                'backup_file' => $file,
-            ])
+        $this->post(route('servers.backups.upload', $this->server), [
+            'backup_file' => $file,
+        ])
             ->assertRedirect()
             ->assertSessionHas('success');
 
@@ -145,8 +121,7 @@ class ServerBackupManagementTest extends TestCase
 
     public function test_upload_validates_file_required(): void
     {
-        $this->actingAs($this->user)
-            ->post(route('servers.backups.upload', $this->server))
+        $this->post(route('servers.backups.upload', $this->server))
             ->assertSessionHasErrors(['backup_file']);
     }
 
@@ -162,8 +137,7 @@ class ServerBackupManagementTest extends TestCase
             'file_size' => 21,
         ]);
 
-        $response = $this->actingAs($this->user)
-            ->get(route('servers.backups.download', $backup));
+        $response = $this->get(route('servers.backups.download', $backup));
 
         $response->assertOk();
         $this->assertEquals("version=148;\nblood=1;\n", $response->streamedContent());
@@ -175,7 +149,7 @@ class ServerBackupManagementTest extends TestCase
             'server_id' => $this->server->id,
         ]);
 
-        $this->get(route('servers.backups.download', $backup))
+        $this->asGuest()->get(route('servers.backups.download', $backup))
             ->assertRedirect(route('login'));
     }
 
@@ -191,8 +165,7 @@ class ServerBackupManagementTest extends TestCase
             'data' => $data,
         ]);
 
-        $this->actingAs($this->user)
-            ->post(route('servers.backups.restore', $backup))
+        $this->post(route('servers.backups.restore', $backup))
             ->assertRedirect()
             ->assertSessionHas('success');
 
@@ -210,8 +183,7 @@ class ServerBackupManagementTest extends TestCase
             'data' => 'test',
         ]);
 
-        $this->actingAs($this->user)
-            ->post(route('servers.backups.restore', $backup))
+        $this->post(route('servers.backups.restore', $backup))
             ->assertRedirect()
             ->assertSessionHas('error');
 
@@ -229,8 +201,7 @@ class ServerBackupManagementTest extends TestCase
             'server_id' => $this->server->id,
         ]);
 
-        $this->actingAs($this->user)
-            ->delete(route('servers.backups.destroy', $backup))
+        $this->delete(route('servers.backups.destroy', $backup))
             ->assertRedirect()
             ->assertSessionHas('success');
 
@@ -243,7 +214,7 @@ class ServerBackupManagementTest extends TestCase
 
     public function test_auto_backup_captures_vars_file_when_present(): void
     {
-        $this->createVarsFileForServer($this->server, "version=148;\nauto=1;\n");
+        $this->createVarsFile($this->server, "version=148;\nauto=1;\n");
 
         $service = app(ServerBackupService::class);
         $backup = $service->createFromServer($this->server, 'Auto-backup before start', isAutomatic: true);
@@ -268,7 +239,7 @@ class ServerBackupManagementTest extends TestCase
 
     public function test_start_method_creates_auto_backup_when_vars_file_exists(): void
     {
-        $this->createVarsFileForServer($this->server, "version=148;\nauto=1;\n");
+        $this->createVarsFile($this->server, "version=148;\nauto=1;\n");
 
         $mockService = \Mockery::mock(\App\Services\Server\ServerProcessService::class, [app(\App\GameManager::class), app(\App\Services\Server\ServerBackupService::class)])->makePartial();
         $mockService->shouldAllowMockingProtectedMethods();
@@ -282,24 +253,5 @@ class ServerBackupManagementTest extends TestCase
             'name' => 'Auto-backup before start',
             'is_automatic' => true,
         ]);
-    }
-
-    // ---------------------------------------------------------------
-    // Helpers
-    // ---------------------------------------------------------------
-
-    protected function createVarsFileForServer(Server $server, string $content): string
-    {
-        $service = app(ServerBackupService::class);
-        $varsPath = $service->getVarsFilePath($server);
-        $varsDir = dirname($varsPath);
-
-        if (! is_dir($varsDir)) {
-            mkdir($varsDir, 0755, true);
-        }
-
-        file_put_contents($varsPath, $content);
-
-        return $varsPath;
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Contracts\SupportsWorkshopMods;
 use App\Enums\InstallationStatus;
 use App\Events\ModDownloadOutput;
 use App\GameManager;
@@ -82,7 +83,7 @@ class DownloadModJob implements ShouldQueue
         }
 
         if ($result->successful()) {
-            if ($handler->requiresLowercaseConversion()) {
+            if ($handler instanceof SupportsWorkshopMods && $handler->requiresLowercaseConversion()) {
                 $this->convertToLowercase($modPath);
             }
 

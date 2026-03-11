@@ -6,47 +6,37 @@ use App\Enums\InstallationStatus;
 use App\Jobs\InstallServerJob;
 use App\Models\GameInstall;
 use App\Models\Server;
-use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;
+use Tests\Concerns\UsesTestPaths;
 use Tests\TestCase;
 
 class GameInstallManagementTest extends TestCase
 {
-    use RefreshDatabase;
-
-    protected User $user;
-
-    private string $testGamesBasePath;
+    use UsesTestPaths;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->testGamesBasePath = sys_get_temp_dir().'/armaani_test_games_'.uniqid();
-        config(['arma.games_base_path' => $this->testGamesBasePath]);
-
-        $this->user = User::factory()->create();
+        $this->setUpTestPaths(['games']);
     }
 
     protected function tearDown(): void
     {
-        File::deleteDirectory($this->testGamesBasePath);
+        $this->tearDownTestPaths();
 
         parent::tearDown();
     }
 
     public function test_game_installs_page_requires_authentication(): void
     {
-        $this->get(route('game-installs.index'))->assertRedirect(route('login'));
+        $this->asGuest()->get(route('game-installs.index'))->assertRedirect(route('login'));
     }
 
     public function test_game_installs_page_is_displayed(): void
     {
-        $this->actingAs($this->user)
-            ->get(route('game-installs.index'))
+        $this->get(route('game-installs.index'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('game-installs/index')
@@ -57,8 +47,7 @@ class GameInstallManagementTest extends TestCase
 
     public function test_game_installs_shows_empty_state_when_none_exist(): void
     {
-        $this->actingAs($this->user)
-            ->get(route('game-installs.index'))
+        $this->get(route('game-installs.index'))
             ->assertInertia(fn (Assert $page) => $page
                 ->component('game-installs/index')
                 ->has('installs', 0)
@@ -69,8 +58,7 @@ class GameInstallManagementTest extends TestCase
     {
         GameInstall::factory()->create(['name' => 'Main Server Install']);
 
-        $this->actingAs($this->user)
-            ->get(route('game-installs.index'))
+        $this->get(route('game-installs.index'))
             ->assertInertia(fn (Assert $page) => $page
                 ->component('game-installs/index')
                 ->has('installs', 1)
@@ -85,12 +73,11 @@ class GameInstallManagementTest extends TestCase
     {
         Queue::fake();
 
-        $this->actingAs($this->user)
-            ->post(route('game-installs.store'), [
-                'game_type' => 'arma3',
-                'name' => 'My Arma Install',
-                'branch' => 'public',
-            ])
+        $this->post(route('game-installs.store'), [
+            'game_type' => 'arma3',
+            'name' => 'My Arma Install',
+            'branch' => 'public',
+        ])
             ->assertRedirect()
             ->assertSessionHas('success');
 
@@ -104,12 +91,11 @@ class GameInstallManagementTest extends TestCase
 
     public function test_create_validates_required_name(): void
     {
-        $this->actingAs($this->user)
-            ->post(route('game-installs.store'), [
-                'game_type' => 'arma3',
-                'name' => '',
-                'branch' => 'public',
-            ])
+        $this->post(route('game-installs.store'), [
+            'game_type' => 'arma3',
+            'name' => '',
+            'branch' => 'public',
+        ])
             ->assertSessionHasErrors(['name']);
     }
 
@@ -119,8 +105,7 @@ class GameInstallManagementTest extends TestCase
 
         $install = GameInstall::factory()->installed()->create();
 
-        $this->actingAs($this->user)
-            ->post(route('game-installs.reinstall', $install))
+        $this->post(route('game-installs.reinstall', $install))
             ->assertRedirect()
             ->assertSessionHas('success');
 
@@ -142,8 +127,7 @@ class GameInstallManagementTest extends TestCase
         @mkdir($path, 0755, true);
         $this->assertTrue(is_dir($path), 'Test setup: directory should exist before delete');
 
-        $this->actingAs($this->user)
-            ->delete(route('game-installs.destroy', $install))
+        $this->delete(route('game-installs.destroy', $install))
             ->assertRedirect()
             ->assertSessionHas('success');
 
@@ -155,8 +139,7 @@ class GameInstallManagementTest extends TestCase
     {
         $install = GameInstall::factory()->create(['installation_status' => InstallationStatus::Queued]);
 
-        $this->actingAs($this->user)
-            ->delete(route('game-installs.destroy', $install))
+        $this->delete(route('game-installs.destroy', $install))
             ->assertRedirect()
             ->assertSessionHas('error');
 
@@ -167,8 +150,7 @@ class GameInstallManagementTest extends TestCase
     {
         $install = GameInstall::factory()->create(['installation_status' => InstallationStatus::Installing]);
 
-        $this->actingAs($this->user)
-            ->delete(route('game-installs.destroy', $install))
+        $this->delete(route('game-installs.destroy', $install))
             ->assertRedirect()
             ->assertSessionHas('error');
 
@@ -180,8 +162,7 @@ class GameInstallManagementTest extends TestCase
         $install = GameInstall::factory()->installed()->create();
         Server::factory()->create(['game_install_id' => $install->id]);
 
-        $this->actingAs($this->user)
-            ->delete(route('game-installs.destroy', $install))
+        $this->delete(route('game-installs.destroy', $install))
             ->assertRedirect()
             ->assertSessionHas('error');
 

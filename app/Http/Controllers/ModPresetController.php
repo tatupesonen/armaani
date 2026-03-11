@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Contracts\GameHandler;
 use App\Contracts\SupportsRegisteredMods;
+use App\Contracts\SupportsWorkshopMods;
 use App\GameManager;
 use App\Http\Requests\ModPreset\ImportModPresetRequest;
 use App\Http\Requests\ModPreset\StoreModPresetRequest;
@@ -53,7 +54,7 @@ class ModPresetController extends Controller
             'gameTypes' => collect($handlers)->map(fn (GameHandler $handler) => [
                 'value' => $handler->value(),
                 'label' => $handler->label(),
-                'supportsWorkshopMods' => $handler->supportsWorkshopMods(),
+                'supportsWorkshopMods' => $handler instanceof SupportsWorkshopMods,
                 'modSections' => $handler->modSections(),
             ])->values(),
             'workshopMods' => WorkshopMod::query()->orderBy('name')->get(),

@@ -3,38 +3,48 @@
 namespace App\GameHandlers;
 
 use App\Concerns\DetectsServerStateBehavior;
+use App\Concerns\WorkshopModBehavior;
 use App\Contracts\DetectsServerState;
-use App\Contracts\GameHandler;
 use App\Contracts\HasQueryPort;
 use App\Contracts\ManagesModAssets;
 use App\Contracts\SteamGameHandler;
 use App\Contracts\SupportsBackups;
 use App\Contracts\SupportsHeadlessClients;
 use App\Contracts\SupportsMissions;
+use App\Contracts\SupportsWorkshopMods;
 use App\Models\Arma3Settings;
-use App\Models\ModPreset;
 use App\Models\Server;
 use App\Services\Renderer\TwigConfigRenderer;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 
-final class Arma3Handler implements DetectsServerState, GameHandler, HasQueryPort, ManagesModAssets, SteamGameHandler, SupportsBackups, SupportsHeadlessClients, SupportsMissions
+final class Arma3Handler extends AbstractGameHandler implements DetectsServerState, HasQueryPort, ManagesModAssets, SteamGameHandler, SupportsBackups, SupportsHeadlessClients, SupportsMissions, SupportsWorkshopMods
 {
     use DetectsServerStateBehavior;
+    use WorkshopModBehavior;
 
     public function __construct(
         protected TwigConfigRenderer $configRenderer,
-    ) {}
-
-    public function value(): string
-    {
-        return 'arma3';
+    ) {
+        parent::__construct(
+            value: 'arma3',
+            label: 'Arma 3',
+            defaultPort: 2302,
+            defaultQueryPort: 2303,
+            branches: ['public', 'contact', 'creatordlc', 'profiling', 'performance', 'legacy'],
+            settingsModelClass: Arma3Settings::class,
+            settingsRelationName: 'arma3Settings',
+        );
     }
 
-    public function label(): string
+    // --- SupportsWorkshopMods ---
+
+    public function requiresLowercaseConversion(): bool
     {
-        return 'Arma 3';
+        return true;
     }
+
+    // --- SteamGameHandler ---
 
     public function consumerAppId(): int
     {
@@ -51,30 +61,7 @@ final class Arma3Handler implements DetectsServerState, GameHandler, HasQueryPor
         return 107410;
     }
 
-    public function defaultPort(): int
-    {
-        return 2302;
-    }
-
-    public function defaultQueryPort(): int
-    {
-        return 2303;
-    }
-
-    public function branches(): array
-    {
-        return ['public', 'contact', 'creatordlc', 'profiling', 'performance', 'legacy'];
-    }
-
-    public function supportsWorkshopMods(): bool
-    {
-        return true;
-    }
-
-    public function requiresLowercaseConversion(): bool
-    {
-        return true;
-    }
+    // --- Server Process ---
 
     public function buildLaunchCommand(Server $server): array
     {
@@ -552,63 +539,6 @@ final class Arma3Handler implements DetectsServerState, GameHandler, HasQueryPor
             'terrain_grid' => ['nullable', 'numeric', 'min:0'],
             'view_distance' => ['nullable', 'integer', 'min:0'],
         ];
-    }
-
-    // --- Related Settings ---
-
-    /** @phpstan-ignore return.unusedType */
-    public function settingsModelClass(): ?string
-    {
-        return Arma3Settings::class;
-    }
-
-    /** @phpstan-ignore return.unusedType */
-    public function settingsRelationName(): ?string
-    {
-        return 'arma3Settings';
-    }
-
-    public function createRelatedSettings(Server $server): void
-    {
-        Arma3Settings::query()->create(['server_id' => $server->id]);
-    }
-
-    public function updateRelatedSettings(Server $server, array $validated): void
-    {
-        $settingsFields = collect($validated)->only(
-            (new Arma3Settings)->getFillable()
-        )->except('server_id')->toArray();
-
-        if (! empty($settingsFields)) {
-            $server->arma3Settings()->updateOrCreate(
-                ['server_id' => $server->id],
-                $settingsFields,
-            );
-        }
-    }
-
-    // --- Mod Presets ---
-
-    public function modSections(): array
-    {
-        return [
-            [
-                'type' => 'workshop',
-                'label' => 'Workshop Mods',
-                'relationship' => 'mods',
-                'formField' => 'mod_ids',
-            ],
-        ];
-    }
-
-    public function syncPresetMods(ModPreset $preset, array $validated): void
-    {
-        $preset->mods()->sync($validated['mod_ids'] ?? []);
-    }
-
-    public function getPresetModCount(ModPreset $preset): int
-    {
-        return $preset->mods()->count();
     }
 
     /**

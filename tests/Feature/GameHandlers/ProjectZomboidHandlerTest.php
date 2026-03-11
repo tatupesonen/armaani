@@ -2,51 +2,34 @@
 
 namespace Tests\Feature\GameHandlers;
 
-use App\Contracts\DetectsServerState;
-use App\Contracts\ManagesModAssets;
-use App\Contracts\SupportsBackups;
-use App\Contracts\SupportsHeadlessClients;
-use App\Contracts\SupportsMissions;
+use App\Contracts\SupportsWorkshopMods;
 use App\GameHandlers\ProjectZomboidHandler;
 use App\Models\ModPreset;
 use App\Models\Server;
 use App\Models\WorkshopMod;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\File;
 use Tests\Concerns\CreatesGameScenarios;
+use Tests\Concerns\GeneratesHandlerConfigs;
+use Tests\Concerns\UsesTestPaths;
 use Tests\TestCase;
 
 class ProjectZomboidHandlerTest extends TestCase
 {
     use CreatesGameScenarios;
-    use RefreshDatabase;
+    use GeneratesHandlerConfigs;
+    use UsesTestPaths;
 
     private ProjectZomboidHandler $handler;
-
-    private string $testServersBasePath;
-
-    private string $testGamesBasePath;
 
     protected function setUp(): void
     {
         parent::setUp();
-
-        $this->testServersBasePath = sys_get_temp_dir().'/armaani_test_servers_'.uniqid();
-        $this->testGamesBasePath = sys_get_temp_dir().'/armaani_test_games_'.uniqid();
-
-        config([
-            'arma.servers_base_path' => $this->testServersBasePath,
-            'arma.games_base_path' => $this->testGamesBasePath,
-        ]);
-
+        $this->setUpTestPaths(['servers', 'games']);
         $this->handler = app(ProjectZomboidHandler::class);
     }
 
     protected function tearDown(): void
     {
-        File::deleteDirectory($this->testServersBasePath);
-        File::deleteDirectory($this->testGamesBasePath);
-
+        $this->tearDownTestPaths();
         parent::tearDown();
     }
 
@@ -92,7 +75,7 @@ class ProjectZomboidHandlerTest extends TestCase
 
     public function test_supports_workshop_mods(): void
     {
-        $this->assertTrue($this->handler->supportsWorkshopMods());
+        $this->assertInstanceOf(SupportsWorkshopMods::class, $this->handler);
     }
 
     public function test_does_not_require_lowercase_conversion(): void
@@ -123,11 +106,6 @@ class ProjectZomboidHandlerTest extends TestCase
         $this->assertEquals($expected, $this->handler->getServerLogPath($server));
     }
 
-    public function test_implements_detects_server_state(): void
-    {
-        $this->assertInstanceOf(DetectsServerState::class, $this->handler);
-    }
-
     public function test_boot_detection_string(): void
     {
         $this->assertSame(['LuaNet: Initialization [DONE]'], $this->handler->getBootDetectionStrings());
@@ -149,26 +127,6 @@ class ProjectZomboidHandlerTest extends TestCase
         $server = $this->createProjectZomboidServer();
 
         $this->assertFalse($this->handler->shouldAutoRestart($server));
-    }
-
-    public function test_does_not_implement_supports_headless_clients(): void
-    {
-        $this->assertNotInstanceOf(SupportsHeadlessClients::class, $this->handler);
-    }
-
-    public function test_does_not_implement_supports_backups(): void
-    {
-        $this->assertNotInstanceOf(SupportsBackups::class, $this->handler);
-    }
-
-    public function test_does_not_implement_manages_mod_assets(): void
-    {
-        $this->assertNotInstanceOf(ManagesModAssets::class, $this->handler);
-    }
-
-    public function test_does_not_implement_supports_missions(): void
-    {
-        $this->assertNotInstanceOf(SupportsMissions::class, $this->handler);
     }
 
     public function test_build_launch_command_includes_servername_and_cachedir(): void
@@ -405,15 +363,6 @@ class ProjectZomboidHandlerTest extends TestCase
      */
     private function generateAndReadConfig(Server $server): string
     {
-        $profilesPath = $server->getProfilesPath();
-        @mkdir($profilesPath, 0755, true);
-
-        $this->handler->generateConfigFiles($server);
-
-        $profileName = 'pz_'.$server->id;
-        $configPath = $profilesPath.'/Server/'.$profileName.'.ini';
-        $this->assertFileExists($configPath);
-
-        return file_get_contents($configPath);
+        return $this->generateAndReadRawConfig($server, 'Server/pz_'.$server->id.'.ini');
     }
 }

@@ -2,52 +2,33 @@
 
 namespace Tests\Feature\GameHandlers;
 
-use App\Contracts\DetectsServerState;
-use App\Contracts\ManagesModAssets;
-use App\Contracts\SupportsBackups;
-use App\Contracts\SupportsHeadlessClients;
-use App\Contracts\SupportsMissions;
-use App\Contracts\WritesNativeLogs;
 use App\GameHandlers\ReforgerHandler;
 use App\Models\ModPreset;
 use App\Models\ReforgerMod;
 use App\Models\Server;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\File;
 use Tests\Concerns\CreatesGameScenarios;
+use Tests\Concerns\GeneratesHandlerConfigs;
+use Tests\Concerns\UsesTestPaths;
 use Tests\TestCase;
 
 class ReforgerHandlerTest extends TestCase
 {
     use CreatesGameScenarios;
-    use RefreshDatabase;
+    use GeneratesHandlerConfigs;
+    use UsesTestPaths;
 
     private ReforgerHandler $handler;
-
-    private string $testServersBasePath;
-
-    private string $testGamesBasePath;
 
     protected function setUp(): void
     {
         parent::setUp();
-
-        $this->testServersBasePath = sys_get_temp_dir().'/armaani_test_servers_'.uniqid();
-        $this->testGamesBasePath = sys_get_temp_dir().'/armaani_test_games_'.uniqid();
-
-        config([
-            'arma.servers_base_path' => $this->testServersBasePath,
-            'arma.games_base_path' => $this->testGamesBasePath,
-        ]);
-
+        $this->setUpTestPaths(['servers', 'games']);
         $this->handler = app(ReforgerHandler::class);
     }
 
     protected function tearDown(): void
     {
-        File::deleteDirectory($this->testServersBasePath);
-        File::deleteDirectory($this->testGamesBasePath);
-
+        $this->tearDownTestPaths();
         parent::tearDown();
     }
 
@@ -79,11 +60,6 @@ class ReforgerHandlerTest extends TestCase
         $this->assertEquals($expected, $this->handler->getServerLogPath($server));
     }
 
-    public function test_implements_detects_server_state(): void
-    {
-        $this->assertInstanceOf(DetectsServerState::class, $this->handler);
-    }
-
     public function test_boot_detection_string(): void
     {
         $this->assertSame(['Server registered with addr'], $this->handler->getBootDetectionStrings());
@@ -97,26 +73,6 @@ class ReforgerHandlerTest extends TestCase
     public function test_mod_download_finished_string(): void
     {
         $this->assertSame('Required addons are ready to use.', $this->handler->getModDownloadFinishedString());
-    }
-
-    public function test_does_not_implement_supports_headless_clients(): void
-    {
-        $this->assertNotInstanceOf(SupportsHeadlessClients::class, $this->handler);
-    }
-
-    public function test_does_not_implement_supports_backups(): void
-    {
-        $this->assertNotInstanceOf(SupportsBackups::class, $this->handler);
-    }
-
-    public function test_does_not_implement_manages_mod_assets(): void
-    {
-        $this->assertNotInstanceOf(ManagesModAssets::class, $this->handler);
-    }
-
-    public function test_does_not_implement_supports_missions(): void
-    {
-        $this->assertNotInstanceOf(SupportsMissions::class, $this->handler);
     }
 
     public function test_build_launch_command_includes_config_and_flags(): void
@@ -264,24 +220,6 @@ class ReforgerHandlerTest extends TestCase
         $this->assertContains('string', $rules['scenario_id']);
     }
 
-    /**
-     * Generate config files for a server and return the parsed JSON config.
-     *
-     * @return array<string, mixed>
-     */
-    private function generateAndReadConfig(Server $server): array
-    {
-        $profilesPath = $server->getProfilesPath();
-        @mkdir($profilesPath, 0755, true);
-
-        $this->handler->generateConfigFiles($server);
-
-        $configPath = $profilesPath.'/REFORGER_'.$server->id.'.json';
-        $this->assertFileExists($configPath);
-
-        return json_decode(file_get_contents($configPath), true);
-    }
-
     public function test_create_related_settings_creates_reforger_settings(): void
     {
         $server = $this->createReforgerServer();
@@ -292,15 +230,6 @@ class ReforgerHandlerTest extends TestCase
         $this->handler->createRelatedSettings($server);
 
         $this->assertNotNull($server->fresh()->reforgerSettings);
-    }
-
-    // ---------------------------------------------------------------
-    // WritesNativeLogs
-    // ---------------------------------------------------------------
-
-    public function test_implements_writes_native_logs(): void
-    {
-        $this->assertInstanceOf(WritesNativeLogs::class, $this->handler);
     }
 
     public function test_get_native_log_directory_returns_logs_subdirectory(): void
@@ -314,5 +243,15 @@ class ReforgerHandlerTest extends TestCase
     public function test_get_native_log_file_pattern_returns_wildcard_log(): void
     {
         $this->assertEquals('*.log', $this->handler->getNativeLogFilePattern());
+    }
+
+    /**
+     * Generate config files and return the parsed JSON config.
+     *
+     * @return array<string, mixed>
+     */
+    private function generateAndReadConfig(Server $server): array
+    {
+        return $this->generateAndReadJsonConfig($server, 'REFORGER_'.$server->id.'.json');
     }
 }

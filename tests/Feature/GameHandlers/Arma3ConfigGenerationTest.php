@@ -5,42 +5,29 @@ namespace Tests\Feature\GameHandlers;
 use App\GameHandlers\Arma3Handler;
 use App\Models\Arma3Settings;
 use App\Models\Server;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\File;
 use Tests\Concerns\CreatesGameScenarios;
+use Tests\Concerns\GeneratesHandlerConfigs;
+use Tests\Concerns\UsesTestPaths;
 use Tests\TestCase;
 
 class Arma3ConfigGenerationTest extends TestCase
 {
     use CreatesGameScenarios;
-    use RefreshDatabase;
+    use GeneratesHandlerConfigs;
+    use UsesTestPaths;
 
     private Arma3Handler $handler;
-
-    private string $testServersBasePath;
-
-    private string $testGamesBasePath;
 
     protected function setUp(): void
     {
         parent::setUp();
-
-        $this->testServersBasePath = sys_get_temp_dir().'/armaani_test_servers_'.uniqid();
-        $this->testGamesBasePath = sys_get_temp_dir().'/armaani_test_games_'.uniqid();
-
-        config([
-            'arma.servers_base_path' => $this->testServersBasePath,
-            'arma.games_base_path' => $this->testGamesBasePath,
-        ]);
-
+        $this->setUpTestPaths(['servers', 'games']);
         $this->handler = app(Arma3Handler::class);
     }
 
     protected function tearDown(): void
     {
-        File::deleteDirectory($this->testServersBasePath);
-        File::deleteDirectory($this->testGamesBasePath);
-
+        $this->tearDownTestPaths();
         parent::tearDown();
     }
 
@@ -229,34 +216,19 @@ class Arma3ConfigGenerationTest extends TestCase
 
     private function generateAndReadServerCfg(Server $server): string
     {
-        $profilesPath = $server->getProfilesPath();
-        @mkdir($profilesPath, 0755, true);
-
-        $this->handler->generateConfigFiles($server);
-
-        return file_get_contents($profilesPath.'/server.cfg');
+        return $this->generateAndReadRawConfig($server, 'server.cfg');
     }
 
     private function generateAndReadBasicCfg(Server $server): string
     {
-        $profilesPath = $server->getProfilesPath();
-        @mkdir($profilesPath, 0755, true);
-
-        $this->handler->generateConfigFiles($server);
-
-        return file_get_contents($profilesPath.'/server_basic.cfg');
+        return $this->generateAndReadRawConfig($server, 'server_basic.cfg');
     }
 
     private function generateAndReadProfile(Server $server): string
     {
-        $profilesPath = $server->getProfilesPath();
-        @mkdir($profilesPath, 0755, true);
-
-        $this->handler->generateConfigFiles($server);
-
         $profileName = 'arma3_'.$server->id;
 
-        return file_get_contents($profilesPath.'/home/'.$profileName.'/'.$profileName.'.Arma3Profile');
+        return $this->generateAndReadRawConfig($server, 'home/'.$profileName.'/'.$profileName.'.Arma3Profile');
     }
 
     // --- Helpers: build expected output using old inline logic ---

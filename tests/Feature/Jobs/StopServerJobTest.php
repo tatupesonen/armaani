@@ -7,25 +7,23 @@ use App\Events\ServerStatusChanged;
 use App\Jobs\StopServerJob;
 use App\Models\Server;
 use App\Services\Server\ServerProcessService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Mockery;
+use Mockery\MockInterface;
 use Tests\TestCase;
 
 class StopServerJobTest extends TestCase
 {
-    use RefreshDatabase;
-
     public function test_stop_job_calls_service_and_sets_stopped_status(): void
     {
         Event::fake([ServerStatusChanged::class]);
 
         $server = Server::factory()->create(['name' => 'Stop Server', 'status' => ServerStatus::Stopping]);
 
-        $service = Mockery::mock(ServerProcessService::class);
-        $service->shouldReceive('stopAllHeadlessClients')->once()->with(Mockery::on(fn ($s) => $s->id === $server->id));
-        $service->shouldReceive('stop')->once()->with(Mockery::on(fn ($s) => $s->id === $server->id));
-        $this->app->instance(ServerProcessService::class, $service);
+        $service = $this->mock(ServerProcessService::class, function (MockInterface $mock) use ($server) {
+            $mock->shouldReceive('stopAllHeadlessClients')->once()->with(Mockery::on(fn ($s) => $s->id === $server->id));
+            $mock->shouldReceive('stop')->once()->with(Mockery::on(fn ($s) => $s->id === $server->id));
+        });
 
         (new StopServerJob($server))->handle($service);
 
@@ -45,14 +43,14 @@ class StopServerJobTest extends TestCase
         $server = Server::factory()->create(['status' => ServerStatus::Stopping]);
 
         $callOrder = [];
-        $service = Mockery::mock(ServerProcessService::class);
-        $service->shouldReceive('stopAllHeadlessClients')->once()->andReturnUsing(function () use (&$callOrder) {
-            $callOrder[] = 'stopAllHeadlessClients';
+        $service = $this->mock(ServerProcessService::class, function (MockInterface $mock) use (&$callOrder) {
+            $mock->shouldReceive('stopAllHeadlessClients')->once()->andReturnUsing(function () use (&$callOrder) {
+                $callOrder[] = 'stopAllHeadlessClients';
+            });
+            $mock->shouldReceive('stop')->once()->andReturnUsing(function () use (&$callOrder) {
+                $callOrder[] = 'stop';
+            });
         });
-        $service->shouldReceive('stop')->once()->andReturnUsing(function () use (&$callOrder) {
-            $callOrder[] = 'stop';
-        });
-        $this->app->instance(ServerProcessService::class, $service);
 
         (new StopServerJob($server))->handle($service);
 

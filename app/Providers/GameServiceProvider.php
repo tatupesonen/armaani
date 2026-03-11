@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Attributes\Beta;
 use App\Contracts\GameHandler;
 use App\Contracts\SupportsRegisteredMods;
 use App\Contracts\SupportsScenarios;
@@ -121,12 +122,19 @@ class GameServiceProvider extends ServiceProvider
     public static function discoverHandlers(): array
     {
         $handlers = [];
+        $isProduction = app()->isProduction();
 
         foreach (glob(app_path('GameHandlers/*.php')) ?: [] as $file) {
             /** @var class-string $class */
             $class = 'App\\GameHandlers\\'.pathinfo($file, PATHINFO_FILENAME);
 
-            if (! class_exists($class) || ! is_subclass_of($class, GameHandler::class)) {
+            $reflection = new \ReflectionClass($class);
+
+            if (! class_exists($class) || ! is_subclass_of($class, GameHandler::class) || $reflection->isAbstract()) {
+                continue;
+            }
+
+            if ($isProduction && $reflection->getAttributes(Beta::class) !== []) {
                 continue;
             }
 

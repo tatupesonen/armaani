@@ -11,40 +11,33 @@ use App\Jobs\StopServerJob;
 use App\Models\GameInstall;
 use App\Models\ModPreset;
 use App\Models\Server;
-use App\Models\User;
 use App\Services\Server\ServerProcessService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;
 use Mockery;
+use Mockery\MockInterface;
+use Tests\Concerns\UsesTestPaths;
 use Tests\TestCase;
 
 class ServerManagementTest extends TestCase
 {
-    use RefreshDatabase;
-
-    protected User $user;
+    use UsesTestPaths;
 
     protected GameInstall $gameInstall;
-
-    private string $testServersBasePath;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->testServersBasePath = sys_get_temp_dir().'/armaani_test_servers_'.uniqid();
-        config(['arma.servers_base_path' => $this->testServersBasePath]);
+        $this->setUpTestPaths(['servers']);
 
-        $this->user = User::factory()->create();
         $this->gameInstall = GameInstall::factory()->installed()->create();
     }
 
     protected function tearDown(): void
     {
-        File::deleteDirectory($this->testServersBasePath);
+        $this->tearDownTestPaths();
 
         parent::tearDown();
     }
@@ -55,13 +48,12 @@ class ServerManagementTest extends TestCase
 
     public function test_servers_index_page_requires_authentication(): void
     {
-        $this->get(route('servers.index'))->assertRedirect(route('login'));
+        $this->asGuest()->get(route('servers.index'))->assertRedirect(route('login'));
     }
 
     public function test_servers_index_page_is_displayed(): void
     {
-        $this->actingAs($this->user)
-            ->get(route('servers.index'))
+        $this->get(route('servers.index'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('servers/index')
@@ -76,8 +68,7 @@ class ServerManagementTest extends TestCase
     {
         Server::factory()->create(['name' => 'Alpha Squad Server']);
 
-        $this->actingAs($this->user)
-            ->get(route('servers.index'))
+        $this->get(route('servers.index'))
             ->assertInertia(fn (Assert $page) => $page
                 ->component('servers/index')
                 ->has('servers', 1)
@@ -92,8 +83,7 @@ class ServerManagementTest extends TestCase
     {
         $server = Server::factory()->create(['name' => 'Path Server']);
 
-        $this->actingAs($this->user)
-            ->get(route('servers.index'))
+        $this->get(route('servers.index'))
             ->assertInertia(fn (Assert $page) => $page
                 ->has('servers.0', fn (Assert $s) => $s
                     ->where('profiles_path', $server->getProfilesPath())
@@ -104,8 +94,7 @@ class ServerManagementTest extends TestCase
 
     public function test_servers_index_shows_empty_state_when_no_servers(): void
     {
-        $this->actingAs($this->user)
-            ->get(route('servers.index'))
+        $this->get(route('servers.index'))
             ->assertInertia(fn (Assert $page) => $page
                 ->has('servers', 0)
             );
@@ -116,8 +105,7 @@ class ServerManagementTest extends TestCase
         $server = Server::factory()->create();
         $server->arma3Settings()->create(['max_msg_send' => 2048]);
 
-        $this->actingAs($this->user)
-            ->get(route('servers.index'))
+        $this->get(route('servers.index'))
             ->assertInertia(fn (Assert $page) => $page
                 ->has('servers.0.arma3_settings', fn (Assert $ns) => $ns
                     ->where('max_msg_send', 2048)
@@ -132,18 +120,17 @@ class ServerManagementTest extends TestCase
 
     public function test_user_can_create_server(): void
     {
-        $this->actingAs($this->user)
-            ->post(route('servers.store'), [
-                'game_type' => 'arma3',
-                'name' => 'New Test Server',
-                'port' => 2302,
-                'query_port' => 2303,
-                'max_players' => 64,
-                'password' => 'secret',
-                'admin_password' => 'admin123',
-                'description' => 'A test server',
-                'game_install_id' => $this->gameInstall->id,
-            ])
+        $this->post(route('servers.store'), [
+            'game_type' => 'arma3',
+            'name' => 'New Test Server',
+            'port' => 2302,
+            'query_port' => 2303,
+            'max_players' => 64,
+            'password' => 'secret',
+            'admin_password' => 'admin123',
+            'description' => 'A test server',
+            'game_install_id' => $this->gameInstall->id,
+        ])
             ->assertRedirect()
             ->assertSessionHas('success');
 
@@ -158,56 +145,52 @@ class ServerManagementTest extends TestCase
 
     public function test_create_server_requires_game_install(): void
     {
-        $this->actingAs($this->user)
-            ->post(route('servers.store'), [
-                'game_type' => 'arma3',
-                'name' => 'No Install Server',
-                'port' => 2302,
-                'query_port' => 2303,
-                'max_players' => 32,
-            ])
+        $this->post(route('servers.store'), [
+            'game_type' => 'arma3',
+            'name' => 'No Install Server',
+            'port' => 2302,
+            'query_port' => 2303,
+            'max_players' => 32,
+        ])
             ->assertSessionHasErrors(['game_install_id']);
     }
 
     public function test_create_server_validates_required_fields(): void
     {
-        $this->actingAs($this->user)
-            ->post(route('servers.store'), [
-                'game_type' => 'arma3',
-                'name' => '',
-                'port' => 2302,
-                'query_port' => 2303,
-                'max_players' => 32,
-                'game_install_id' => $this->gameInstall->id,
-            ])
+        $this->post(route('servers.store'), [
+            'game_type' => 'arma3',
+            'name' => '',
+            'port' => 2302,
+            'query_port' => 2303,
+            'max_players' => 32,
+            'game_install_id' => $this->gameInstall->id,
+        ])
             ->assertSessionHasErrors(['name']);
     }
 
     public function test_create_server_validates_port_range(): void
     {
-        $this->actingAs($this->user)
-            ->post(route('servers.store'), [
-                'game_type' => 'arma3',
-                'name' => 'Port Test',
-                'port' => 99999,
-                'query_port' => 2303,
-                'max_players' => 32,
-                'game_install_id' => $this->gameInstall->id,
-            ])
+        $this->post(route('servers.store'), [
+            'game_type' => 'arma3',
+            'name' => 'Port Test',
+            'port' => 99999,
+            'query_port' => 2303,
+            'max_players' => 32,
+            'game_install_id' => $this->gameInstall->id,
+        ])
             ->assertSessionHasErrors(['port']);
     }
 
     public function test_create_server_validates_max_players_range(): void
     {
-        $this->actingAs($this->user)
-            ->post(route('servers.store'), [
-                'game_type' => 'arma3',
-                'name' => 'Player Test',
-                'port' => 2302,
-                'query_port' => 2303,
-                'max_players' => 300,
-                'game_install_id' => $this->gameInstall->id,
-            ])
+        $this->post(route('servers.store'), [
+            'game_type' => 'arma3',
+            'name' => 'Player Test',
+            'port' => 2302,
+            'query_port' => 2303,
+            'max_players' => 300,
+            'game_install_id' => $this->gameInstall->id,
+        ])
             ->assertSessionHasErrors(['max_players']);
     }
 
@@ -215,15 +198,14 @@ class ServerManagementTest extends TestCase
     {
         Server::factory()->create(['port' => 2302, 'query_port' => 2303]);
 
-        $this->actingAs($this->user)
-            ->post(route('servers.store'), [
-                'game_type' => 'arma3',
-                'name' => 'Conflict Server',
-                'port' => 2302,
-                'query_port' => 2304,
-                'max_players' => 32,
-                'game_install_id' => $this->gameInstall->id,
-            ])
+        $this->post(route('servers.store'), [
+            'game_type' => 'arma3',
+            'name' => 'Conflict Server',
+            'port' => 2302,
+            'query_port' => 2304,
+            'max_players' => 32,
+            'game_install_id' => $this->gameInstall->id,
+        ])
             ->assertSessionHasErrors(['port']);
     }
 
@@ -231,15 +213,14 @@ class ServerManagementTest extends TestCase
     {
         Server::factory()->create(['port' => 2302, 'query_port' => 2303]);
 
-        $this->actingAs($this->user)
-            ->post(route('servers.store'), [
-                'game_type' => 'arma3',
-                'name' => 'Conflict Server',
-                'port' => 2304,
-                'query_port' => 2303,
-                'max_players' => 32,
-                'game_install_id' => $this->gameInstall->id,
-            ])
+        $this->post(route('servers.store'), [
+            'game_type' => 'arma3',
+            'name' => 'Conflict Server',
+            'port' => 2304,
+            'query_port' => 2303,
+            'max_players' => 32,
+            'game_install_id' => $this->gameInstall->id,
+        ])
             ->assertSessionHasErrors(['query_port']);
     }
 
@@ -247,15 +228,14 @@ class ServerManagementTest extends TestCase
     {
         Server::factory()->create(['port' => 2302, 'query_port' => 2303]);
 
-        $this->actingAs($this->user)
-            ->post(route('servers.store'), [
-                'game_type' => 'arma3',
-                'name' => 'Cross Conflict Server',
-                'port' => 2303,
-                'query_port' => 2350,
-                'max_players' => 32,
-                'game_install_id' => $this->gameInstall->id,
-            ])
+        $this->post(route('servers.store'), [
+            'game_type' => 'arma3',
+            'name' => 'Cross Conflict Server',
+            'port' => 2303,
+            'query_port' => 2350,
+            'max_players' => 32,
+            'game_install_id' => $this->gameInstall->id,
+        ])
             ->assertSessionHasErrors(['port']);
     }
 
@@ -263,15 +243,14 @@ class ServerManagementTest extends TestCase
     {
         Server::factory()->create(['port' => 2302, 'query_port' => 2303]);
 
-        $this->actingAs($this->user)
-            ->post(route('servers.store'), [
-                'game_type' => 'arma3',
-                'name' => 'Cross Conflict Server',
-                'port' => 2350,
-                'query_port' => 2302,
-                'max_players' => 32,
-                'game_install_id' => $this->gameInstall->id,
-            ])
+        $this->post(route('servers.store'), [
+            'game_type' => 'arma3',
+            'name' => 'Cross Conflict Server',
+            'port' => 2350,
+            'query_port' => 2302,
+            'max_players' => 32,
+            'game_install_id' => $this->gameInstall->id,
+        ])
             ->assertSessionHasErrors(['query_port']);
     }
 
@@ -279,16 +258,15 @@ class ServerManagementTest extends TestCase
     {
         $preset = ModPreset::factory()->create();
 
-        $this->actingAs($this->user)
-            ->post(route('servers.store'), [
-                'game_type' => 'arma3',
-                'name' => 'Modded Server',
-                'port' => 2302,
-                'query_port' => 2303,
-                'max_players' => 32,
-                'game_install_id' => $this->gameInstall->id,
-                'active_preset_id' => $preset->id,
-            ])
+        $this->post(route('servers.store'), [
+            'game_type' => 'arma3',
+            'name' => 'Modded Server',
+            'port' => 2302,
+            'query_port' => 2303,
+            'max_players' => 32,
+            'game_install_id' => $this->gameInstall->id,
+            'active_preset_id' => $preset->id,
+        ])
             ->assertRedirect()
             ->assertSessionHas('success');
 
@@ -300,15 +278,14 @@ class ServerManagementTest extends TestCase
 
     public function test_create_server_creates_arma3_settings_with_defaults(): void
     {
-        $this->actingAs($this->user)
-            ->post(route('servers.store'), [
-                'game_type' => 'arma3',
-                'name' => 'Network Test Server',
-                'port' => 2350,
-                'query_port' => 2351,
-                'max_players' => 32,
-                'game_install_id' => $this->gameInstall->id,
-            ])
+        $this->post(route('servers.store'), [
+            'game_type' => 'arma3',
+            'name' => 'Network Test Server',
+            'port' => 2350,
+            'query_port' => 2351,
+            'max_players' => 32,
+            'game_install_id' => $this->gameInstall->id,
+        ])
             ->assertRedirect()
             ->assertSessionHas('success');
 
@@ -323,15 +300,14 @@ class ServerManagementTest extends TestCase
     {
         $reforgerInstall = GameInstall::factory()->installed()->reforger()->create();
 
-        $this->actingAs($this->user)
-            ->post(route('servers.store'), [
-                'game_type' => 'reforger',
-                'name' => 'Reforger Server',
-                'port' => 2001,
-                'max_players' => 32,
-                'game_install_id' => $reforgerInstall->id,
-                'scenario_id' => '{ECC61978EDCC2B5A}Missions/23_Campaign.conf',
-            ])
+        $this->post(route('servers.store'), [
+            'game_type' => 'reforger',
+            'name' => 'Reforger Server',
+            'port' => 2001,
+            'max_players' => 32,
+            'game_install_id' => $reforgerInstall->id,
+            'scenario_id' => '{ECC61978EDCC2B5A}Missions/23_Campaign.conf',
+        ])
             ->assertRedirect()
             ->assertSessionHas('success');
 
@@ -346,14 +322,13 @@ class ServerManagementTest extends TestCase
     {
         $reforgerInstall = GameInstall::factory()->installed()->reforger()->create();
 
-        $this->actingAs($this->user)
-            ->post(route('servers.store'), [
-                'game_type' => 'reforger',
-                'name' => 'Reforger No Scenario',
-                'port' => 2001,
-                'max_players' => 32,
-                'game_install_id' => $reforgerInstall->id,
-            ])
+        $this->post(route('servers.store'), [
+            'game_type' => 'reforger',
+            'name' => 'Reforger No Scenario',
+            'port' => 2001,
+            'max_players' => 32,
+            'game_install_id' => $reforgerInstall->id,
+        ])
             ->assertRedirect()
             ->assertSessionHas('success');
 
@@ -371,14 +346,13 @@ class ServerManagementTest extends TestCase
     {
         $server = Server::factory()->create(['name' => 'Original Name', 'port' => 2302, 'query_port' => 2303]);
 
-        $this->actingAs($this->user)
-            ->put(route('servers.update', $server), [
-                'name' => 'Updated Name',
-                'port' => 2302,
-                'query_port' => 2303,
-                'max_players' => 128,
-                'game_install_id' => $server->game_install_id,
-            ])
+        $this->put(route('servers.update', $server), [
+            'name' => 'Updated Name',
+            'port' => 2302,
+            'query_port' => 2303,
+            'max_players' => 128,
+            'game_install_id' => $server->game_install_id,
+        ])
             ->assertRedirect()
             ->assertSessionHas('success');
 
@@ -394,14 +368,13 @@ class ServerManagementTest extends TestCase
         Server::factory()->create(['port' => 2310, 'query_port' => 2311]);
         $server = Server::factory()->create(['port' => 2302, 'query_port' => 2303]);
 
-        $this->actingAs($this->user)
-            ->put(route('servers.update', $server), [
-                'name' => $server->name,
-                'port' => 2310,
-                'query_port' => 2303,
-                'max_players' => $server->max_players,
-                'game_install_id' => $server->game_install_id,
-            ])
+        $this->put(route('servers.update', $server), [
+            'name' => $server->name,
+            'port' => 2310,
+            'query_port' => 2303,
+            'max_players' => $server->max_players,
+            'game_install_id' => $server->game_install_id,
+        ])
             ->assertSessionHasErrors(['port']);
     }
 
@@ -409,14 +382,13 @@ class ServerManagementTest extends TestCase
     {
         $server = Server::factory()->create(['port' => 2302, 'query_port' => 2303]);
 
-        $this->actingAs($this->user)
-            ->put(route('servers.update', $server), [
-                'name' => 'Renamed',
-                'port' => 2302,
-                'query_port' => 2303,
-                'max_players' => $server->max_players,
-                'game_install_id' => $server->game_install_id,
-            ])
+        $this->put(route('servers.update', $server), [
+            'name' => 'Renamed',
+            'port' => 2302,
+            'query_port' => 2303,
+            'max_players' => $server->max_players,
+            'game_install_id' => $server->game_install_id,
+        ])
             ->assertRedirect()
             ->assertSessionHas('success');
     }
@@ -426,19 +398,18 @@ class ServerManagementTest extends TestCase
         $server = Server::factory()->create();
         $server->arma3Settings()->create([]);
 
-        $this->actingAs($this->user)
-            ->put(route('servers.update', $server), [
-                'name' => $server->name,
-                'port' => $server->port,
-                'query_port' => $server->query_port,
-                'max_players' => $server->max_players,
-                'game_install_id' => $server->game_install_id,
-                'max_msg_send' => 2048,
-                'min_bandwidth' => 5120000,
-                'max_bandwidth' => 104857600,
-                'terrain_grid' => 3.125,
-                'view_distance' => 5000,
-            ])
+        $this->put(route('servers.update', $server), [
+            'name' => $server->name,
+            'port' => $server->port,
+            'query_port' => $server->query_port,
+            'max_players' => $server->max_players,
+            'game_install_id' => $server->game_install_id,
+            'max_msg_send' => 2048,
+            'min_bandwidth' => 5120000,
+            'max_bandwidth' => 104857600,
+            'terrain_grid' => 3.125,
+            'view_distance' => 5000,
+        ])
             ->assertRedirect()
             ->assertSessionHas('success');
 
@@ -454,16 +425,15 @@ class ServerManagementTest extends TestCase
         $server = Server::factory()->create();
         $server->arma3Settings()->create([]);
 
-        $this->actingAs($this->user)
-            ->put(route('servers.update', $server), [
-                'name' => $server->name,
-                'port' => $server->port,
-                'query_port' => $server->query_port,
-                'max_players' => $server->max_players,
-                'game_install_id' => $server->game_install_id,
-                'max_msg_send' => 0,
-                'max_packet_size' => 100,
-            ])
+        $this->put(route('servers.update', $server), [
+            'name' => $server->name,
+            'port' => $server->port,
+            'query_port' => $server->query_port,
+            'max_players' => $server->max_players,
+            'game_install_id' => $server->game_install_id,
+            'max_msg_send' => 0,
+            'max_packet_size' => 100,
+        ])
             ->assertSessionHasErrors(['max_msg_send', 'max_packet_size']);
     }
 
@@ -472,16 +442,15 @@ class ServerManagementTest extends TestCase
         $server = Server::factory()->forReforger()->create();
         $server->reforgerSettings()->create([]);
 
-        $this->actingAs($this->user)
-            ->put(route('servers.update', $server), [
-                'name' => $server->name,
-                'port' => $server->port,
-                'query_port' => $server->query_port,
-                'max_players' => $server->max_players,
-                'game_install_id' => $server->game_install_id,
-                'scenario_id' => '{ECC61978EDCC2B5A}Missions/23_Campaign.conf',
-                'third_person_view_enabled' => false,
-            ])
+        $this->put(route('servers.update', $server), [
+            'name' => $server->name,
+            'port' => $server->port,
+            'query_port' => $server->query_port,
+            'max_players' => $server->max_players,
+            'game_install_id' => $server->game_install_id,
+            'scenario_id' => '{ECC61978EDCC2B5A}Missions/23_Campaign.conf',
+            'third_person_view_enabled' => false,
+        ])
             ->assertRedirect()
             ->assertSessionHas('success');
 
@@ -495,17 +464,16 @@ class ServerManagementTest extends TestCase
         $server = Server::factory()->forReforger()->create();
         $server->reforgerSettings()->create([]);
 
-        $this->actingAs($this->user)
-            ->put(route('servers.update', $server), [
-                'name' => $server->name,
-                'port' => $server->port,
-                'query_port' => $server->query_port,
-                'max_players' => $server->max_players,
-                'game_install_id' => $server->game_install_id,
-                'scenario_id' => '{ECC61978EDCC2B5A}Missions/23_Campaign.conf',
-                'third_person_view_enabled' => true,
-                'max_fps' => 120,
-            ])
+        $this->put(route('servers.update', $server), [
+            'name' => $server->name,
+            'port' => $server->port,
+            'query_port' => $server->query_port,
+            'max_players' => $server->max_players,
+            'game_install_id' => $server->game_install_id,
+            'scenario_id' => '{ECC61978EDCC2B5A}Missions/23_Campaign.conf',
+            'third_person_view_enabled' => true,
+            'max_fps' => 120,
+        ])
             ->assertRedirect()
             ->assertSessionHas('success');
 
@@ -518,17 +486,16 @@ class ServerManagementTest extends TestCase
         $server = Server::factory()->forReforger()->create();
         $server->reforgerSettings()->create([]);
 
-        $this->actingAs($this->user)
-            ->put(route('servers.update', $server), [
-                'name' => $server->name,
-                'port' => $server->port,
-                'query_port' => $server->query_port,
-                'max_players' => $server->max_players,
-                'game_install_id' => $server->game_install_id,
-                'scenario_id' => '{ECC61978EDCC2B5A}Missions/23_Campaign.conf',
-                'third_person_view_enabled' => true,
-                'cross_platform' => true,
-            ])
+        $this->put(route('servers.update', $server), [
+            'name' => $server->name,
+            'port' => $server->port,
+            'query_port' => $server->query_port,
+            'max_players' => $server->max_players,
+            'game_install_id' => $server->game_install_id,
+            'scenario_id' => '{ECC61978EDCC2B5A}Missions/23_Campaign.conf',
+            'third_person_view_enabled' => true,
+            'cross_platform' => true,
+        ])
             ->assertRedirect()
             ->assertSessionHas('success');
 
@@ -541,16 +508,15 @@ class ServerManagementTest extends TestCase
         $server = Server::factory()->forReforger()->create();
         $server->reforgerSettings()->create([]);
 
-        $this->actingAs($this->user)
-            ->put(route('servers.update', $server), [
-                'name' => $server->name,
-                'port' => $server->port,
-                'query_port' => $server->query_port,
-                'max_players' => $server->max_players,
-                'game_install_id' => $server->game_install_id,
-                'scenario_id' => 'invalid-format',
-                'third_person_view_enabled' => true,
-            ])
+        $this->put(route('servers.update', $server), [
+            'name' => $server->name,
+            'port' => $server->port,
+            'query_port' => $server->query_port,
+            'max_players' => $server->max_players,
+            'game_install_id' => $server->game_install_id,
+            'scenario_id' => 'invalid-format',
+            'third_person_view_enabled' => true,
+        ])
             ->assertSessionHasErrors(['scenario_id']);
     }
 
@@ -559,16 +525,15 @@ class ServerManagementTest extends TestCase
         $server = Server::factory()->forReforger()->create();
         $server->reforgerSettings()->create([]);
 
-        $this->actingAs($this->user)
-            ->put(route('servers.update', $server), [
-                'name' => $server->name,
-                'port' => $server->port,
-                'query_port' => $server->query_port,
-                'max_players' => $server->max_players,
-                'game_install_id' => $server->game_install_id,
-                'scenario_id' => '',
-                'third_person_view_enabled' => true,
-            ])
+        $this->put(route('servers.update', $server), [
+            'name' => $server->name,
+            'port' => $server->port,
+            'query_port' => $server->query_port,
+            'max_players' => $server->max_players,
+            'game_install_id' => $server->game_install_id,
+            'scenario_id' => '',
+            'third_person_view_enabled' => true,
+        ])
             ->assertRedirect()
             ->assertSessionHas('success');
     }
@@ -581,8 +546,7 @@ class ServerManagementTest extends TestCase
     {
         $server = Server::factory()->create();
 
-        $this->actingAs($this->user)
-            ->delete(route('servers.destroy', $server))
+        $this->delete(route('servers.destroy', $server))
             ->assertRedirect()
             ->assertSessionHas('success');
 
@@ -593,8 +557,7 @@ class ServerManagementTest extends TestCase
     {
         $server = Server::factory()->create(['status' => ServerStatus::Running]);
 
-        $this->actingAs($this->user)
-            ->delete(route('servers.destroy', $server))
+        $this->delete(route('servers.destroy', $server))
             ->assertRedirect()
             ->assertSessionHas('error');
 
@@ -611,8 +574,7 @@ class ServerManagementTest extends TestCase
 
         $server = Server::factory()->create();
 
-        $this->actingAs($this->user)
-            ->post(route('servers.start', $server))
+        $this->post(route('servers.start', $server))
             ->assertRedirect();
 
         $this->assertDatabaseHas('servers', [
@@ -629,8 +591,7 @@ class ServerManagementTest extends TestCase
 
         $server = Server::factory()->create(['status' => ServerStatus::Running]);
 
-        $this->actingAs($this->user)
-            ->post(route('servers.stop', $server))
+        $this->post(route('servers.stop', $server))
             ->assertRedirect();
 
         $this->assertDatabaseHas('servers', [
@@ -647,8 +608,7 @@ class ServerManagementTest extends TestCase
 
         $server = Server::factory()->create(['status' => ServerStatus::Running]);
 
-        $this->actingAs($this->user)
-            ->post(route('servers.restart', $server))
+        $this->post(route('servers.restart', $server))
             ->assertRedirect();
 
         $this->assertDatabaseHas('servers', [
@@ -670,15 +630,14 @@ class ServerManagementTest extends TestCase
     {
         $server = Server::factory()->create();
 
-        $mock = Mockery::mock(ServerProcessService::class);
-        $mock->shouldReceive('addHeadlessClient')
-            ->once()
-            ->with(Mockery::on(fn ($s) => $s->id === $server->id))
-            ->andReturn(0);
-        $this->app->instance(ServerProcessService::class, $mock);
+        $this->mock(ServerProcessService::class, function (MockInterface $mock) use ($server) {
+            $mock->shouldReceive('addHeadlessClient')
+                ->once()
+                ->with(Mockery::on(fn ($s) => $s->id === $server->id))
+                ->andReturn(0);
+        });
 
-        $this->actingAs($this->user)
-            ->post(route('servers.headless-client.add', $server))
+        $this->post(route('servers.headless-client.add', $server))
             ->assertRedirect();
     }
 
@@ -686,15 +645,14 @@ class ServerManagementTest extends TestCase
     {
         $server = Server::factory()->create();
 
-        $mock = Mockery::mock(ServerProcessService::class);
-        $mock->shouldReceive('removeHeadlessClient')
-            ->once()
-            ->with(Mockery::on(fn ($s) => $s->id === $server->id))
-            ->andReturn(0);
-        $this->app->instance(ServerProcessService::class, $mock);
+        $this->mock(ServerProcessService::class, function (MockInterface $mock) use ($server) {
+            $mock->shouldReceive('removeHeadlessClient')
+                ->once()
+                ->with(Mockery::on(fn ($s) => $s->id === $server->id))
+                ->andReturn(0);
+        });
 
-        $this->actingAs($this->user)
-            ->post(route('servers.headless-client.remove', $server))
+        $this->post(route('servers.headless-client.remove', $server))
             ->assertRedirect();
     }
 
@@ -715,14 +673,13 @@ class ServerManagementTest extends TestCase
             ->with(Mockery::on(fn ($s) => $s->id === $server->id))
             ->andReturn($logPath);
 
-        $gameManager = Mockery::mock(GameManager::class);
-        $gameManager->shouldReceive('for')
-            ->with(Mockery::on(fn ($s) => $s->id === $server->id))
-            ->andReturn($handler);
-        $this->app->instance(GameManager::class, $gameManager);
+        $this->mock(GameManager::class, function (MockInterface $mock) use ($server, $handler) {
+            $mock->shouldReceive('for')
+                ->with(Mockery::on(fn ($s) => $s->id === $server->id))
+                ->andReturn($handler);
+        });
 
-        $this->actingAs($this->user)
-            ->get(route('servers.log', $server))
+        $this->get(route('servers.log', $server))
             ->assertOk()
             ->assertJson(['lines' => ['Line 1', 'Line 2', 'Line 3']]);
     }
@@ -735,12 +692,11 @@ class ServerManagementTest extends TestCase
         $handler->shouldReceive('getServerLogPath')
             ->andReturn('/nonexistent/path/server.log');
 
-        $gameManager = Mockery::mock(GameManager::class);
-        $gameManager->shouldReceive('for')->andReturn($handler);
-        $this->app->instance(GameManager::class, $gameManager);
+        $this->mock(GameManager::class, function (MockInterface $mock) use ($handler) {
+            $mock->shouldReceive('for')->andReturn($handler);
+        });
 
-        $this->actingAs($this->user)
-            ->get(route('servers.log', $server))
+        $this->get(route('servers.log', $server))
             ->assertOk()
             ->assertJson(['lines' => []]);
     }
@@ -753,13 +709,12 @@ class ServerManagementTest extends TestCase
     {
         $server = Server::factory()->create();
 
-        $mock = Mockery::mock(ServerProcessService::class);
-        $mock->shouldReceive('getStatus')->andReturn(ServerStatus::Running);
-        $mock->shouldReceive('getRunningHeadlessClientCount')->andReturn(2);
-        $this->app->instance(ServerProcessService::class, $mock);
+        $this->mock(ServerProcessService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getStatus')->andReturn(ServerStatus::Running);
+            $mock->shouldReceive('getRunningHeadlessClientCount')->andReturn(2);
+        });
 
-        $this->actingAs($this->user)
-            ->get(route('servers.status', $server))
+        $this->get(route('servers.status', $server))
             ->assertOk()
             ->assertJson([
                 'status' => ServerStatus::Running->value,
@@ -780,12 +735,11 @@ class ServerManagementTest extends TestCase
             ->with(Mockery::on(fn ($s) => $s->id === $server->id))
             ->andReturn(['/path/to/arma3server', '-port=2302']);
 
-        $gameManager = Mockery::mock(GameManager::class);
-        $gameManager->shouldReceive('for')->andReturn($handler);
-        $this->app->instance(GameManager::class, $gameManager);
+        $this->mock(GameManager::class, function (MockInterface $mock) use ($handler) {
+            $mock->shouldReceive('for')->andReturn($handler);
+        });
 
-        $this->actingAs($this->user)
-            ->get(route('servers.launch-command', $server))
+        $this->get(route('servers.launch-command', $server))
             ->assertOk()
             ->assertJson(['command' => '/path/to/arma3server -port=2302']);
     }
@@ -799,7 +753,7 @@ class ServerManagementTest extends TestCase
         $server = Server::factory()->create();
 
         // Create timestamped log directories with log files
-        $logsBase = $this->testServersBasePath.'/'.$server->id.'/logs';
+        $logsBase = $this->testPath('servers').'/'.$server->id.'/logs';
         mkdir($logsBase.'/logs_2026-03-11_11-00-00', 0755, true);
         mkdir($logsBase.'/logs_2026-03-11_12-00-00', 0755, true);
 
@@ -826,14 +780,13 @@ class ServerManagementTest extends TestCase
         $handler->shouldReceive('getNativeLogFilePattern')
             ->andReturn('*.log');
 
-        $gameManager = Mockery::mock(GameManager::class);
-        $gameManager->shouldReceive('for')
-            ->with(Mockery::on(fn ($s) => $s->id === $server->id))
-            ->andReturn($handler);
-        $this->app->instance(GameManager::class, $gameManager);
+        $this->mock(GameManager::class, function (MockInterface $mock) use ($server, $handler) {
+            $mock->shouldReceive('for')
+                ->with(Mockery::on(fn ($s) => $s->id === $server->id))
+                ->andReturn($handler);
+        });
 
-        $response = $this->actingAs($this->user)
-            ->get(route('servers.log', $server))
+        $response = $this->get(route('servers.log', $server))
             ->assertOk();
 
         $lines = $response->json('lines');
@@ -855,12 +808,11 @@ class ServerManagementTest extends TestCase
         $handler->shouldReceive('getNativeLogFilePattern')
             ->andReturn('*.log');
 
-        $gameManager = Mockery::mock(GameManager::class);
-        $gameManager->shouldReceive('for')->andReturn($handler);
-        $this->app->instance(GameManager::class, $gameManager);
+        $this->mock(GameManager::class, function (MockInterface $mock) use ($handler) {
+            $mock->shouldReceive('for')->andReturn($handler);
+        });
 
-        $this->actingAs($this->user)
-            ->get(route('servers.log', $server))
+        $this->get(route('servers.log', $server))
             ->assertOk()
             ->assertJson(['lines' => []]);
     }
@@ -869,7 +821,7 @@ class ServerManagementTest extends TestCase
     {
         $server = Server::factory()->create();
 
-        $logsBase = $this->testServersBasePath.'/'.$server->id.'/logs';
+        $logsBase = $this->testPath('servers').'/'.$server->id.'/logs';
         mkdir($logsBase, 0755, true);
 
         $handler = Mockery::mock(GameHandler::class, WritesNativeLogs::class);
@@ -878,12 +830,11 @@ class ServerManagementTest extends TestCase
         $handler->shouldReceive('getNativeLogFilePattern')
             ->andReturn('*.log');
 
-        $gameManager = Mockery::mock(GameManager::class);
-        $gameManager->shouldReceive('for')->andReturn($handler);
-        $this->app->instance(GameManager::class, $gameManager);
+        $this->mock(GameManager::class, function (MockInterface $mock) use ($handler) {
+            $mock->shouldReceive('for')->andReturn($handler);
+        });
 
-        $this->actingAs($this->user)
-            ->get(route('servers.log', $server))
+        $this->get(route('servers.log', $server))
             ->assertOk()
             ->assertJson(['lines' => []]);
     }
@@ -892,7 +843,7 @@ class ServerManagementTest extends TestCase
     {
         $server = Server::factory()->create();
 
-        $logsBase = $this->testServersBasePath.'/'.$server->id.'/logs';
+        $logsBase = $this->testPath('servers').'/'.$server->id.'/logs';
         mkdir($logsBase.'/logs_2026-03-11_12-00-00', 0755, true);
 
         // Write 150 lines
@@ -908,12 +859,11 @@ class ServerManagementTest extends TestCase
         $handler->shouldReceive('getNativeLogFilePattern')
             ->andReturn('*.log');
 
-        $gameManager = Mockery::mock(GameManager::class);
-        $gameManager->shouldReceive('for')->andReturn($handler);
-        $this->app->instance(GameManager::class, $gameManager);
+        $this->mock(GameManager::class, function (MockInterface $mock) use ($handler) {
+            $mock->shouldReceive('for')->andReturn($handler);
+        });
 
-        $response = $this->actingAs($this->user)
-            ->get(route('servers.log', $server))
+        $response = $this->get(route('servers.log', $server))
             ->assertOk();
 
         $lines = $response->json('lines');

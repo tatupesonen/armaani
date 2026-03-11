@@ -88,16 +88,6 @@ interface GameHandler
      */
     public function branches(): array;
 
-    /**
-     * Whether this game uses Steam Workshop mods downloaded via SteamCMD.
-     */
-    public function supportsWorkshopMods(): bool;
-
-    /**
-     * Whether mod files need to be converted to lowercase (Linux requirement).
-     */
-    public function requiresLowercaseConversion(): bool;
-
     // --- Server Process ---
 
     /**

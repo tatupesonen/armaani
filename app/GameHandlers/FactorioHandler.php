@@ -5,31 +5,29 @@ namespace App\GameHandlers;
 use App\Concerns\DetectsServerStateBehavior;
 use App\Contracts\DetectsServerState;
 use App\Contracts\DownloadsDirectly;
-use App\Contracts\GameHandler;
 use App\Contracts\HasQueryPort;
 use App\Models\FactorioSettings;
-use App\Models\ModPreset;
 use App\Models\Server;
 use App\Services\Renderer\JsonConfigRenderer;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Process;
 
-final class FactorioHandler implements DetectsServerState, DownloadsDirectly, GameHandler, HasQueryPort
+final class FactorioHandler extends AbstractGameHandler implements DetectsServerState, DownloadsDirectly, HasQueryPort
 {
     use DetectsServerStateBehavior;
 
     public function __construct(
         protected JsonConfigRenderer $configRenderer,
-    ) {}
-
-    public function value(): string
-    {
-        return 'factorio';
-    }
-
-    public function label(): string
-    {
-        return 'Factorio';
+    ) {
+        parent::__construct(
+            value: 'factorio',
+            label: 'Factorio',
+            defaultPort: 34197,
+            defaultQueryPort: 27015,
+            branches: ['stable', 'experimental'],
+            settingsModelClass: FactorioSettings::class,
+            settingsRelationName: 'factorioSettings',
+        );
     }
 
     // --- DownloadsDirectly ---
@@ -42,33 +40,6 @@ final class FactorioHandler implements DetectsServerState, DownloadsDirectly, Ga
     public function getArchiveStripComponents(): int
     {
         return 1;
-    }
-
-    // --- Game Metadata ---
-
-    public function defaultPort(): int
-    {
-        return 34197;
-    }
-
-    public function defaultQueryPort(): int
-    {
-        return 27015;
-    }
-
-    public function branches(): array
-    {
-        return ['stable', 'experimental'];
-    }
-
-    public function supportsWorkshopMods(): bool
-    {
-        return false;
-    }
-
-    public function requiresLowercaseConversion(): bool
-    {
-        return false;
     }
 
     // --- Server Process ---
@@ -172,11 +143,17 @@ final class FactorioHandler implements DetectsServerState, DownloadsDirectly, Ga
             ['value' => 'very-big', 'label' => 'Very Big'],
         ];
 
-        $resourceFields = fn (string $resource, string $label): array => [
-            ['key' => "{$resource}_frequency", 'label' => "{$label} Frequency", 'type' => 'segmented', 'default' => 'normal', 'options' => $scaleOptions],
-            ['key' => "{$resource}_size", 'label' => "{$label} Size", 'type' => 'segmented', 'default' => 'normal', 'options' => $scaleOptions],
-            ['key' => "{$resource}_richness", 'label' => "{$label} Richness", 'type' => 'segmented', 'default' => 'normal', 'options' => $scaleOptions],
-        ];
+        $resourceRow = function (string $resource, string $label) use ($scaleOptions) {
+            return [
+                'columns' => 3,
+                'label' => $label,
+                'fields' => [
+                    ['key' => "{$resource}_frequency", 'label' => 'Frequency', 'type' => 'segmented', 'default' => 'normal', 'options' => $scaleOptions],
+                    ['key' => "{$resource}_size", 'label' => 'Size', 'type' => 'segmented', 'default' => 'normal', 'options' => $scaleOptions],
+                    ['key' => "{$resource}_richness", 'label' => 'Richness', 'type' => 'segmented', 'default' => 'normal', 'options' => $scaleOptions],
+                ],
+            ];
+        };
 
         return [
             // --- Server Rules ---
@@ -185,15 +162,9 @@ final class FactorioHandler implements DetectsServerState, DownloadsDirectly, Ga
                 'showOnCreate' => true,
                 'createLabel' => 'Factorio Options',
                 'fields' => [
-                    ['key' => 'query_port', 'label' => 'RCON Port', 'type' => 'number', 'default' => $this->defaultQueryPort(), 'min' => 1, 'max' => 65535, 'description' => 'Remote console port for server administration.', 'source' => 'server'],
-                    ['key' => 'password', 'label' => 'Game Password', 'type' => 'text', 'default' => '', 'placeholder' => 'Leave empty for no password', 'source' => 'server'],
-                    ['key' => 'rcon_password', 'label' => 'RCON Password', 'type' => 'text', 'default' => '', 'placeholder' => 'Leave empty to disable RCON auth', 'source' => 'factorio_settings'],
-                    ['type' => 'separator'],
-                    ['key' => 'visibility_public', 'label' => 'Public Visibility', 'type' => 'toggle', 'default' => true, 'source' => 'factorio_settings', 'description' => 'Show in the public server browser.'],
-                    ['key' => 'visibility_lan', 'label' => 'LAN Visibility', 'type' => 'toggle', 'default' => true, 'source' => 'factorio_settings', 'description' => 'Visible on local network.'],
-                    ['key' => 'require_user_verification', 'label' => 'Require Factorio Account', 'type' => 'toggle', 'default' => true, 'source' => 'factorio_settings', 'description' => 'Only allow clients with a valid Factorio.com account.'],
-                    ['key' => 'auto_pause', 'label' => 'Auto-Pause When Empty', 'type' => 'toggle', 'default' => true, 'source' => 'factorio_settings', 'description' => 'Pause the server when no players are connected.'],
-                    ['key' => 'only_admins_can_pause', 'label' => 'Only Admins Can Pause', 'type' => 'toggle', 'default' => true, 'source' => 'factorio_settings'],
+                    ['key' => 'query_port', 'label' => 'RCON Port', 'type' => 'number', 'default' => $this->defaultQueryPort(), 'min' => 1, 'max' => 65535, 'description' => 'Remote console port. Only used when RCON password is set.', 'source' => 'server'],
+                    ['key' => 'password', 'label' => 'Server Password', 'type' => 'text', 'default' => '', 'placeholder' => 'Leave empty for no password', 'source' => 'server'],
+                    ['key' => 'rcon_password', 'label' => 'RCON Password', 'type' => 'text', 'default' => '', 'placeholder' => 'Leave empty to disable RCON', 'source' => 'factorio_settings'],
                 ],
             ],
 
@@ -202,66 +173,54 @@ final class FactorioHandler implements DetectsServerState, DownloadsDirectly, Ga
                 'title' => 'Server Settings',
                 'collapsible' => true,
                 'source' => 'factorio_settings',
-                'layout' => 'rows',
-                'groups' => [
-                    [
-                        'columns' => 3,
-                        'fields' => [
-                            ['key' => 'allow_commands', 'label' => 'Allow Commands', 'type' => 'segmented', 'default' => 'admins-only', 'options' => [
-                                ['value' => 'true', 'label' => 'Everyone'],
-                                ['value' => 'admins-only', 'label' => 'Admins Only'],
-                                ['value' => 'false', 'label' => 'Nobody'],
-                            ]],
-                            ['key' => 'autosave_interval', 'label' => 'Autosave Interval (min)', 'type' => 'number', 'default' => 10, 'min' => 1, 'max' => 60],
-                            ['key' => 'autosave_slots', 'label' => 'Autosave Slots', 'type' => 'number', 'default' => 5, 'min' => 1, 'max' => 100],
-                        ],
-                    ],
-                    [
-                        'columns' => 3,
-                        'fields' => [
-                            ['key' => 'afk_autokick_interval', 'label' => 'AFK Kick (min)', 'type' => 'number', 'default' => 0, 'min' => 0, 'description' => '0 = never kick.'],
-                            ['key' => 'max_upload_kbps', 'label' => 'Max Upload (KB/s)', 'type' => 'number', 'default' => 0, 'min' => 0, 'description' => '0 = unlimited.'],
-                            ['key' => 'max_heartbeats_per_second', 'label' => 'Tick Rate', 'type' => 'number', 'default' => 60, 'min' => 6, 'max' => 240, 'description' => 'Network updates per second.'],
-                        ],
-                    ],
-                    [
-                        'fields' => [
-                            ['key' => 'ignore_player_limit_for_returning', 'label' => 'Returning Players Bypass Limit', 'type' => 'toggle', 'default' => false, 'description' => 'Players who played before can always join, even when full.'],
-                            ['key' => 'autosave_only_on_server', 'label' => 'Autosave Only on Server', 'type' => 'toggle', 'default' => true, 'description' => 'Autosaves are stored only on the server, not on clients.'],
-                            ['key' => 'non_blocking_saving', 'label' => 'Non-Blocking Saving', 'type' => 'toggle', 'default' => false, 'description' => 'Experimental. Server forks to save — may lose data on crash.'],
-                        ],
-                    ],
-                    [
-                        'fields' => [
-                            ['key' => 'tags', 'label' => 'Server Tags', 'type' => 'text', 'default' => '', 'placeholder' => 'vanilla, modded, friendly (comma-separated)'],
-                        ],
-                    ],
+                'fields' => [
+                    ['key' => 'visibility_public', 'label' => 'Public', 'type' => 'toggle', 'default' => true, 'description' => 'Show in the public server browser.'],
+                    ['key' => 'visibility_lan', 'label' => 'LAN', 'type' => 'toggle', 'default' => true, 'description' => 'Show in the LAN server browser.'],
+                    ['key' => 'require_user_verification', 'label' => 'Verify Users', 'type' => 'toggle', 'default' => true, 'description' => 'Verify user accounts with factorio.com.'],
+                    ['type' => 'separator'],
+                    ['key' => 'max_upload_kbps', 'label' => 'Max Upload (KB/s)', 'type' => 'number', 'default' => 0, 'min' => 0, 'description' => '0 = unlimited.'],
+                    ['key' => 'max_heartbeats_per_second', 'label' => 'Max Heartbeats/s', 'type' => 'number', 'default' => 60, 'min' => 6, 'max' => 240, 'description' => 'Network heartbeat frequency.'],
+                    ['key' => 'ignore_player_limit_for_returning', 'label' => 'Ignore Limit for Returning', 'type' => 'toggle', 'default' => false, 'description' => 'Allow returning players even when server is full.'],
+                    ['key' => 'allow_commands', 'label' => 'Allow Commands', 'type' => 'segmented', 'default' => 'admins-only', 'options' => [
+                        ['value' => 'true', 'label' => 'All'],
+                        ['value' => 'admins-only', 'label' => 'Admins'],
+                        ['value' => 'false', 'label' => 'None'],
+                    ]],
+                    ['type' => 'separator'],
+                    ['key' => 'autosave_interval', 'label' => 'Autosave (min)', 'type' => 'number', 'default' => 10, 'min' => 1, 'max' => 60],
+                    ['key' => 'autosave_slots', 'label' => 'Autosave Slots', 'type' => 'number', 'default' => 5, 'min' => 1, 'max' => 100],
+                    ['key' => 'afk_autokick_interval', 'label' => 'AFK Kick (min)', 'type' => 'number', 'default' => 0, 'min' => 0, 'description' => '0 = disabled.'],
+                    ['key' => 'auto_pause', 'label' => 'Auto-Pause', 'type' => 'toggle', 'default' => true, 'description' => 'Pause when no players connected.'],
+                    ['key' => 'only_admins_can_pause', 'label' => 'Admin-Only Pause', 'type' => 'toggle', 'default' => true],
+                    ['key' => 'autosave_only_on_server', 'label' => 'Server-Only Autosave', 'type' => 'toggle', 'default' => true],
+                    ['key' => 'non_blocking_saving', 'label' => 'Non-Blocking Save', 'type' => 'toggle', 'default' => false],
+                    ['key' => 'tags', 'label' => 'Tags', 'type' => 'text', 'default' => '', 'placeholder' => 'vanilla, modded, ...', 'description' => 'Comma-separated tags for the server browser.'],
                 ],
             ],
 
             // --- Map Generation: Resources ---
             [
                 'title' => 'Map Generation: Resources',
-                'description' => 'Controls resource frequency, patch size, and richness. Only affects new save creation.',
+                'description' => 'Resource frequency, size, and richness. Changes only apply to new saves.',
                 'collapsible' => true,
                 'source' => 'factorio_settings',
                 'layout' => 'rows',
                 'groups' => [
-                    ['columns' => 3, 'fields' => $resourceFields('iron_ore', 'Iron')],
-                    ['columns' => 3, 'fields' => $resourceFields('copper_ore', 'Copper')],
-                    ['columns' => 3, 'fields' => $resourceFields('coal', 'Coal')],
-                    ['columns' => 3, 'fields' => $resourceFields('stone', 'Stone')],
-                    ['columns' => 3, 'fields' => $resourceFields('crude_oil', 'Oil')],
-                    ['columns' => 3, 'fields' => $resourceFields('uranium_ore', 'Uranium')],
-                    ['columns' => 3, 'fields' => $resourceFields('trees', 'Trees')],
-                    ['columns' => 3, 'fields' => $resourceFields('enemy_base', 'Enemy Bases')],
+                    $resourceRow('coal', 'Coal'),
+                    $resourceRow('copper_ore', 'Copper Ore'),
+                    $resourceRow('crude_oil', 'Crude Oil'),
+                    $resourceRow('iron_ore', 'Iron Ore'),
+                    $resourceRow('stone', 'Stone'),
+                    $resourceRow('trees', 'Trees'),
+                    $resourceRow('uranium_ore', 'Uranium Ore'),
+                    $resourceRow('enemy_base', 'Enemy Base'),
                 ],
             ],
 
             // --- Map Generation: Terrain ---
             [
                 'title' => 'Map Generation: Terrain',
-                'description' => 'Map dimensions, starting area, water, cliffs, and seed. Only affects new save creation.',
+                'description' => 'Terrain generation settings. Changes only apply to new saves.',
                 'collapsible' => true,
                 'source' => 'factorio_settings',
                 'layout' => 'rows',
@@ -274,26 +233,24 @@ final class FactorioHandler implements DetectsServerState, DownloadsDirectly, Ga
                         ],
                     ],
                     [
-                        'columns' => 3,
                         'fields' => [
                             ['key' => 'starting_area', 'label' => 'Starting Area', 'type' => 'segmented', 'default' => 'normal', 'options' => $startingAreaOptions],
                             ['key' => 'water', 'label' => 'Water', 'type' => 'segmented', 'default' => 'normal', 'options' => $scaleOptions],
-                            ['key' => 'terrain_segmentation', 'label' => 'Terrain Type', 'type' => 'segmented', 'default' => 'normal', 'options' => $scaleOptions],
-                        ],
-                    ],
-                    [
-                        'columns' => 3,
-                        'fields' => [
-                            ['key' => 'cliff_richness', 'label' => 'Cliff Frequency', 'type' => 'segmented', 'default' => 'normal', 'options' => $scaleOptions],
-                            ['key' => 'cliff_elevation_0', 'label' => 'First Cliff Row', 'type' => 'number', 'default' => 10, 'min' => 0, 'step' => 1, 'description' => 'Elevation of the first cliff row.'],
-                            ['key' => 'cliff_elevation_interval', 'label' => 'Cliff Spacing', 'type' => 'number', 'default' => 40, 'min' => 1, 'step' => 1, 'description' => 'Elevation between successive cliff rows.'],
+                            ['key' => 'terrain_segmentation', 'label' => 'Terrain Segmentation', 'type' => 'segmented', 'default' => 'normal', 'options' => $scaleOptions],
                         ],
                     ],
                     [
                         'columns' => 2,
                         'fields' => [
-                            ['key' => 'peaceful_mode', 'label' => 'Peaceful Mode', 'type' => 'toggle', 'default' => false, 'description' => 'Enemies won\'t attack first.'],
-                            ['key' => 'map_seed', 'label' => 'Map Seed', 'type' => 'text', 'default' => '', 'placeholder' => 'Leave empty for random', 'description' => 'Fixed seed for reproducible maps.'],
+                            ['key' => 'cliff_elevation_0', 'label' => 'Cliff Base Height', 'type' => 'number', 'default' => 10, 'min' => 0, 'step' => 0.1],
+                            ['key' => 'cliff_elevation_interval', 'label' => 'Cliff Interval', 'type' => 'number', 'default' => 40, 'min' => 1, 'step' => 0.1],
+                        ],
+                    ],
+                    [
+                        'fields' => [
+                            ['key' => 'cliff_richness', 'label' => 'Cliff Frequency', 'type' => 'segmented', 'default' => 'normal', 'options' => $scaleOptions],
+                            ['key' => 'peaceful_mode', 'label' => 'Peaceful Mode', 'type' => 'toggle', 'default' => false],
+                            ['key' => 'map_seed', 'label' => 'Map Seed', 'type' => 'text', 'default' => '', 'placeholder' => 'Random', 'description' => 'Leave empty for random.'],
                         ],
                     ],
                 ],
@@ -302,34 +259,16 @@ final class FactorioHandler implements DetectsServerState, DownloadsDirectly, Ga
             // --- Map Settings: Gameplay ---
             [
                 'title' => 'Map Settings: Gameplay',
-                'description' => 'Pollution, enemy evolution, and expansion settings. Only affects new save creation.',
+                'description' => 'Runtime enemy behavior. Changes only apply to new saves.',
                 'collapsible' => true,
                 'source' => 'factorio_settings',
-                'layout' => 'rows',
-                'groups' => [
-                    [
-                        'fields' => [
-                            ['key' => 'pollution_enabled', 'label' => 'Pollution', 'type' => 'toggle', 'default' => true, 'description' => 'Enable pollution mechanics.'],
-                        ],
-                    ],
-                    [
-                        'fields' => [
-                            ['key' => 'evolution_enabled', 'label' => 'Enemy Evolution', 'type' => 'toggle', 'default' => true, 'description' => 'Enemies evolve over time, from destruction, and from pollution.'],
-                        ],
-                    ],
-                    [
-                        'columns' => 3,
-                        'fields' => [
-                            ['key' => 'evolution_time_factor', 'label' => 'Time Factor', 'type' => 'text', 'default' => '0.000004', 'inputMode' => 'decimal', 'storeAsString' => true, 'description' => 'Evolution from time passing.'],
-                            ['key' => 'evolution_destroy_factor', 'label' => 'Destroy Factor', 'type' => 'text', 'default' => '0.002', 'inputMode' => 'decimal', 'storeAsString' => true, 'description' => 'Evolution from killing spawners.'],
-                            ['key' => 'evolution_pollution_factor', 'label' => 'Pollution Factor', 'type' => 'text', 'default' => '0.0000009', 'inputMode' => 'decimal', 'storeAsString' => true, 'description' => 'Evolution from pollution.'],
-                        ],
-                    ],
-                    [
-                        'fields' => [
-                            ['key' => 'expansion_enabled', 'label' => 'Enemy Expansion', 'type' => 'toggle', 'default' => true, 'description' => 'Enemies build new bases over time.'],
-                        ],
-                    ],
+                'fields' => [
+                    ['key' => 'pollution_enabled', 'label' => 'Pollution', 'type' => 'toggle', 'default' => true],
+                    ['key' => 'evolution_enabled', 'label' => 'Evolution', 'type' => 'toggle', 'default' => true],
+                    ['key' => 'evolution_time_factor', 'label' => 'Evolution Time Factor', 'type' => 'number', 'default' => 0.000004, 'min' => 0, 'step' => 0.000001],
+                    ['key' => 'evolution_destroy_factor', 'label' => 'Evolution Destroy Factor', 'type' => 'number', 'default' => 0.002, 'min' => 0, 'step' => 0.001],
+                    ['key' => 'evolution_pollution_factor', 'label' => 'Evolution Pollution Factor', 'type' => 'number', 'default' => 0.0000009, 'min' => 0, 'step' => 0.0000001],
+                    ['key' => 'expansion_enabled', 'label' => 'Enemy Expansion', 'type' => 'toggle', 'default' => true],
                 ],
             ],
 
@@ -337,7 +276,7 @@ final class FactorioHandler implements DetectsServerState, DownloadsDirectly, Ga
             [
                 'advanced' => true,
                 'fields' => [
-                    ['key' => 'additional_params', 'label' => 'Additional Launch Parameters', 'type' => 'textarea', 'default' => '', 'rows' => 2, 'placeholder' => '--console-log /path/to/log', 'source' => 'server'],
+                    ['key' => 'additional_params', 'label' => 'Additional Launch Parameters', 'type' => 'textarea', 'default' => '', 'rows' => 2, 'placeholder' => '--no-auto-pause', 'source' => 'server'],
                 ],
             ],
         ];
@@ -430,59 +369,6 @@ final class FactorioHandler implements DetectsServerState, DownloadsDirectly, Ga
             'evolution_pollution_factor' => ['numeric', 'min:0'],
             'expansion_enabled' => ['boolean'],
         ];
-    }
-
-    // --- Related Settings ---
-
-    /** @phpstan-ignore return.unusedType */
-    public function settingsModelClass(): ?string
-    {
-        return FactorioSettings::class;
-    }
-
-    /** @phpstan-ignore return.unusedType */
-    public function settingsRelationName(): ?string
-    {
-        return 'factorioSettings';
-    }
-
-    public function createRelatedSettings(Server $server): void
-    {
-        FactorioSettings::query()->create(['server_id' => $server->id]);
-    }
-
-    public function updateRelatedSettings(Server $server, array $validated): void
-    {
-        $fields = collect($validated)->only(
-            (new FactorioSettings)->getFillable()
-        )->except('server_id')->toArray();
-
-        if (! empty($fields)) {
-            $server->factorioSettings()->updateOrCreate(
-                ['server_id' => $server->id],
-                $fields,
-            );
-        }
-    }
-
-    // --- Mod Presets ---
-
-    /**
-     * @return list<array{type: 'workshop'|'registered', label: string, relationship: string, formField: string}>
-     */
-    public function modSections(): array
-    {
-        return [];
-    }
-
-    public function syncPresetMods(ModPreset $preset, array $validated): void
-    {
-        // Factorio does not support mods through this manager yet
-    }
-
-    public function getPresetModCount(ModPreset $preset): int
-    {
-        return 0;
     }
 
     // --- Config Generation ---
