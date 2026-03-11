@@ -2,6 +2,7 @@
 
 namespace App\GameHandlers;
 
+use App\Concerns\DetectsServerStateBehavior;
 use App\Contracts\DetectsServerState;
 use App\Contracts\GameHandler;
 use App\Contracts\HasQueryPort;
@@ -19,6 +20,8 @@ use Illuminate\Database\Eloquent\Model;
 
 final class ReforgerHandler implements DetectsServerState, GameHandler, HasQueryPort, SteamGameHandler, SupportsRegisteredMods, SupportsScenarios, WritesNativeLogs
 {
+    use DetectsServerStateBehavior;
+
     public function __construct(
         protected JsonConfigRenderer $configRenderer,
         protected ReforgerScenarioService $scenarioService,
@@ -200,11 +203,6 @@ final class ReforgerHandler implements DetectsServerState, GameHandler, HasQuery
     public function getCrashDetectionStrings(): array
     {
         return [];
-    }
-
-    public function shouldAutoRestart(Server $server): bool
-    {
-        return false;
     }
 
     // --- UI Schema ---

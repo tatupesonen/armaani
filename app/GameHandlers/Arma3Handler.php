@@ -2,6 +2,7 @@
 
 namespace App\GameHandlers;
 
+use App\Concerns\DetectsServerStateBehavior;
 use App\Contracts\DetectsServerState;
 use App\Contracts\GameHandler;
 use App\Contracts\HasQueryPort;
@@ -19,6 +20,8 @@ use Illuminate\Validation\Rule;
 
 final class Arma3Handler implements DetectsServerState, GameHandler, HasQueryPort, ManagesModAssets, SteamGameHandler, SupportsBackups, SupportsHeadlessClients, SupportsMissions
 {
+    use DetectsServerStateBehavior;
+
     public function __construct(
         protected TwigConfigRenderer $configRenderer,
     ) {}
@@ -482,13 +485,6 @@ final class Arma3Handler implements DetectsServerState, GameHandler, HasQueryPor
                 ],
             ],
         ];
-    }
-
-    // --- DetectsServerState: Auto-Restart ---
-
-    public function shouldAutoRestart(Server $server): bool
-    {
-        return (bool) $server->auto_restart;
     }
 
     // --- Validation ---

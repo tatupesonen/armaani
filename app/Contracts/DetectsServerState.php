@@ -35,6 +35,12 @@ interface DetectsServerState
     public function getModDownloadFinishedString(): ?string;
 
     /**
+     * Whether this handler supports auto-restart (i.e. has crash detection strings).
+     * Used by the frontend to conditionally show the auto-restart toggle.
+     */
+    public function supportsAutoRestart(): bool;
+
+    /**
      * Whether the server should be automatically restarted after a crash.
      * Only called for games that support crash detection.
      */

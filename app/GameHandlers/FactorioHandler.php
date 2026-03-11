@@ -2,6 +2,7 @@
 
 namespace App\GameHandlers;
 
+use App\Concerns\DetectsServerStateBehavior;
 use App\Contracts\DetectsServerState;
 use App\Contracts\DownloadsDirectly;
 use App\Contracts\GameHandler;
@@ -15,6 +16,8 @@ use Illuminate\Support\Facades\Process;
 
 final class FactorioHandler implements DetectsServerState, DownloadsDirectly, GameHandler, HasQueryPort
 {
+    use DetectsServerStateBehavior;
+
     public function __construct(
         protected JsonConfigRenderer $configRenderer,
     ) {}
@@ -146,11 +149,6 @@ final class FactorioHandler implements DetectsServerState, DownloadsDirectly, Ga
     public function getModDownloadFinishedString(): ?string
     {
         return null;
-    }
-
-    public function shouldAutoRestart(Server $server): bool
-    {
-        return false;
     }
 
     // --- UI Schema ---

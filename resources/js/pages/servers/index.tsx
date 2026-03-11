@@ -115,6 +115,9 @@ export default function ServersIndex({
                                     supportsHeadlessClients={
                                         gt?.supportsHeadlessClients ?? false
                                     }
+                                    supportsAutoRestart={
+                                        gt?.supportsAutoRestart ?? false
+                                    }
                                     onDelete={(id) => setDeletingServerId(id)}
                                 />
                             );

@@ -32,6 +32,7 @@ type ServerCardProps = {
     gameInstalls: GameInstall[];
     settingsSchema: SettingsSection[];
     supportsHeadlessClients: boolean;
+    supportsAutoRestart: boolean;
     onDelete: (id: number) => void;
 };
 
@@ -74,6 +75,7 @@ export default function ServerCard({
     gameInstalls,
     settingsSchema,
     supportsHeadlessClients,
+    supportsAutoRestart,
     onDelete,
 }: ServerCardProps) {
     const { gameTypeLabels } = usePage().props;
@@ -297,6 +299,7 @@ export default function ServerCard({
                     presets={presets}
                     gameInstalls={gameInstalls}
                     settingsSchema={settingsSchema}
+                    supportsAutoRestart={supportsAutoRestart}
                     onCancel={() => setEditing(false)}
                 />
             )}

@@ -2,6 +2,7 @@
 
 namespace App\GameHandlers;
 
+use App\Concerns\DetectsServerStateBehavior;
 use App\Contracts\DetectsServerState;
 use App\Contracts\GameHandler;
 use App\Contracts\HasQueryPort;
@@ -13,6 +14,8 @@ use App\Services\Renderer\TwigConfigRenderer;
 
 final class ProjectZomboidHandler implements DetectsServerState, GameHandler, HasQueryPort, SteamGameHandler
 {
+    use DetectsServerStateBehavior;
+
     public function __construct(
         protected TwigConfigRenderer $configRenderer,
     ) {}
@@ -136,11 +139,6 @@ final class ProjectZomboidHandler implements DetectsServerState, GameHandler, Ha
     public function getCrashDetectionStrings(): array
     {
         return [];
-    }
-
-    public function shouldAutoRestart(Server $server): bool
-    {
-        return false;
     }
 
     // --- UI Schema ---

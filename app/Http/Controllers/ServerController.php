@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Contracts\DetectsServerState;
 use App\Contracts\GameHandler;
 use App\Contracts\SupportsBackups;
 use App\Contracts\SupportsHeadlessClients;
@@ -68,6 +69,7 @@ class ServerController extends Controller
                 'supportsHeadlessClients' => $handler instanceof SupportsHeadlessClients,
                 'supportsWorkshopMods' => $handler->supportsWorkshopMods(),
                 'supportsMissionUpload' => $handler instanceof SupportsMissions,
+                'supportsAutoRestart' => $handler instanceof DetectsServerState && $handler->supportsAutoRestart(),
                 'settingsSchema' => $handler->settingsSchema(),
             ])->values(),
         ]);

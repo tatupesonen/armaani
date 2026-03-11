@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import {
     Select,
     SelectContent,
@@ -27,6 +28,7 @@ type ServerEditPanelProps = {
     presets: ModPreset[];
     gameInstalls: GameInstall[];
     settingsSchema: SettingsSection[];
+    supportsAutoRestart: boolean;
     onCancel: () => void;
 };
 
@@ -39,6 +41,7 @@ function buildEditData(
         name: server.name,
         port: server.port,
         max_players: server.max_players,
+        auto_restart: server.auto_restart,
         description: server.description ?? '',
         active_preset_id: server.active_preset_id?.toString() ?? '',
         game_install_id: server.game_install_id?.toString() ?? '',
@@ -55,6 +58,7 @@ export default function ServerEditPanel({
     presets,
     gameInstalls,
     settingsSchema,
+    supportsAutoRestart,
     onCancel,
 }: ServerEditPanelProps) {
     const { gameTypeLabels } = usePage().props;
@@ -91,11 +95,8 @@ export default function ServerEditPanel({
             active_preset_id: (data.active_preset_id as string) || null,
             game_install_id: Number(data.game_install_id),
             password: (data.password as string) || null,
-            admin_password: (data.admin_password as string) || null,
             description: (data.description as string) || null,
             additional_params: (data.additional_params as string) || null,
-            additional_server_options:
-                (data.additional_server_options as string) || null,
         };
 
         router.put(
@@ -244,6 +245,20 @@ export default function ServerEditPanel({
                         </div>
                     )}
                 </div>
+
+                {/* Auto-restart toggle (only for games with crash detection) */}
+                {supportsAutoRestart && (
+                    <div className="flex items-center gap-3">
+                        <Switch
+                            id="auto_restart"
+                            checked={data.auto_restart as boolean}
+                            onCheckedChange={(v) => set('auto_restart', v)}
+                        />
+                        <Label htmlFor="auto_restart">
+                            Auto-Restart on Crash
+                        </Label>
+                    </div>
+                )}
 
                 {/* Schema-driven game-specific sections */}
                 <GameSettingsRenderer

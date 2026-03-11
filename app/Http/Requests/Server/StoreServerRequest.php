@@ -37,7 +37,7 @@ class StoreServerRequest extends FormRequest
             'description' => ['nullable', 'string', 'max:1000'],
             'active_preset_id' => ['nullable', 'exists:mod_presets,id'],
             'game_install_id' => ['required', 'exists:game_installs,id'],
-            ...($handler instanceof DetectsServerState ? ['auto_restart' => ['boolean']] : []),
+            ...($handler instanceof DetectsServerState && $handler->supportsAutoRestart() ? ['auto_restart' => ['boolean']] : []),
             ...$handlerRules,
             ...$settingsRules,
         ];

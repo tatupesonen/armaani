@@ -5,29 +5,27 @@
  * Regenerate with: php artisan game:generate-types
  */
 
-import type { GameInstall, ModPreset, ServerBackup, ServerStatus } from './game';
+import type {
+    GameInstall,
+    ModPreset,
+    ServerBackup,
+    ServerStatus,
+} from './game';
 
 export type ServerBase = {
     id: number;
     game_type: string;
     name: string;
     port: number;
-    query_port: number;
+    query_port: number | null;
     max_players: number;
     password: string | null;
-    admin_password: string | null;
     description: string | null;
     active_preset_id: number | null;
     game_install_id: number | null;
     status: ServerStatus;
     auto_restart: boolean;
     additional_params: string | null;
-    verify_signatures: boolean;
-    allowed_file_patching: boolean;
-    battle_eye: boolean;
-    persistent: boolean;
-    von_enabled: boolean;
-    additional_server_options: string | null;
     supports_backups?: boolean;
     profiles_path?: string;
     created_at: string;
@@ -40,6 +38,13 @@ export type ServerBase = {
 export type Arma3Settings = {
     id: number;
     server_id: number;
+    admin_password: string | null;
+    verify_signatures: boolean;
+    allowed_file_patching: boolean;
+    battle_eye: boolean;
+    persistent: boolean;
+    von_enabled: boolean;
+    additional_server_options: string | null;
     reduced_damage: boolean;
     stamina_bar: boolean;
     weapon_crosshair: boolean;
@@ -140,6 +145,7 @@ export type FactorioSettings = {
 export type ProjectzomboidSettings = {
     id: number;
     server_id: number;
+    admin_password: string | null;
     open: boolean;
     pvp: boolean;
     pause_empty: boolean;
@@ -159,6 +165,8 @@ export type ProjectzomboidSettings = {
 export type ReforgerSettings = {
     id: number;
     server_id: number;
+    admin_password: string | null;
+    battle_eye: boolean;
     scenario_id: string | null;
     third_person_view_enabled: boolean;
     cross_platform: boolean;
@@ -189,4 +197,9 @@ export type ReforgerServer = ServerBase & {
     reforger_settings?: ReforgerSettings;
 };
 
-export type Server = Arma3Server | DayzServer | FactorioServer | ProjectzomboidServer | ReforgerServer;
+export type Server =
+    | Arma3Server
+    | DayzServer
+    | FactorioServer
+    | ProjectzomboidServer
+    | ReforgerServer;

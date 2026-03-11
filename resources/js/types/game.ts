@@ -201,6 +201,7 @@ export type ServerGameTypeOption = {
     supportsHeadlessClients: boolean;
     supportsWorkshopMods: boolean;
     supportsMissionUpload: boolean;
+    supportsAutoRestart: boolean;
     settingsSchema: SettingsSection[];
     modSections: ModSection[];
 };
