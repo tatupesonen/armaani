@@ -1,0 +1,99 @@
+name: Game Request
+description: Request a new game to be added to the server manager
+title: '[Game Request]: '
+labels: ['game-request']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a new game! Please fill out the details below so we can evaluate adding support for it.
+
+  - type: input
+    id: game-name
+    attributes:
+      label: Game Name
+      description: The full name of the game.
+      placeholder: e.g. Counter-Strike 2
+    validations:
+      required: true
+
+  - type: dropdown
+    id: dedicated-server
+    attributes:
+      label: Does this game have a dedicated server?
+      description: Armaani requires a dedicated server binary to manage.
+      options:
+        - 'Yes'
+        - 'No'
+        - 'Not sure'
+    validations:
+      required: true
+
+  - type: dropdown
+    id: distribution-method
+    attributes:
+      label: How is the dedicated server distributed?
+      description: How do you download/install the server files?
+      options:
+        - SteamCMD
+        - Direct HTTP download
+        - Other
+        - Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: steam-app-id
+    attributes:
+      label: Steam App ID (if applicable)
+      description: The Steam App ID for the dedicated server. You can find this on SteamDB.
+      placeholder: e.g. 730
+
+  - type: dropdown
+    id: workshop-support
+    attributes:
+      label: Does this game use Steam Workshop for mods?
+      options:
+        - 'Yes'
+        - 'No'
+        - 'Not sure'
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: What platform does the dedicated server run on?
+      options:
+        - Linux
+        - Windows only
+        - Both
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: config-details
+    attributes:
+      label: Configuration Details
+      description: Any details about how the server is configured (config file format, launch parameters, etc.).
+      placeholder: |
+        e.g.
+        - Uses a JSON config file at server/config.json
+        - Launched with ./server -port 27015 -maxplayers 64
+        - Supports RCON on a separate port
+
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: Links to documentation, wiki pages, or other resources about running a dedicated server for this game.
+      placeholder: |
+        - https://developer.valvesoftware.com/wiki/...
+        - https://steamdb.info/app/.../info/
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Anything else that might be useful (popularity, community demand, similar games already supported, etc.).
