@@ -6,6 +6,7 @@ use App\Contracts\ManagesModAssets;
 use App\Contracts\SupportsBackups;
 use App\Contracts\SupportsHeadlessClients;
 use App\Contracts\SupportsMissions;
+use App\Contracts\WritesNativeLogs;
 use App\Enums\ServerStatus;
 use App\GameManager;
 use App\Models\Server;
@@ -65,15 +66,21 @@ class ServerProcessService
 
         $command = $handler->buildLaunchCommand($server);
         $pidFile = $this->getPidFilePath($server);
-        $logFile = $handler->getServerLogPath($server);
         $binaryDir = $server->gameInstall->getInstallationPath();
+        $usesNativeLogs = $handler instanceof WritesNativeLogs;
 
         Log::info("{$server->logContext()} Starting server from {$binaryDir}");
         Log::info("{$server->logContext()} Launch command: ".implode(' ', $command));
-        Log::info("{$server->logContext()} Log file: {$logFile}");
 
-        // Truncate/create log file before the server process.
-        file_put_contents($logFile, '');
+        // Games that write native log files (e.g., Reforger) don't need stdout capture.
+        // For other games, capture stdout/stderr to a log file.
+        $logFile = $usesNativeLogs ? '/dev/null' : $handler->getServerLogPath($server);
+
+        if (! $usesNativeLogs) {
+            Log::info("{$server->logContext()} Log file: {$logFile}");
+            file_put_contents($logFile, '');
+        }
+
         $this->startLogTail($server);
 
         // Start the server as a detached child process using proc_open.
@@ -320,9 +327,10 @@ class ServerProcessService
         $descriptors = [
             0 => ['file', '/dev/null', 'r'],
             1 => ['file', $logFile, 'a'],
-            2 => ['file', $logFile, 'a'],
+            2 => ['redirect', 1],
         ];
 
+        /** @phpstan-ignore argument.type (PHP supports ['redirect', int] descriptors) */
         $process = proc_open($command, $descriptors, $pipes, $workingDir);
 
         if (is_resource($process)) {

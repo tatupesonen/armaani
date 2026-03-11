@@ -7,6 +7,7 @@ use App\Contracts\ManagesModAssets;
 use App\Contracts\SupportsBackups;
 use App\Contracts\SupportsHeadlessClients;
 use App\Contracts\SupportsMissions;
+use App\Contracts\WritesNativeLogs;
 use App\GameHandlers\ReforgerHandler;
 use App\Models\ModPreset;
 use App\Models\ReforgerMod;
@@ -291,5 +292,27 @@ class ReforgerHandlerTest extends TestCase
         $this->handler->createRelatedSettings($server);
 
         $this->assertNotNull($server->fresh()->reforgerSettings);
+    }
+
+    // ---------------------------------------------------------------
+    // WritesNativeLogs
+    // ---------------------------------------------------------------
+
+    public function test_implements_writes_native_logs(): void
+    {
+        $this->assertInstanceOf(WritesNativeLogs::class, $this->handler);
+    }
+
+    public function test_get_native_log_directory_returns_logs_subdirectory(): void
+    {
+        $server = $this->createReforgerServer();
+
+        $expected = $server->getProfilesPath().'/logs';
+        $this->assertEquals($expected, $this->handler->getNativeLogDirectory($server));
+    }
+
+    public function test_get_native_log_file_pattern_returns_wildcard_log(): void
+    {
+        $this->assertEquals('*.log', $this->handler->getNativeLogFilePattern());
     }
 }

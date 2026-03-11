@@ -7,6 +7,7 @@ use App\Contracts\GameHandler;
 use App\Contracts\SteamGameHandler;
 use App\Contracts\SupportsRegisteredMods;
 use App\Contracts\SupportsScenarios;
+use App\Contracts\WritesNativeLogs;
 use App\Models\ModPreset;
 use App\Models\ReforgerMod;
 use App\Models\ReforgerSettings;
@@ -15,7 +16,7 @@ use App\Services\Mod\ReforgerScenarioService;
 use App\Services\Renderer\JsonConfigRenderer;
 use Illuminate\Database\Eloquent\Model;
 
-final class ReforgerHandler implements DetectsServerState, GameHandler, SteamGameHandler, SupportsRegisteredMods, SupportsScenarios
+final class ReforgerHandler implements DetectsServerState, GameHandler, SteamGameHandler, SupportsRegisteredMods, SupportsScenarios, WritesNativeLogs
 {
     public function __construct(
         protected JsonConfigRenderer $configRenderer,
@@ -164,6 +165,18 @@ final class ReforgerHandler implements DetectsServerState, GameHandler, SteamGam
     public function getServerLogPath(Server $server): string
     {
         return $server->getProfilesPath().'/server.log';
+    }
+
+    // --- WritesNativeLogs ---
+
+    public function getNativeLogDirectory(Server $server): string
+    {
+        return $server->getProfilesPath().'/logs';
+    }
+
+    public function getNativeLogFilePattern(): string
+    {
+        return '*.log';
     }
 
     // --- DetectsServerState ---

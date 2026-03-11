@@ -2,12 +2,16 @@
 
 namespace Tests\Feature\Servers;
 
+use App\Contracts\GameHandler;
+use App\Contracts\WritesNativeLogs;
 use App\GameHandlers\Arma3Handler;
+use App\GameManager;
 use App\Models\Arma3Settings;
 use App\Models\GameInstall;
 use App\Models\ModPreset;
 use App\Models\Server;
 use App\Models\WorkshopMod;
+use App\Services\Server\ServerBackupService;
 use App\Services\Server\ServerProcessService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
@@ -512,6 +516,77 @@ class ServerProcessServiceTest extends TestCase
             ->once();
 
         $mockService->start($server);
+    }
+
+    public function test_start_uses_dev_null_for_native_log_handlers(): void
+    {
+        $server = $this->makeServer();
+
+        $handler = Mockery::mock(GameHandler::class, WritesNativeLogs::class);
+        $handler->shouldReceive('generateConfigFiles')->once();
+        $handler->shouldReceive('buildLaunchCommand')->andReturn(['/usr/bin/true']);
+        $handler->shouldReceive('getServerLogPath')->never();
+
+        $gameManager = Mockery::mock(GameManager::class);
+        $gameManager->shouldReceive('for')
+            ->with(Mockery::on(fn ($s) => $s->id === $server->id))
+            ->andReturn($handler);
+        $this->app->instance(GameManager::class, $gameManager);
+
+        $mockService = Mockery::mock(ServerProcessService::class, [$gameManager, app(ServerBackupService::class)])->makePartial();
+        $mockService->shouldAllowMockingProtectedMethods();
+        $mockService->shouldReceive('spawnProcess')
+            ->once()
+            ->withArgs(fn ($cmd, $dir, $logFile) => $logFile === '/dev/null')
+            ->andReturn(12345);
+        $mockService->shouldReceive('startLogTail')->once();
+
+        Log::shouldReceive('info')
+            ->withArgs(fn (string $msg) => str_contains($msg, 'Starting server from'))
+            ->once();
+
+        Log::shouldReceive('info')
+            ->withArgs(fn (string $msg) => str_contains($msg, 'Launch command:'))
+            ->once();
+
+        // The "Log file:" message should NOT be logged for native log handlers
+        Log::shouldReceive('info')
+            ->withArgs(fn (string $msg) => str_contains($msg, 'Log file:'))
+            ->never();
+
+        Log::shouldReceive('info')->withAnyArgs();
+
+        $mockService->start($server);
+    }
+
+    public function test_start_does_not_truncate_log_file_for_native_log_handlers(): void
+    {
+        $server = $this->makeServer();
+
+        // Create a pre-existing file at the server log path to verify it's NOT truncated
+        $logPath = $server->getProfilesPath().'/server.log';
+        @mkdir(dirname($logPath), 0755, true);
+        file_put_contents($logPath, 'existing content');
+
+        $handler = Mockery::mock(GameHandler::class, WritesNativeLogs::class);
+        $handler->shouldReceive('generateConfigFiles')->once();
+        $handler->shouldReceive('buildLaunchCommand')->andReturn(['/usr/bin/true']);
+
+        $gameManager = Mockery::mock(GameManager::class);
+        $gameManager->shouldReceive('for')
+            ->with(Mockery::on(fn ($s) => $s->id === $server->id))
+            ->andReturn($handler);
+        $this->app->instance(GameManager::class, $gameManager);
+
+        $mockService = Mockery::mock(ServerProcessService::class, [$gameManager, app(ServerBackupService::class)])->makePartial();
+        $mockService->shouldAllowMockingProtectedMethods();
+        $mockService->shouldReceive('spawnProcess')->once()->andReturn(12345);
+        $mockService->shouldReceive('startLogTail')->once();
+
+        $mockService->start($server);
+
+        // The existing log file should NOT have been truncated
+        $this->assertEquals('existing content', file_get_contents($logPath));
     }
 
     public function test_build_launch_command_uses_game_install_binary_path(): void
