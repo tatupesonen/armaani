@@ -3,6 +3,7 @@
 namespace Tests\Feature\Servers;
 
 use App\Contracts\GameHandler;
+use App\Contracts\WritesNativeLogs;
 use App\Enums\ServerStatus;
 use App\GameManager;
 use App\Jobs\StartServerJob;
@@ -787,5 +788,135 @@ class ServerManagementTest extends TestCase
             ->get(route('servers.launch-command', $server))
             ->assertOk()
             ->assertJson(['command' => '/path/to/arma3server -port=2302']);
+    }
+
+    // ---------------------------------------------------------------
+    // Server Log — Native Logs (WritesNativeLogs handlers)
+    // ---------------------------------------------------------------
+
+    public function test_server_log_returns_native_log_lines_for_writes_native_logs_handler(): void
+    {
+        $server = Server::factory()->create();
+
+        // Create timestamped log directories with log files
+        $logsBase = $this->testServersBasePath.'/'.$server->id.'/logs';
+        mkdir($logsBase.'/logs_2026-03-11_11-00-00', 0755, true);
+        mkdir($logsBase.'/logs_2026-03-11_12-00-00', 0755, true);
+
+        // Write to the LATEST directory — only this one should be read
+        file_put_contents(
+            $logsBase.'/logs_2026-03-11_12-00-00/console.log',
+            "12:00:01.000 ENGINE  Server started\n12:00:02.000 BACKEND Server registered with address\n"
+        );
+        file_put_contents(
+            $logsBase.'/logs_2026-03-11_12-00-00/error.log',
+            "12:00:01.500 ERROR   Some warning\n"
+        );
+
+        // Older directory should be ignored
+        file_put_contents(
+            $logsBase.'/logs_2026-03-11_11-00-00/console.log',
+            "11:00:01.000 ENGINE  Old log line\n"
+        );
+
+        $handler = Mockery::mock(GameHandler::class, WritesNativeLogs::class);
+        $handler->shouldReceive('getNativeLogDirectory')
+            ->with(Mockery::on(fn ($s) => $s->id === $server->id))
+            ->andReturn($logsBase);
+        $handler->shouldReceive('getNativeLogFilePattern')
+            ->andReturn('*.log');
+
+        $gameManager = Mockery::mock(GameManager::class);
+        $gameManager->shouldReceive('for')
+            ->with(Mockery::on(fn ($s) => $s->id === $server->id))
+            ->andReturn($handler);
+        $this->app->instance(GameManager::class, $gameManager);
+
+        $response = $this->actingAs($this->user)
+            ->get(route('servers.log', $server))
+            ->assertOk();
+
+        $lines = $response->json('lines');
+
+        // Lines from both files in the latest dir, sorted by timestamp
+        $this->assertCount(3, $lines);
+        $this->assertEquals('12:00:01.000 ENGINE  Server started', $lines[0]);
+        $this->assertEquals('12:00:01.500 ERROR   Some warning', $lines[1]);
+        $this->assertEquals('12:00:02.000 BACKEND Server registered with address', $lines[2]);
+    }
+
+    public function test_server_log_returns_empty_when_native_log_directory_does_not_exist(): void
+    {
+        $server = Server::factory()->create();
+
+        $handler = Mockery::mock(GameHandler::class, WritesNativeLogs::class);
+        $handler->shouldReceive('getNativeLogDirectory')
+            ->andReturn('/nonexistent/path/logs');
+        $handler->shouldReceive('getNativeLogFilePattern')
+            ->andReturn('*.log');
+
+        $gameManager = Mockery::mock(GameManager::class);
+        $gameManager->shouldReceive('for')->andReturn($handler);
+        $this->app->instance(GameManager::class, $gameManager);
+
+        $this->actingAs($this->user)
+            ->get(route('servers.log', $server))
+            ->assertOk()
+            ->assertJson(['lines' => []]);
+    }
+
+    public function test_server_log_returns_empty_when_no_timestamped_subdirectories(): void
+    {
+        $server = Server::factory()->create();
+
+        $logsBase = $this->testServersBasePath.'/'.$server->id.'/logs';
+        mkdir($logsBase, 0755, true);
+
+        $handler = Mockery::mock(GameHandler::class, WritesNativeLogs::class);
+        $handler->shouldReceive('getNativeLogDirectory')
+            ->andReturn($logsBase);
+        $handler->shouldReceive('getNativeLogFilePattern')
+            ->andReturn('*.log');
+
+        $gameManager = Mockery::mock(GameManager::class);
+        $gameManager->shouldReceive('for')->andReturn($handler);
+        $this->app->instance(GameManager::class, $gameManager);
+
+        $this->actingAs($this->user)
+            ->get(route('servers.log', $server))
+            ->assertOk()
+            ->assertJson(['lines' => []]);
+    }
+
+    public function test_server_log_native_limits_to_last_100_lines(): void
+    {
+        $server = Server::factory()->create();
+
+        $logsBase = $this->testServersBasePath.'/'.$server->id.'/logs';
+        mkdir($logsBase.'/logs_2026-03-11_12-00-00', 0755, true);
+
+        // Write 150 lines
+        $logContent = '';
+        for ($i = 1; $i <= 150; $i++) {
+            $logContent .= sprintf("12:%02d:%02d.000 ENGINE  Line %d\n", intdiv($i, 60), $i % 60, $i);
+        }
+        file_put_contents($logsBase.'/logs_2026-03-11_12-00-00/console.log', $logContent);
+
+        $handler = Mockery::mock(GameHandler::class, WritesNativeLogs::class);
+        $handler->shouldReceive('getNativeLogDirectory')
+            ->andReturn($logsBase);
+        $handler->shouldReceive('getNativeLogFilePattern')
+            ->andReturn('*.log');
+
+        $gameManager = Mockery::mock(GameManager::class);
+        $gameManager->shouldReceive('for')->andReturn($handler);
+        $this->app->instance(GameManager::class, $gameManager);
+
+        $response = $this->actingAs($this->user)
+            ->get(route('servers.log', $server))
+            ->assertOk();
+
+        $lines = $response->json('lines');
+        $this->assertCount(100, $lines);
     }
 }

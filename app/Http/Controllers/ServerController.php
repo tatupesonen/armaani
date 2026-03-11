@@ -7,6 +7,7 @@ use App\Contracts\SupportsBackups;
 use App\Contracts\SupportsHeadlessClients;
 use App\Contracts\SupportsMissions;
 use App\Contracts\SupportsScenarios;
+use App\Contracts\WritesNativeLogs;
 use App\Enums\InstallationStatus;
 use App\Enums\ServerStatus;
 use App\GameManager;
@@ -177,6 +178,11 @@ class ServerController extends Controller
     public function serverLog(Server $server): JsonResponse
     {
         $handler = $this->gameManager->for($server);
+
+        if ($handler instanceof WritesNativeLogs) {
+            return response()->json(['lines' => $this->readNativeLogLines($handler, $server)]);
+        }
+
         $logPath = $handler->getServerLogPath($server);
 
         if (! $logPath || ! file_exists($logPath)) {
@@ -186,6 +192,48 @@ class ServerController extends Controller
         $lines = array_slice(file($logPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES), -100);
 
         return response()->json(['lines' => $lines]);
+    }
+
+    /**
+     * Read the last 100 lines from all native log files, merged and sorted by timestamp.
+     *
+     * @return list<string>
+     */
+    protected function readNativeLogLines(WritesNativeLogs $handler, Server $server): array
+    {
+        $baseDir = $handler->getNativeLogDirectory($server);
+        $pattern = $handler->getNativeLogFilePattern();
+
+        if (! is_dir($baseDir)) {
+            return [];
+        }
+
+        $subdirs = glob($baseDir.'/logs_*', GLOB_ONLYDIR) ?: [];
+
+        if ($subdirs === []) {
+            return [];
+        }
+
+        sort($subdirs);
+        $latestDir = end($subdirs);
+
+        $logFiles = glob($latestDir.'/'.$pattern) ?: [];
+        $allLines = [];
+
+        foreach ($logFiles as $logFile) {
+            if (! file_exists($logFile)) {
+                continue;
+            }
+
+            $lines = file($logFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
+            array_push($allLines, ...$lines);
+        }
+
+        // Native log lines are timestamped (e.g., "11:54:13.851 ENGINE ..."), so sorting
+        // merges lines from different files in chronological order.
+        sort($allLines);
+
+        return array_slice($allLines, -100);
     }
 
     public function status(Server $server, ServerProcessService $processService): JsonResponse
