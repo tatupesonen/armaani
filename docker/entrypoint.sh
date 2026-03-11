@@ -67,6 +67,11 @@ php /var/www/html/artisan optimize
 php /var/www/html/artisan storage:link --force 2>/dev/null || true
 
 # -------------------------------------------------------
+# Check for updates
+# -------------------------------------------------------
+php /var/www/html/artisan app:version-check || true
+
+# -------------------------------------------------------
 # Start supervisor (PID 1)
 # -------------------------------------------------------
 exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
