@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.4](https://github.com/tatupesonen/Armaani/compare/v1.8.3...v1.8.4) (2026-03-15)
+
+
+### Bug Fixes
+
+* preserve mod symlinks across servers sharing a game install and copy bikeys instead of symlinking ([cad4495](https://github.com/tatupesonen/Armaani/commit/cad4495ded0bef4cded061738c360a601110a77b)), closes [#35](https://github.com/tatupesonen/Armaani/issues/35)
+
 ## [1.8.3](https://github.com/tatupesonen/Armaani/compare/v1.8.2...v1.8.3) (2026-03-15)
 
 
