@@ -97,6 +97,41 @@ interface GameHandler
      */
     public function buildLaunchCommand(Server $server): array;
 
+    // --- Lifecycle Hooks ---
+
+    /**
+     * Called before the server process is spawned.
+     *
+     * Runs after config generation and mod symlinking, but before proc_open.
+     * Override in concrete handlers for pre-start setup (e.g., creating temp files,
+     * validating external services, writing auxiliary configs).
+     */
+    public function beforeStart(Server $server): void;
+
+    /**
+     * Called after the server process has been spawned.
+     *
+     * Override in concrete handlers for post-start work (e.g., registering with
+     * an external monitoring service, writing run metadata).
+     */
+    public function afterStart(Server $server): void;
+
+    /**
+     * Called before the server process is killed.
+     *
+     * Override in concrete handlers for pre-stop work (e.g., sending RCON commands
+     * to gracefully save world state, notifying players).
+     */
+    public function beforeStop(Server $server): void;
+
+    /**
+     * Called after the server process has been stopped and PID files cleaned up.
+     *
+     * Override in concrete handlers for post-stop cleanup (e.g., archiving logs,
+     * deregistering from an external service).
+     */
+    public function afterStop(Server $server): void;
+
     /**
      * Generate all config files needed by this game (server.cfg, JSON config, profiles, etc.)
      * Called on every server start.

@@ -130,6 +130,8 @@ class ServerProcessServiceTest extends TestCase
         $handler->shouldReceive('generateConfigFiles')->once();
         $handler->shouldReceive('buildLaunchCommand')->andReturn(['/usr/bin/true']);
         $handler->shouldReceive('getServerLogPath')->never();
+        $handler->shouldReceive('beforeStart')->once();
+        $handler->shouldReceive('afterStart')->once();
 
         $gameManager = $this->mock(GameManager::class, function (MockInterface $mock) use ($server, $handler) {
             $mock->shouldReceive('for')
@@ -175,6 +177,8 @@ class ServerProcessServiceTest extends TestCase
         $handler = Mockery::mock(GameHandler::class, WritesNativeLogs::class);
         $handler->shouldReceive('generateConfigFiles')->once();
         $handler->shouldReceive('buildLaunchCommand')->andReturn(['/usr/bin/true']);
+        $handler->shouldReceive('beforeStart')->once();
+        $handler->shouldReceive('afterStart')->once();
 
         $gameManager = $this->mock(GameManager::class, function (MockInterface $mock) use ($server, $handler) {
             $mock->shouldReceive('for')

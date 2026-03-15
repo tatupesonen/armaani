@@ -64,6 +64,30 @@ abstract class AbstractGameHandler implements GameHandler
     }
 
     // ---------------------------------------------------------------
+    // Lifecycle Hooks (override as needed)
+    // ---------------------------------------------------------------
+
+    public function beforeStart(Server $server): void
+    {
+        // No-op by default. Override for pre-start setup.
+    }
+
+    public function afterStart(Server $server): void
+    {
+        // No-op by default. Override for post-start work.
+    }
+
+    public function beforeStop(Server $server): void
+    {
+        // No-op by default. Override for pre-stop work.
+    }
+
+    public function afterStop(Server $server): void
+    {
+        // No-op by default. Override for post-stop cleanup.
+    }
+
+    // ---------------------------------------------------------------
     // Default Implementations (override as needed)
     // ---------------------------------------------------------------
 

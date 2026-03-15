@@ -81,12 +81,16 @@ class ServerProcessService
             file_put_contents($logFile, '');
         }
 
+        $handler->beforeStart($server);
+
         $this->startLogTail($server);
 
         // Start the server as a detached child process using proc_open.
         // Array-form proc_open bypasses the shell entirely, so the PID we
         // capture IS the server process — signals target it directly.
         $this->spawnProcess($command, $binaryDir, $logFile, $pidFile, $server->logContext());
+
+        $handler->afterStart($server);
     }
 
     /**
@@ -94,6 +98,10 @@ class ServerProcessService
      */
     public function stop(Server $server): void
     {
+        $handler = $this->gameManager->for($server);
+
+        $handler->beforeStop($server);
+
         $pid = $this->getPid($server);
 
         if ($pid && $this->isProcessRunning($pid)) {
@@ -118,6 +126,8 @@ class ServerProcessService
 
         $this->stopLogTail($server);
         $this->cleanupPidFile($server);
+
+        $handler->afterStop($server);
     }
 
     /**
